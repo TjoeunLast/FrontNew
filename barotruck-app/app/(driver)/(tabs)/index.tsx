@@ -1,21 +1,20 @@
-import React, { useEffect, useState } from "react";
 import {
   Bell,
-  MessageCircle,
   Box,
-  ClipboardCheck,
-  Truck,
   CheckCircle2,
+  ClipboardCheck,
+  MessageCircle,
+  Truck,
 } from "lucide-react-native";
+import { useState } from "react";
 
 // React Native 기본 컴포넌트 임포트
-import { View, Text, StyleSheet, ScrollView } from "react-native";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
 // 프로젝트 공통 UI 및 API 서비스, 타입 임포트
-import { OrderCard } from "@/shared/ui/business"; // 오더 정보를 보여주는 공통 카드 컴포넌트
 import { useAppTheme } from "@/shared/hooks/useAppTheme"; // 커스텀 테마 훅 (라이트/다크 모드 대응)
-import { OrderService } from "@/shared/api/orderService"; // 백엔드 통신을 담당하는 서비스 객체
 import { OrderResponse } from "@/shared/models/order"; // 오더 데이터의 타입 정의
 import { Card } from "@/shared/ui/base/Card"; // 카드 컴포넌트
+import { OrderCard } from "@/shared/ui/business"; // 오더 정보를 보여주는 공통 카드 컴포넌트
 
 export default function DriverHomeScreen() {
   // 1. 테마 및 상태 관리 설정
@@ -36,6 +35,7 @@ export default function DriverHomeScreen() {
       status: "PENDING",
       createdAt: "2026-02-11",
       updated: "2026-02-11",
+      isInstant: true,
 
       // 상차지 정보
       startAddr: "경기 수원시 영통구 매탄동",
@@ -81,7 +81,8 @@ export default function DriverHomeScreen() {
     {
       orderId: 2,
       status: "REQUESTED",
-      createdAt: "2026-02-11T14:10:00",
+      createdAt: "2026-02-11",
+      isInstant: false,
 
       startAddr: "서울 강동구 성내동",
       startPlace: "성내동 개인주택",
@@ -99,7 +100,7 @@ export default function DriverHomeScreen() {
       tonnage: 5,
       reqCarType: "카고",
       reqTonnage: "5톤",
-      driveMode: "편도",
+      driveMode: "왕복",
 
       basePrice: 150000,
       laborFee: 30000, // 수작업비 발생
@@ -350,7 +351,7 @@ const styles = StyleSheet.create({
   },
   incomeBadgeText: {
     color: "#FFF",
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: "700",
   },
   incomeFooter: {
@@ -370,7 +371,7 @@ const styles = StyleSheet.create({
   },
   incomeSub: {
     color: "rgba(255, 255, 255, 0.9)",
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: "500",
   },
   sectionTitle: {

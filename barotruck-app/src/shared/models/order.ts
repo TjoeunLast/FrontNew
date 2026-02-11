@@ -3,7 +3,15 @@ import { ImageInfo } from "./ImageInfo";
 // @/shared/models/order.
 
 /** 오더 상태 (Order.java의 status 필드 대응) */
-export type OrderStatus = 'REQUESTED' | 'ACCEPTED' | 'LOADING' | 'IN_TRANSIT' | 'UNLOADING' | 'COMPLETED' | 'CANCELLED' | 'PENDING';
+export type OrderStatus =
+  | "REQUESTED"
+  | "ACCEPTED"
+  | "LOADING"
+  | "IN_TRANSIT"
+  | "UNLOADING"
+  | "COMPLETED"
+  | "CANCELLED"
+  | "PENDING";
 
 /** * 오더 생성 요청 (OrderRequest.java 대응)
  */
@@ -38,7 +46,7 @@ export interface OrderRequest {
   reqCarType: string;
   reqTonnage: string;
   driveMode?: string;
-  loadWeight? : number;
+  loadWeight?: number;
   // --- [화물 및 작업 세부 정보] ---
   // 화물 내용물 (예: 정밀 기계, 파레트 짐, 농산물 등)
   // 적재 방식 (예: 독차-차 한 대 전체 사용, 혼적-다른 짐과 같이 적재)
@@ -54,15 +62,15 @@ export interface OrderRequest {
   // 결제 방식 (예: 신용카드, 계좌이체, 인수증/후불, 선불)
   basePrice: number;
   payMethod: string;
-  laborFee?: number;         // 수작업비 (기사님이 직접 상하차를 도울 경우 발생하는 수고비)
-  packagingPrice?: number;   // 포장비용 (물건 보호를 위한 래핑, 파레트 제공 등 실비)
-  insuranceFee?: number;     // 적재물 보험료 (고가 화물일 경우 추가되는 보험 비용)
+  laborFee?: number; // 수작업비 (기사님이 직접 상하차를 도울 경우 발생하는 수고비)
+  packagingPrice?: number; // 포장비용 (물건 보호를 위한 래핑, 파레트 제공 등 실비)
+  insuranceFee?: number; // 적재물 보험료 (고가 화물일 경우 추가되는 보험 비용)
 
   distance: number;
   duration: number;
   // --- [시스템 계산 지표: 지도 API 연동 결과] ---
-    // 예상 주행 거리 (단위: 미터 또는 킬로미터)
-     // 예상 소요 시간 (단위: 초 또는 분)
+  // 예상 주행 거리 (단위: 미터 또는 킬로미터)
+  // 예상 소요 시간 (단위: 초 또는 분)
 }
 
 /** * 오더 상세 응답 (OrderResponse.java 대응)
@@ -72,6 +80,7 @@ export interface OrderResponse {
   status: OrderStatus;
   createdAt: string; //
   updated?: string;
+  isInstant?: boolean;
   // OrderSnapshot 대응 데이터
 
   startAddr: string;
@@ -83,7 +92,7 @@ export interface OrderResponse {
   endPlace: string;
   endType: string;
   endSchedule?: string;
-  
+
   cargoContent: string;
   loadMethod?: string;
   workType?: string;
@@ -91,21 +100,21 @@ export interface OrderResponse {
   reqCarType: string;
   reqTonnage: string;
   driveMode?: string;
-  loadWeight? : number; 
+  loadWeight?: number;
 
   // 요금
-    basePrice: number;
-    laborFee?: number;
-    packagingPrice?: number;
-    insuranceFee?: number;
-    payMethod: string;
-    
-    // 시스템 지표
-    distance: number;
-    duration: number;
+  basePrice: number;
+  laborFee?: number;
+  packagingPrice?: number;
+  insuranceFee?: number;
+  payMethod: string;
 
-    user?: UserSummary;
-    cancellation?: CancellationSummary;
+  // 시스템 지표
+  distance: number;
+  duration: number;
+
+  user?: UserSummary;
+  cancellation?: CancellationSummary;
 }
 
 export interface UserSummary {
@@ -125,7 +134,6 @@ export interface CancellationSummary {
   cancelledAt?: string;
   cancelledBy?: string;
 }
-
 
 /** 대시보드 데이터 모델 (차주 홈 화면용) */
 export interface DriverDashboardResponse {
