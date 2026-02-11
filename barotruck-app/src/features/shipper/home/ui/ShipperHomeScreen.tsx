@@ -1,14 +1,23 @@
-import { Ionicons } from "@expo/vector-icons";
+﻿import { Ionicons } from "@expo/vector-icons";
+import { useFocusEffect } from "@react-navigation/native";
 import { useRouter } from "expo-router";
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { OrderApi } from "@/shared/api/orderService";
+import type { OrderResponse, OrderStatus } from "@/shared/models/order";
+import { UserService } from "@/shared/api/userService";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import { Button } from "@/shared/ui/base/Button";
 import { Card } from "@/shared/ui/base/Card";
 import { Divider } from "@/shared/ui/base/Divider";
 import { IconButton } from "@/shared/ui/base/IconButton";
 import { Badge } from "@/shared/ui/feedback/Badge";
+import {
+  getCurrentUserSnapshot,
+  saveCurrentUserSnapshot,
+} from "@/shared/utils/currentUserStorage";
 
 type SummaryItem = {
   key: "matching" | "driving" | "done";
@@ -27,6 +36,38 @@ type LiveOrderItem = {
   priceWon: number;
   updatedAtLabel: string;
 };
+type StatusFilter = "ALL" | LiveOrderItem["status"];
+
+function mapStatus(status: OrderStatus): LiveOrderItem["status"] {
+  if (status === "COMPLETED") return "DONE";
+  if (status === "REQUESTED" || status === "PENDING") return "MATCHING";
+  return "DRIVING";
+}
+
+function toRelativeLabel(iso?: string) {
+  if (!iso) return "방금 전";
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return "방금 전";
+  const diffMin = Math.max(0, Math.floor((Date.now() - t) / 60000));
+  if (diffMin < 1) return "방금 전";
+  if (diffMin < 60) return `${diffMin}분 전`;
+  const h = Math.floor(diffMin / 60);
+  if (h < 24) return `${h}시간 전`;
+  return `${Math.floor(h / 24)}일 전`;
+}
+
+function mapOrderToLiveItem(o: OrderResponse): LiveOrderItem {
+  return {
+    id: String(o.orderId),
+    status: mapStatus(o.status),
+    from: o.startAddr || o.startPlace || "-",
+    to: o.endAddr || o.endPlace || "-",
+    distanceKm: Math.round(o.distance ?? 0),
+    cargoSummary: `${o.reqTonnage ?? ""} ${o.reqCarType ?? ""}`.trim() || o.cargoContent || "-",
+    priceWon: o.basePrice ?? 0,
+    updatedAtLabel: toRelativeLabel(o.updated ?? o.createdAt),
+  };
+}
 
 function formatWon(v: number) {
   const s = Math.round(v).toString();
@@ -49,62 +90,93 @@ export function ShipperHomeScreen() {
   const t = useAppTheme();
   const c = t.colors;
   const router = useRouter();
+  const insets = useSafeAreaInsets();
 
-  const name = "김화주"; // TODO: authStore 연결 시 교체
+  const [displayName, setDisplayName] = useState("화주");
+  const [liveOrders, setLiveOrders] = useState<LiveOrderItem[]>([]);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
+  const [showAll, setShowAll] = useState(false);
 
-  const summary: SummaryItem[] = useMemo(
-    () => [
-      { key: "matching", label: "배차대기", value: 1, icon: "time-outline" },
-      { key: "driving", label: "운송중", value: 2, icon: "car-outline" },
-      { key: "done", label: "완료", value: 15, icon: "checkmark-circle-outline" },
-    ],
-    []
+  useFocusEffect(
+    React.useCallback(() => {
+      let active = true;
+      void (async () => {
+        try {
+          const me = await UserService.getMyInfo();
+          if (!active) return;
+          setDisplayName(me.nickname || "화주");
+          await saveCurrentUserSnapshot({
+            email: me.email,
+            nickname: me.nickname,
+            role: me.role,
+          });
+        } catch {
+          const cached = await getCurrentUserSnapshot();
+          if (!active) return;
+          if (cached?.nickname) setDisplayName(cached.nickname);
+        }
+      })();
+
+      return () => {
+        active = false;
+      };
+    }, [])
   );
 
-  const liveOrders: LiveOrderItem[] = useMemo(
-    () => [
-      {
-        id: "o1",
-        status: "MATCHING",
-        from: "서울 강남",
-        to: "부산 해운대",
-        distanceKm: 340,
-        cargoSummary: "11톤 윙바디 · 독차",
-        priceWon: 350000,
-        updatedAtLabel: "10분 전",
-      },
-      {
-        id: "o2",
-        status: "DRIVING",
-        from: "인천 남동",
-        to: "대전 유성",
-        distanceKm: 120,
-        cargoSummary: "5톤 카고 · 혼적",
-        priceWon: 180000,
-        updatedAtLabel: "1일 전",
-      },
-      {
-        id: "o3",
-        status: "DRIVING",
-        from: "경기 수원",
-        to: "서울 종로",
-        distanceKm: 45,
-        cargoSummary: "1톤 카고 · 독차",
-        priceWon: 60000,
-        updatedAtLabel: "1일 전",
-      },
-    ],
-    []
+  useFocusEffect(
+    React.useCallback(() => {
+      let active = true;
+      void (async () => {
+        try {
+          const rows = await OrderApi.getAvailableOrders();
+          if (!active) return;
+          setLiveOrders(rows.map(mapOrderToLiveItem).slice(0, 50));
+        } catch {
+          if (!active) return;
+          setLiveOrders([]);
+        }
+      })();
+      return () => {
+        active = false;
+      };
+    }, [])
   );
 
-  const goCreateOrder = () => router.push("/(shipper)/create-order/step1-route");
-  const goOrdersTab = () => router.push("/(shipper)/(tabs)/orders");
-  const goNotificationsTab = () => router.push("/(shipper)/(tabs)/notifications");
+  const summary: SummaryItem[] = useMemo(() => {
+    const matching = liveOrders.filter((x) => x.status === "MATCHING").length;
+    const driving = liveOrders.filter((x) => x.status === "DRIVING").length;
+    const done = liveOrders.filter((x) => x.status === "DONE").length;
+    return [
+      { key: "matching", label: "배차대기", value: matching, icon: "time-outline" },
+      { key: "driving", label: "운송중", value: driving, icon: "car-outline" },
+      { key: "done", label: "완료", value: done, icon: "checkmark-circle-outline" },
+    ];
+  }, [liveOrders]);
+
+  const goCreateOrder = () => router.push("/(shipper)/create-order/step1-route" as any);
+
+  const goNotificationsTab = () => router.push("/(shipper)/(tabs)/notifications" as any);
+
+  const goOrderDetail = (id: string) => {
+    router.push(`/(common)/orders/${id}` as any);
+  };
+
+  const filteredOrders = useMemo(() => {
+    if (statusFilter === "ALL") return liveOrders;
+    return liveOrders.filter((x) => x.status === statusFilter);
+  }, [liveOrders, statusFilter]);
+
+  const visibleOrders = useMemo(() => {
+    if (showAll) return filteredOrders;
+    return filteredOrders.slice(0, 3);
+  }, [filteredOrders, showAll]);
 
   return (
     <View style={[s.page, { backgroundColor: c.bg.canvas }]}>
-      <ScrollView contentContainerStyle={s.container} showsVerticalScrollIndicator={false}>
-        {/* Top Row */}
+      <ScrollView
+        contentContainerStyle={[s.container, { paddingTop: Math.max(18, insets.top + 10) }]}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={s.topRow}>
           <Text style={[s.brandText, { color: c.brand.primary }]}>Baro Truck</Text>
 
@@ -119,10 +191,9 @@ export function ShipperHomeScreen() {
           </View>
         </View>
 
-        {/* Greeting */}
         <View style={s.hello}>
           <Text style={[s.helloSmall, { color: c.text.secondary }]}>오늘도 안전운송 하세요! 🚚</Text>
-          <Text style={[s.helloName, { color: c.brand.primary }]}>{name}님,</Text>
+          <Text style={[s.helloName, { color: c.brand.primary }]}>{displayName}님,</Text>
           <Text style={[s.helloTitle, { color: c.text.primary }]}>화물 등록 하시나요?</Text>
         </View>
 
@@ -143,7 +214,27 @@ export function ShipperHomeScreen() {
                 : c.status.success;
 
             return (
-              <Card key={it.key} padding={14} style={[s.summaryCard, { backgroundColor: c.bg.surface }]}>
+              <Card
+                key={it.key}
+                padding={14}
+                onPress={() => {
+                  const next = it.key === "matching" ? "MATCHING" : it.key === "driving" ? "DRIVING" : "DONE";
+                  setStatusFilter(next);
+                  setShowAll(true);
+                }}
+                style={[
+                  s.summaryCard,
+                  {
+                    backgroundColor: c.bg.surface,
+                    borderColor:
+                      (it.key === "matching" && statusFilter === "MATCHING") ||
+                      (it.key === "driving" && statusFilter === "DRIVING") ||
+                      (it.key === "done" && statusFilter === "DONE")
+                        ? c.brand.primary
+                        : c.border.default,
+                  },
+                ]}
+              >
                 <View style={s.summaryCenter}>
                   <View style={[s.summaryIconWrap, { backgroundColor: iconBg }]}>
                     <Ionicons name={it.icon} size={18} color={iconColor} />
@@ -157,27 +248,31 @@ export function ShipperHomeScreen() {
           })}
         </View>
 
-        {/* CTA */}
         <View style={s.ctaWrap}>
           <Button title="화물 등록하기" onPress={goCreateOrder} fullWidth />
         </View>
 
-        {/* Section Header */}
         <View style={s.sectionHeader}>
           <Text style={[s.sectionTitle, { color: c.text.primary }]}>실시간 운송 현황</Text>
-          <Text style={[s.sectionLink, { color: c.text.secondary }]} onPress={goOrdersTab}>
-            전체보기
+          <Text
+            style={[s.sectionLink, { color: c.text.secondary }]}
+            onPress={() => setShowAll((v) => !v)}
+          >
+            {showAll ? "간단보기" : "전체보기"}
           </Text>
         </View>
 
-        {/* Live Cards */}
-        {liveOrders.slice(0, 3).map((o) => (
-          <Card
-            key={o.id}
-            padding={16}
-            style={s.orderCard}
-            onPress={() => router.push(`/(common)/orders/${String(o.id)}`)}
+        {statusFilter !== "ALL" ? (
+          <Text
+            style={[s.sectionLink, { color: c.brand.primary, marginBottom: 8 }]}
+            onPress={() => setStatusFilter("ALL")}
           >
+            필터 해제
+          </Text>
+        ) : null}
+
+        {visibleOrders.map((o) => (
+          <Card key={o.id} padding={16} style={s.orderCard} onPress={() => goOrderDetail(String(o.id))}>
             <View style={s.orderTopRow}>
               <Badge label={labelByStatus(o.status)} tone={toneByStatus(o.status)} />
               <View style={s.timeRow}>

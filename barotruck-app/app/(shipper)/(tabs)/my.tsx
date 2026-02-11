@@ -1,3 +1,5 @@
+﻿import { useFocusEffect } from "@react-navigation/native";
+import { useRouter } from "expo-router";
 import React, { useMemo, useState } from "react";
 import {
   Alert,
@@ -8,11 +10,31 @@ import {
   type TextStyle,
   type ViewStyle,
 } from "react-native";
-import { useRouter } from "expo-router";
 
+import { AuthService } from "@/shared/api/authService";
+import { UserService } from "@/shared/api/userService";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import { Button } from "@/shared/ui/base/Button";
 import { withAlpha } from "@/shared/utils/color";
+import {
+  clearCurrentUserSnapshot,
+  getCurrentUserSnapshot,
+  saveCurrentUserSnapshot,
+} from "@/shared/utils/currentUserStorage";
+
+type ProfileView = {
+  email: string;
+  name: string;
+  nickname: string;
+  role: string;
+};
+
+function roleToKorean(role: string) {
+  if (role === "SHIPPER") return "화주";
+  if (role === "DRIVER") return "차주";
+  if (role === "ADMIN") return "관리자";
+  return role || "-";
+}
 
 export default function ShipperMyScreen() {
   const router = useRouter();
@@ -20,8 +42,53 @@ export default function ShipperMyScreen() {
   const c = t.colors;
 
   const [loading, setLoading] = useState(false);
+  const [profile, setProfile] = useState<ProfileView>({
+    email: "-",
+    name: "-",
+    nickname: "-",
+    role: "-",
+  });
 
-  // ✅ 스타일 정의 (c가 바뀔 때만 재계산)
+  useFocusEffect(
+    React.useCallback(() => {
+      let active = true;
+
+      void (async () => {
+        try {
+          const me = await UserService.getMyInfo();
+          const cached = await getCurrentUserSnapshot();
+          const next: ProfileView = {
+            email: me.email || "-",
+            name: cached?.name || "-",
+            nickname: me.nickname || cached?.nickname || "-",
+            role: roleToKorean(me.role || cached?.role || ""),
+          };
+          if (!active) return;
+          setProfile(next);
+          await saveCurrentUserSnapshot({
+            email: me.email,
+            nickname: me.nickname,
+            name: cached?.name,
+            role: me.role,
+          });
+        } catch {
+          const cached = await getCurrentUserSnapshot();
+          if (!active || !cached) return;
+          setProfile({
+            email: cached.email || "-",
+            name: cached.name || "-",
+            nickname: cached.nickname || "-",
+            role: roleToKorean(cached.role || ""),
+          });
+        }
+      })();
+
+      return () => {
+        active = false;
+      };
+    }, [])
+  );
+
   const s = useMemo(() => {
     return StyleSheet.create({
       wrap: { flex: 1, padding: 20, paddingTop: 36, backgroundColor: c.bg.surface } as ViewStyle,
@@ -52,18 +119,15 @@ export default function ShipperMyScreen() {
         borderWidth: 1,
         borderColor: withAlpha(c.status.danger, 0.55),
       } as ViewStyle,
-      logoutText: { fontSize: 16, fontWeight: "900", color: c.status.danger } as TextStyle,
     });
   }, [c]);
 
-  // ✅ 실제 로그아웃 수행 함수
   const doLogout = async () => {
-    if (loading) return; // 중복 클릭 방지 가드
-
+    if (loading) return;
     try {
       setLoading(true);
-      
-      // 스토어 없이 단순히 화면만 이동 (필요 시 여기서 AsyncStorage.clear() 등을 호출)
+      await AuthService.logout();
+      await clearCurrentUserSnapshot();
       router.dismissAll();
       router.replace("/(auth)/login");
     } finally {
@@ -71,7 +135,6 @@ export default function ShipperMyScreen() {
     }
   };
 
-  // ✅ 로그아웃 버튼 클릭 핸들러
   const onLogout = () => {
     if (Platform.OS === "web") {
       const ok = window.confirm("정말 로그아웃할까요?");
@@ -89,16 +152,24 @@ export default function ShipperMyScreen() {
   return (
     <View style={s.wrap}>
       <Text style={s.title}>내 정보</Text>
-      <Text style={s.sub}>마이페이지</Text>
+      <Text style={s.sub}>마이페이지 (임시)</Text>
 
       <View style={s.card}>
         <View style={s.row}>
-          <Text style={s.rowLabel}>이름</Text>
-          <Text style={s.rowValue}>-</Text>
+          <Text style={s.rowLabel}>이메일</Text>
+          <Text style={s.rowValue}>{profile.email}</Text>
         </View>
         <View style={s.row}>
-          <Text style={s.rowLabel}>이메일</Text>
-          <Text style={s.rowValue}>-</Text>
+          <Text style={s.rowLabel}>이름</Text>
+          <Text style={s.rowValue}>{profile.name}</Text>
+        </View>
+        <View style={s.row}>
+          <Text style={s.rowLabel}>닉네임</Text>
+          <Text style={s.rowValue}>{profile.nickname}</Text>
+        </View>
+        <View style={s.row}>
+          <Text style={s.rowLabel}>회원 유형</Text>
+          <Text style={s.rowValue}>{profile.role}</Text>
         </View>
 
         <View style={s.divider} />
@@ -110,8 +181,8 @@ export default function ShipperMyScreen() {
           fullWidth
           loading={loading}
           onPress={onLogout}
-          disabled={loading} // 중복 클릭 방지 버튼 비활성화
-          style={s.logoutBtn} // ✅ Style -> style 오타 수정 완료
+          disabled={loading}
+          style={s.logoutBtn}
         />
       </View>
     </View>
