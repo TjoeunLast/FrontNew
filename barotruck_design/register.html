@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>화물 등록 - 바로트럭</title>
+  
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+  <style>
+    /* =========================================
+       1. 디자인 토큰
+       ========================================= */
+    :root {
+      --primary: #4E46E5;       
+      --primary-light: #EEF2FF; 
+      --bg-app: #F8FAFC;        
+      --bg-surface: #FFFFFF;    
+      --text-main: #0F172A;     
+      --text-sub: #64748B;      
+      --border: #E2E8F0;        
+      --radius-md: 12px;        
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Pretendard', sans-serif; -webkit-tap-highlight-color: transparent; }
+    
+    body { background-color: #eee; display: flex; justify-content: center; min-height: 100vh; }
+
+    .app-container {
+      width: 100%; max-width: 420px;
+      background-color: var(--bg-app);
+      position: relative; min-height: 100vh;
+      padding-bottom: 100px;
+      box-shadow: 0 0 30px rgba(0,0,0,0.1);
+    }
+
+    /* 헤더 */
+    header {
+      padding: 16px 24px; display: flex; align-items: center; justify-content: space-between;
+      background: var(--bg-surface); border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; z-index: 50;
+    }
+    .page-title { font-size: 18px; font-weight: 700; color: var(--text-main); }
+    .back-btn { font-size: 24px; cursor: pointer; color: var(--text-main); }
+
+    /* 섹션 공통 */
+    .section {
+      background: var(--bg-surface); margin-bottom: 12px; padding: 24px 20px;
+    }
+    .section-title { font-size: 16px; font-weight: 700; margin-bottom: 16px; color: var(--text-main); }
+    .label { font-size: 13px; font-weight: 600; color: var(--text-sub); margin-bottom: 8px; display: block; }
+
+    /* [복구됨] 구간 타임라인 스타일 */
+    .route-container { position: relative; }
+    .route-line {
+      position: absolute; left: 14px; top: 20px; bottom: 20px;
+      width: 2px; background: #E2E8F0; z-index: 0;
+    }
+    .route-item { position: relative; z-index: 1; margin-bottom: 30px; }
+    .route-item:last-child { margin-bottom: 0; }
+    
+    .dot {
+      width: 30px; height: 30px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 700; color: white;
+      position: absolute; left: 0; top: 4px;
+    }
+    .dot.start { background: var(--primary); }
+    .dot.end { background: var(--text-main); }
+    
+    .route-inputs { margin-left: 42px; }
+    
+    /* 주소 검색 버튼 */
+    .addr-btn {
+      width: 100%; height: 48px; border: 1px solid var(--border); border-radius: var(--radius-md);
+      background: #F8FAFC; text-align: left; padding: 0 16px;
+      color: var(--text-main); font-size: 15px; font-weight: 500;
+      margin-bottom: 8px; cursor: pointer; display: flex; align-items: center; justify-content: space-between;
+    }
+
+    /* 토글/그리드 버튼 */
+    .toggle-group { display: flex; gap: 6px; }
+    .toggle-btn {
+      flex: 1; height: 38px; border: 1px solid var(--border); border-radius: 8px;
+      font-size: 13px; color: var(--text-sub); background: white; cursor: pointer;
+    }
+    .toggle-btn.selected { background: var(--primary); color: white; border-color: var(--primary); font-weight: 600; }
+
+    .grid-options { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 16px; }
+    .grid-btn {
+      height: 42px; border: 1px solid var(--border); border-radius: 8px;
+      font-size: 13px; color: var(--text-sub); background: white; cursor: pointer;
+    }
+    .grid-btn.selected { border-color: var(--primary); color: var(--primary); background: #EEF2FF; font-weight: 700; }
+
+    /* 입력 필드 */
+    .input-field {
+      width: 100%; height: 48px; padding: 0 16px;
+      border: 1px solid var(--border); border-radius: var(--radius-md); font-size: 15px; background: white;
+    }
+    .input-row { display: flex; gap: 10px; margin-bottom: 16px; }
+
+    /* 사진 첨부 */
+    .photo-upload-area { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 8px; }
+    .photo-btn {
+      width: 80px; height: 80px; flex-shrink: 0;
+      border: 1px dashed #CBD5E1; border-radius: 12px;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      color: var(--text-sub); font-size: 12px; cursor: pointer;
+    }
+
+    /* 배차 방식 카드 */
+    .dispatch-method-box { display: flex; gap: 10px; margin-bottom: 20px; }
+    .method-card {
+      flex: 1; padding: 16px; border: 1px solid var(--border); border-radius: 12px;
+      cursor: pointer; transition: 0.2s; background: white;
+    }
+    .method-card.selected {
+      border-color: var(--primary); background: #EEF2FF; box-shadow: 0 4px 10px rgba(78, 70, 229, 0.1);
+    }
+    .method-icon { font-size: 24px; margin-bottom: 8px; display: block; }
+    .method-title { font-weight: 700; font-size: 15px; margin-bottom: 4px; color: var(--text-main); }
+    .method-desc { font-size: 12px; color: var(--text-sub); line-height: 1.4; }
+
+    /* AI 추천 운임 */
+    .recommend-box {
+      background: #EEF2FF; border: 1px solid #C7D2FE;
+      border-radius: var(--radius-md); padding: 16px;
+      margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;
+    }
+    .rec-label { font-size: 12px; color: var(--primary); margin-bottom: 4px; font-weight: 600; }
+    .rec-price { font-size: 18px; font-weight: 800; color: var(--primary); }
+    .btn-apply {
+      background: var(--primary); color: white;
+      padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600;
+      border: none; cursor: pointer; box-shadow: 0 2px 4px rgba(78, 70, 229, 0.2);
+    }
+
+    /* [수정됨] 요금 계산 영역 (디자인 깨짐 방지) */
+    .cost-box { background: #F8FAFC; border-radius: var(--radius-md); padding: 20px; }
+    
+    .cost-row { 
+      display: flex; justify-content: space-between; align-items: center; 
+      margin-bottom: 12px; font-size: 14px; width: 100%;
+    }
+    
+    .cost-row.total { 
+      margin-top: 16px; pt: 16px; border-top: 1px solid #E2E8F0; 
+      font-weight: 700; font-size: 18px; color: var(--text-main);
+    }
+    
+    /* 금액 입력창 래퍼 */
+    .price-input-wrap {
+      display: flex; align-items: center; justify-content: flex-end; gap: 4px;
+    }
+    .input-price {
+      text-align: right; border: none; background: transparent; 
+      font-size: 20px; font-weight: 700; color: var(--text-main); 
+      width: 120px; /* 고정 너비로 레이아웃 유지 */
+      border-bottom: 1px solid var(--border); padding-bottom: 4px;
+    }
+    .input-price:focus { border-color: var(--primary); outline: none; }
+
+    /* 하단 버튼 */
+    .bottom-fixed {
+      position: fixed; bottom: 0; left: 0; width: 100%;
+      background: white; border-top: 1px solid var(--border);
+      padding: 16px 20px; z-index: 100; display: flex; justify-content: center;
+    }
+    /* [수정됨] 버튼 색상 메인 컬러로 변경 */
+    .btn-submit {
+      width: 100%; max-width: 380px; height: 56px;
+      background: var(--primary); color: white;
+      border-radius: var(--radius-md);
+      font-size: 17px; font-weight: 700; border: none; cursor: pointer;
+      box-shadow: 0 4px 15px rgba(78, 70, 229, 0.3);
+    }
+
+  </style>
+</head>
+<body>
+
+  <div class="app-container">
+    
+    <header>
+      <i class="ph ph-arrow-left back-btn" onclick="history.back()"></i>
+      <div class="page-title">화물 등록</div>
+      <div style="width: 24px;"></div>
+    </header>
+
+    <section class="section">
+      <div class="section-title">구간 및 일시</div>
+      <div class="route-container">
+        <div class="route-line"></div>
+        
+        <div class="route-item">
+          <div class="dot start">출발</div>
+          <div class="route-inputs">
+            <div class="label">상차지 정보</div>
+            <button class="addr-btn" onclick="alert('주소 검색 API')">
+              <span>최근: 서울 강남구 테헤란로...</span>
+              <i class="ph ph-caret-down"></i>
+            </button>
+            
+            <div class="toggle-group" id="startDateGroup" style="margin-top: 8px;">
+              <button class="toggle-btn selected" onclick="selectToggle('startDateGroup', this)">당상(오늘)</button>
+              <button class="toggle-btn" onclick="selectToggle('startDateGroup', this)">익상(내일)</button>
+              <button class="toggle-btn" onclick="selectToggle('startDateGroup', this)">날짜지정</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="route-item">
+          <div class="dot end">도착</div>
+          <div class="route-inputs">
+            <div class="label">하차지 정보</div>
+            <button class="addr-btn" onclick="alert('주소 검색 API')">
+              <span style="color:#94A3B8">주소를 검색해주세요</span>
+              <i class="ph ph-magnifying-glass"></i>
+            </button>
+            
+            <div class="toggle-group" id="endDateGroup" style="margin-top: 8px;">
+              <button class="toggle-btn selected" onclick="selectToggle('endDateGroup', this)">당착</button>
+              <button class="toggle-btn" onclick="selectToggle('endDateGroup', this)">익착</button>
+              <button class="toggle-btn" onclick="selectToggle('endDateGroup', this)">내착</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-title">차량 및 화물 정보</div>
+      
+      <div class="label">톤수</div>
+      <div class="grid-options" style="grid-template-columns: repeat(5, 1fr);" id="tonnageGroup">
+        <button class="grid-btn" onclick="selectGrid('tonnageGroup', this)">1t</button>
+        <button class="grid-btn" onclick="selectGrid('tonnageGroup', this)">1.4t</button>
+        <button class="grid-btn" onclick="selectGrid('tonnageGroup', this)">2.5t</button>
+        <button class="grid-btn" onclick="selectGrid('tonnageGroup', this)">3.5t</button>
+        <button class="grid-btn selected" onclick="selectGrid('tonnageGroup', this)">5t</button>
+        <button class="grid-btn" onclick="selectGrid('tonnageGroup', this)">5축</button>
+        <button class="grid-btn" onclick="selectGrid('tonnageGroup', this)">11t</button>
+        <button class="grid-btn" onclick="selectGrid('tonnageGroup', this)">18t</button>
+        <button class="grid-btn" onclick="selectGrid('tonnageGroup', this)">25t</button>
+      </div>
+
+      <div class="label">차종</div>
+      <div class="grid-options" id="carTypeGroup">
+        <button class="grid-btn" onclick="selectGrid('carTypeGroup', this)">카고</button>
+        <button class="grid-btn selected" onclick="selectGrid('carTypeGroup', this)">윙바디</button>
+        <button class="grid-btn" onclick="selectGrid('carTypeGroup', this)">탑차</button>
+        <button class="grid-btn" onclick="selectGrid('carTypeGroup', this)">축차</button>
+      </div>
+
+      <div class="input-row">
+        <div style="flex: 2;">
+          <div class="label">물품 상세</div>
+          <input type="text" class="input-field" placeholder="예: 파레트 2개, 박스짐">
+        </div>
+        <div style="flex: 1;">
+          <div class="label">중량(톤)</div>
+          <input type="number" class="input-field" placeholder="0">
+        </div>
+      </div>
+
+      <div class="label">사진 첨부 (선택)</div>
+      <div class="photo-upload-area">
+        <div class="photo-btn">
+          <i class="ph ph-camera"></i>
+          <span>사진 추가</span>
+        </div>
+        <div class="photo-btn" style="background: #F1F5F9; border: none;">
+          <i class="ph ph-image" style="color: #94A3B8;"></i>
+          <span>IMG_01</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-title">배차 및 운임</div>
+
+      <div class="label" style="color: var(--primary);">배차 방식 선택</div>
+      <div class="dispatch-method-box">
+        <div class="method-card selected" onclick="selectDispatchMethod(this)">
+          <span class="method-icon">⚡</span>
+          <div class="method-title">바로 배차</div>
+          <div class="method-desc">기사님이 수락하면 즉시 배차됩니다. (빠름)</div>
+        </div>
+        <div class="method-card" onclick="selectDispatchMethod(this)">
+          <span class="method-icon">👑</span>
+          <div class="method-title">직접 배차</div>
+          <div class="method-desc">지원한 기사님의 평점을 보고 선택합니다.</div>
+        </div>
+      </div>
+
+      <div class="recommend-box">
+        <div>
+          <div class="rec-label">AI 추천 운임 (거리 340km)</div>
+          <div class="rec-price" id="recPriceDisplay">320,000 원</div>
+        </div>
+        <button class="btn-apply" onclick="applyRecommend()">적용하기</button>
+      </div>
+
+      <div class="label">결제 방법</div>
+      <div class="toggle-group" style="margin-bottom: 20px;" id="payGroup">
+        <button class="toggle-btn selected" data-fee="0" onclick="changePayMethod(this)">인수증/착불</button>
+        <button class="toggle-btn" data-fee="0.1" onclick="changePayMethod(this)">카드 결제</button>
+      </div>
+
+      <div class="cost-box">
+        <div class="cost-row">
+          <span style="font-weight: 600;">희망 운임</span>
+          <div class="price-input-wrap">
+            <input type="tel" class="input-price" id="priceBase" value="0" onkeyup="calculateTotal()" placeholder="0">
+            <span style="font-weight: 700; font-size: 16px;">원</span>
+          </div>
+        </div>
+        
+        <div class="cost-row" style="color: var(--text-sub);">
+          <span>수수료 (10%)</span>
+          <span id="priceFee">+ 0 원</span>
+        </div>
+
+        <div style="border-top: 1px solid #E2E8F0; margin: 12px 0;"></div>
+
+        <div class="cost-row total">
+          <span>최종 결제 금액</span>
+          <span id="priceTotal">0 원</span>
+        </div>
+      </div>
+    </section>
+
+    <div class="bottom-fixed">
+      <button class="btn-submit" onclick="alert('화물 등록이 완료되었습니다!')">화물 등록하기</button>
+    </div>
+
+  </div>
+
+  <script>
+    // 1. 그리드/토글 버튼 선택
+    function selectGrid(groupId, btn) {
+      const buttons = document.getElementById(groupId).getElementsByClassName('grid-btn');
+      for (let b of buttons) b.classList.remove('selected');
+      btn.classList.add('selected');
+    }
+    function selectToggle(groupId, btn) {
+        const buttons = document.getElementById(groupId).getElementsByClassName('toggle-btn');
+        for (let b of buttons) b.classList.remove('selected');
+        btn.classList.add('selected');
+    }
+
+    // 2. 배차 방식 선택
+    function selectDispatchMethod(card) {
+      const cards = document.querySelectorAll('.method-card');
+      cards.forEach(c => c.classList.remove('selected'));
+      card.classList.add('selected');
+    }
+
+    // 3. 추천 운임 적용
+    const AI_RECOMMENDED_PRICE = 320000;
+    function applyRecommend() {
+      const input = document.getElementById('priceBase');
+      input.value = AI_RECOMMENDED_PRICE.toLocaleString();
+      calculateTotal();
+      input.style.borderColor = '#4E46E5';
+      setTimeout(() => input.style.borderColor = '#E2E8F0', 500);
+    }
+
+    // 4. 결제 및 계산 로직
+    let currentFeeRate = 0; 
+    function changePayMethod(btn) {
+      selectToggle('payGroup', btn);
+      currentFeeRate = parseFloat(btn.getAttribute('data-fee'));
+      calculateTotal();
+    }
+
+    function calculateTotal() {
+      const input = document.getElementById('priceBase');
+      const feeDisplay = document.getElementById('priceFee');
+      const totalDisplay = document.getElementById('priceTotal');
+
+      let rawValue = input.value.replace(/,/g, '');
+      let price = parseInt(rawValue) || 0;
+
+      input.value = price.toLocaleString();
+
+      let fee = Math.floor(price * currentFeeRate);
+      let total = price + fee;
+
+      feeDisplay.innerText = '+ ' + fee.toLocaleString() + ' 원';
+      totalDisplay.innerText = total.toLocaleString() + ' 원';
+    }
+  </script>
+
+</body>
+</html>

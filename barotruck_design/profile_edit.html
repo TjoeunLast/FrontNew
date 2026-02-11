@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>프로필 수정</title>
+  
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+  <style>
+    /* =========================================
+       1. 디자인 토큰 (통일)
+       ========================================= */
+    :root {
+      --primary: #4E46E5;       
+      --primary-light: #EEF2FF; 
+      --bg-app: #FFFFFF; /* 수정 페이지는 흰 배경이 깔끔함 */
+      --text-main: #0F172A;     
+      --text-sub: #64748B;      
+      --border: #E2E8F0;        
+      --radius-md: 12px;        
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Pretendard', sans-serif; -webkit-tap-highlight-color: transparent; }
+    
+    body {
+      background-color: #eee;
+      display: flex; justify-content: center; min-height: 100vh;
+    }
+
+    .app-container {
+      width: 100%; max-width: 420px;
+      background-color: var(--bg-app);
+      position: relative; min-height: 100vh;
+      padding-bottom: 90px;
+      box-shadow: 0 0 30px rgba(0,0,0,0.1);
+    }
+
+    /* 헤더 */
+    header {
+      padding: 16px 24px; display: flex; align-items: center; justify-content: space-between;
+      position: sticky; top: 0; background: #fff; z-index: 50;
+    }
+    .page-title { font-size: 18px; font-weight: 700; color: var(--text-main); }
+    .back-btn { font-size: 24px; cursor: pointer; color: var(--text-main); }
+    .header-action { font-size: 15px; color: var(--text-sub); cursor: pointer; }
+
+    /* 1. 프로필 사진 편집 영역 */
+    .avatar-section {
+      display: flex; flex-direction: column; align-items: center;
+      margin: 20px 0 30px 0;
+    }
+    .avatar-wrapper {
+      position: relative; width: 100px; height: 100px;
+    }
+    .avatar-img {
+      width: 100%; height: 100%; border-radius: 50%;
+      background: var(--primary-light); color: var(--primary);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 48px; border: 1px solid var(--border);
+      object-fit: cover;
+    }
+    .camera-btn {
+      position: absolute; bottom: 0; right: 0;
+      width: 32px; height: 32px; border-radius: 50%;
+      background: var(--text-main); color: white;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; border: 2px solid white;
+    }
+
+    /* 2. 입력 폼 영역 */
+    .form-section { padding: 0 24px; }
+    .input-label { font-size: 13px; font-weight: 600; color: var(--text-sub); margin-bottom: 6px; display: block; }
+    
+    .input-field {
+      width: 100%; height: 50px; padding: 0 16px;
+      border: 1px solid var(--border); border-radius: var(--radius-md);
+      font-size: 15px; color: var(--text-main);
+      margin-bottom: 20px; transition: 0.2s;
+    }
+    .input-field:focus { border-color: var(--primary); outline: none; }
+
+    /* 읽기 전용 (수정 불가) 스타일 */
+    .input-field:read-only {
+      background-color: #F8FAFC; color: #94A3B8; cursor: default;
+    }
+    .input-field:read-only:focus { border-color: var(--border); }
+
+    /* 버튼이 있는 입력창 */
+    .input-row { display: flex; gap: 8px; margin-bottom: 20px; }
+    .input-row .input-field { margin-bottom: 0; }
+    
+    .btn-sm {
+      width: 80px; height: 50px;
+      border: 1px solid var(--border); border-radius: var(--radius-md);
+      background: white; color: var(--text-main);
+      font-size: 13px; font-weight: 600; cursor: pointer;
+    }
+
+    /* 섹션 구분선 */
+    .divider {
+      height: 8px; background: #F8FAFC; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+      margin: 10px 0 30px 0;
+    }
+    .section-title {
+      font-size: 16px; font-weight: 700; color: var(--text-main);
+      margin-bottom: 16px;
+    }
+
+    /* 하단 고정 버튼 */
+    .bottom-fixed {
+      position: fixed; bottom: 0; left: 0; width: 100%;
+      background: white; border-top: 1px solid var(--border);
+      padding: 16px 20px; z-index: 100; display: flex; justify-content: center;
+    }
+    .btn-save {
+      width: 100%; max-width: 380px; height: 56px;
+      background: var(--primary); color: white;
+      border-radius: var(--radius-md);
+      font-size: 17px; font-weight: 700; border: none; cursor: pointer;
+      box-shadow: 0 4px 15px rgba(78, 70, 229, 0.3);
+    }
+    
+  </style>
+</head>
+<body>
+
+  <div class="app-container">
+    
+    <header>
+      <i class="ph ph-arrow-left back-btn" onclick="history.back()"></i>
+      <div class="page-title">프로필 수정</div>
+      <div class="header-action" style="width: 24px;"></div>
+    </header>
+
+    <section class="avatar-section">
+      <div class="avatar-wrapper">
+        <div class="avatar-img"><i class="ph ph-user"></i></div>
+        <div class="camera-btn" onclick="document.getElementById('fileInput').click()">
+          <i class="ph ph-camera"></i>
+        </div>
+        <input type="file" id="fileInput" style="display: none;" accept="image/*">
+      </div>
+    </section>
+
+    <section class="form-section">
+      <div class="input-label">닉네임</div>
+      <input type="text" class="input-field" value="김화주">
+
+      <div class="input-label">아이디 (이메일)</div>
+      <input type="text" class="input-field" value="shipper@baro.com" readonly>
+
+      <div class="input-label">휴대폰 번호</div>
+      <div class="input-row">
+        <input type="tel" class="input-field" value="010-1234-5678" readonly>
+        <!-- <button class="btn-sm" onclick="alert('본인인증 페이지로 이동합니다.')">변경</button> -->
+      </div>
+
+      <div class="input-label">비밀번호</div>
+      <button class="btn-sm" style="width: 100%; text-align: left; padding-left: 16px; color: var(--text-sub);" onclick="alert('비밀번호 변경 팝업')">
+        비밀번호 변경하기
+      </button>
+    </section>
+
+    <div class="divider"></div>
+
+    <section class="form-section" style="padding-bottom: 20px;">
+      <div class="section-title">사업자 정보</div>
+
+      <div class="input-label">회사명 (상호)</div>
+      <input type="text" class="input-field" value="(주)대한물류">
+
+      <div class="input-label">사업자 등록번호</div>
+      <input type="text" class="input-field" value="123-45-67890" readonly>
+
+      <div class="input-label">대표자명</div>
+      <input type="text" class="input-field" value="홍길동" readonly>
+      
+      <div class="input-label" style="font-weight: 400; color: #94A3B8; font-size: 12px; margin-top: -10px;">
+        * 사업자 번호 및 대표자명 변경은 고객센터로 문의해주세요.
+      </div>
+    </section>
+
+    <div class="bottom-fixed">
+      <button class="btn-save" onclick="alert('회원 정보가 수정되었습니다.')">저장하기</button>
+    </div>
+
+  </div>
+
+  <script>
+    // 사진 미리보기 기능 (선택사항)
+    document.getElementById('fileInput').addEventListener('change', function(e) {
+      if (e.target.files && e.target.files[0]) {
+        // 실제 구현시엔 FileReader로 이미지 교체
+        alert('사진이 선택되었습니다: ' + e.target.files[0].name);
+      }
+    });
+  </script>
+
+</body>
+</html>

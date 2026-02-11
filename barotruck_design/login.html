@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>바로트럭 - 로그인</title>
+  
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+  <style>
+    /* =========================================
+       1. 통합 스타일 (기존과 동일)
+       ========================================= */
+    :root {
+      --primary: #4E46E5;       
+      --primary-light: #EEF2FF; 
+      --bg-app: #FFFFFF; /* 로그인은 흰 배경이 깔끔함 */
+      --text-main: #0F172A;     
+      --text-sub: #64748B;      
+      --border: #E2E8F0;        
+      --radius-md: 12px;        
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Pretendard', sans-serif; -webkit-tap-highlight-color: transparent; }
+    
+    body {
+      background-color: #eee;
+      display: flex; justify-content: center; min-height: 100vh;
+    }
+
+    .app-container {
+      width: 100%; max-width: 420px;
+      background-color: var(--bg-app);
+      position: relative; min-height: 100vh;
+      padding: 40px 24px; /* 여백 넉넉하게 */
+      display: flex; flex-direction: column; justify-content: center;
+      box-shadow: 0 0 30px rgba(0,0,0,0.1);
+    }
+
+    /* 2. 로고 영역 */
+    .logo-area {
+      text-align: center; margin-bottom: 40px;
+    }
+    .logo-text {
+      font-size: 28px; font-weight: 800; color: var(--primary);
+      letter-spacing: -1px; margin-bottom: 8px;
+    }
+    .logo-sub {
+      font-size: 15px; color: var(--text-sub);
+    }
+
+    /* 3. 입력 폼 */
+    .input-group { margin-bottom: 24px; }
+    
+    .input-box {
+      margin-bottom: 12px;
+    }
+    .input-field {
+      width: 100%; height: 52px;
+      padding: 0 16px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      font-size: 15px; color: var(--text-main);
+      transition: 0.2s; background: #F8FAFC;
+    }
+    .input-field:focus {
+      border-color: var(--primary); background: #fff; outline: none;
+    }
+    .input-field::placeholder { color: #94A3B8; }
+
+    /* 4. 로그인 옵션 (자동로그인/비번찾기) */
+    .login-options {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 30px; font-size: 13px; color: var(--text-sub);
+    }
+    .check-wrap { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+    .text-link { text-decoration: underline; cursor: pointer; }
+
+    /* 5. 버튼 스타일 */
+    .btn {
+      width: 100%; height: 54px;
+      border-radius: var(--radius-md);
+      font-size: 16px; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; border: none; transition: 0.2s;
+    }
+    .btn-primary {
+      background-color: var(--primary); color: white;
+      box-shadow: 0 4px 12px rgba(78, 70, 229, 0.3);
+      margin-bottom: 16px;
+    }
+    .btn-kakao {
+      background-color: #FEE500; color: #3C1E1E;
+      margin-bottom: 40px;
+    }
+
+    /* 6. 회원가입 유도 (푸터) */
+    .signup-area {
+      text-align: center; font-size: 14px; color: var(--text-sub);
+    }
+    .signup-link {
+      color: var(--primary); font-weight: 700; margin-left: 8px; cursor: pointer;
+    }
+
+  </style>
+</head>
+<body>
+
+  <div class="app-container">
+    
+    <div class="logo-area">
+      <div class="logo-text">Baro Truck</div>
+      <div class="logo-sub">빠르고 간편한 화물 배차의 시작</div>
+    </div>
+
+    <div class="input-group">
+      <div class="input-box">
+        <input type="text" class="input-field" placeholder="아이디 (휴대폰 번호)">
+      </div>
+      <div class="input-box">
+        <input type="password" class="input-field" placeholder="비밀번호">
+      </div>
+    </div>
+
+    <div class="login-options">
+      <label class="check-wrap">
+        <input type="checkbox"> 
+        <span>자동 로그인</span>
+      </label>
+      <span class="text-link">비밀번호 찾기</span>
+    </div>
+
+    <button class="btn btn-primary" onclick="location.href='shipper_home.html'">
+      로그인
+    </button>
+    
+    <button class="btn btn-kakao">
+      <i class="ph ph-chat-circle-dots" style="font-size: 20px; margin-right: 8px;"></i>
+      카카오로 3초만에 시작하기
+    </button>
+
+    <div class="signup-area">
+      아직 계정이 없으신가요?
+      <span class="signup-link" onclick="alert('화주/차주 선택 페이지로 이동')">회원가입</span>
+    </div>
+
+  </div>
+
+</body>
+</html>

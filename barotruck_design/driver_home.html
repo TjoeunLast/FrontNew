@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>바로트럭 차주 - 홈</title>
+  
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@700&display=swap" rel="stylesheet">
+
+  <style>
+    /* =========================================
+       1. 디자인 토큰 (화주 앱과 100% 동일)
+       ========================================= */
+    :root {
+      --primary: #4E46E5;       
+      --primary-dark: #3730A3;
+      --primary-light: #EEF2FF;
+      
+      --bg-app: #F8FAFC;        
+      --bg-surface: #FFFFFF;    
+      
+      --text-main: #0F172A;     
+      --text-sub: #64748B;      
+      --border: #E2E8F0;        
+      --radius-md: 16px;        
+      
+      --shadow-card: 0 4px 20px rgba(0, 0, 0, 0.05);
+      --shadow-float: 0 10px 25px rgba(78, 70, 229, 0.3);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Pretendard', sans-serif; -webkit-tap-highlight-color: transparent; }
+    
+    body { background-color: #eee; display: flex; justify-content: center; min-height: 100vh; }
+
+    .app-container {
+      width: 100%; max-width: 420px;
+      background-color: var(--bg-app);
+      position: relative; min-height: 100vh;
+      padding-bottom: 90px;
+      box-shadow: 0 0 30px rgba(0,0,0,0.1);
+    }
+
+    /* 헤더 */
+    header {
+      padding: 16px 24px; display: flex; justify-content: space-between; align-items: center;
+      background: var(--bg-app); position: sticky; top: 0; z-index: 50;
+    }
+    .logo-text { font-size: 20px; font-weight: 800; color: var(--primary); letter-spacing: -0.5px; }
+    
+    /* 영업 토글 (차주 전용 UI) */
+    .work-toggle {
+      display: flex; align-items: center; gap: 8px;
+      background: #E2E8F0; padding: 4px 12px 4px 4px;
+      border-radius: 20px; cursor: pointer; transition: 0.3s;
+    }
+    .work-toggle.on { background: var(--text-main); } /* 활성 시 진한 검정 */
+    .toggle-circle {
+      width: 24px; height: 24px; background: white; border-radius: 50%;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2); transition: 0.3s;
+    }
+    .work-toggle.on .toggle-circle { transform: translateX(46px); background: var(--primary); }
+    .toggle-text {
+      font-size: 13px; font-weight: 700; color: var(--text-sub); margin-left: 4px;
+    }
+    .work-toggle.on .toggle-text { color: white; margin-left: 0; margin-right: 4px; }
+
+
+    /* 메인 섹션 */
+    .dashboard-section { padding: 10px 24px 24px; }
+    
+    /* 매출 카드 (프리미엄 스타일) */
+    .revenue-card {
+      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+      border-radius: 20px;
+      padding: 24px;
+      color: white;
+      box-shadow: 0 10px 25px rgba(78, 70, 229, 0.25);
+      position: relative; overflow: hidden;
+      margin-bottom: 24px;
+    }
+    .revenue-card::before {
+      content: ''; position: absolute; top: -50px; right: -50px;
+      width: 150px; height: 150px; border-radius: 50%;
+      background: rgba(255,255,255,0.1); pointer-events: none;
+    }
+    .rev-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; }
+    .rev-label { font-size: 14px; opacity: 0.9; font-weight: 500; }
+    .rev-badge { 
+      background: rgba(255,255,255,0.2); padding: 4px 8px; border-radius: 6px; 
+      font-size: 11px; font-weight: 700; backdrop-filter: blur(4px);
+    }
+    .rev-amount {
+      font-family: 'Space Mono', monospace;
+      font-size: 32px; font-weight: 700; letter-spacing: -1px; margin-bottom: 4px;
+    }
+    .rev-sub { font-size: 13px; opacity: 0.7; }
+
+    /* 현황 그리드 (Status Grid) */
+    .status-grid {
+      display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;
+    }
+    .status-item {
+      background: var(--bg-surface);
+      border-radius: var(--radius-md);
+      padding: 16px 10px;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      box-shadow: var(--shadow-card);
+      border: 1px solid var(--border);
+      cursor: pointer; position: relative; transition: 0.2s;
+    }
+    .status-item:active { transform: scale(0.96); }
+    
+    .status-icon { font-size: 24px; color: var(--text-sub); margin-bottom: 8px; }
+    .status-label { font-size: 12px; color: var(--text-sub); font-weight: 600; margin-bottom: 4px; }
+    .status-count { font-size: 18px; font-weight: 800; color: var(--text-main); }
+    
+    /* 활성화 된 상태 스타일 (배차확정 등) */
+    .status-item.active .status-icon { color: var(--primary); }
+    .status-item.active .status-count { color: var(--primary); }
+    .noti-dot {
+      position: absolute; top: 12px; right: 12px;
+      width: 6px; height: 6px; background: #EF4444; border-radius: 50%;
+    }
+
+    /* 리스트 섹션 헤더 */
+    .list-header {
+      padding: 0 24px 12px; display: flex; justify-content: space-between; align-items: flex-end;
+    }
+    .section-title { font-size: 18px; font-weight: 700; color: var(--text-main); }
+    .btn-text { font-size: 13px; color: var(--text-sub); font-weight: 500; cursor: pointer; }
+
+    /* 오더 카드 (화주 카드와 디자인 통일) */
+    .order-list { padding: 0 24px; }
+    .order-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 20px; margin-bottom: 16px;
+      box-shadow: var(--shadow-card);
+      position: relative; cursor: pointer;
+    }
+    .card-top { display: flex; justify-content: space-between; margin-bottom: 16px; }
+    .badge { padding: 6px 10px; border-radius: 8px; font-size: 12px; font-weight: 600; }
+    .badge.rec { background: #111827; color: #F3F4F6; } /* 추천 뱃지 (검정) */
+
+    .route { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+    .loc-text { font-size: 17px; font-weight: 700; color: var(--text-main); }
+    
+    .dist-badge {
+      font-size: 11px; color: var(--text-sub); background: #F1F5F9;
+      padding: 2px 6px; border-radius: 4px; font-weight: 500;
+    }
+    
+    .card-info {
+      display: flex; align-items: center; justify-content: space-between;
+      padding-top: 16px; border-top: 1px solid #F8FAFC;
+    }
+    .info-item { font-size: 14px; color: var(--text-sub); font-weight: 500; }
+    /* 운임 강조 */
+    .info-price { font-size: 18px; font-weight: 800; color: var(--primary); }
+
+    /* 하단 탭바 */
+    .bottom-nav {
+      position: fixed; bottom: 0; width: 100%; max-width: 420px;
+      height: 80px; background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px); border-top: 1px solid var(--border);
+      display: flex; justify-content: space-around; padding-bottom: 10px; z-index: 100;
+    }
+    .nav-item {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      color: #94A3B8; cursor: pointer;
+    }
+    .nav-item.active { color: var(--primary); }
+    .nav-item i { font-size: 26px; margin-bottom: 4px; }
+    .nav-item span { font-size: 10px; font-weight: 500; }
+    .nav-item.active i { font-weight: fill; }
+
+  </style>
+</head>
+<body>
+
+  <div class="app-container">
+    
+    <header>
+      <div class="logo-text">BARO</div> <div style="display: flex; gap: 16px; align-items: center;">
+        <div class="work-toggle on" onclick="toggleWork(this)">
+          <div class="toggle-circle"></div>
+          <span class="toggle-text">영업중</span>
+        </div>
+        <i class="ph ph-bell" style="font-size: 24px; color: var(--text-main);"></i>
+      </div>
+    </header>
+
+    <section class="dashboard-section">
+      <div class="revenue-card">
+        <div class="rev-top">
+          <div class="rev-label">2월 예상 수익</div>
+          <div class="rev-badge">+8.5%</div>
+        </div>
+        <div class="rev-amount">3,540,000</div>
+        <div class="rev-sub">목표 달성까지 46만원 남았어요!</div>
+      </div>
+
+      <div class="status-grid">
+        <div class="status-item active">
+          <div class="noti-dot"></div>
+          <i class="ph ph-steering-wheel status-icon"></i>
+          <span class="status-label">배차확정</span>
+          <span class="status-count">1</span>
+        </div>
+        <div class="status-item">
+          <i class="ph ph-truck status-icon"></i>
+          <span class="status-label">운행중</span>
+          <span class="status-count">0</span>
+        </div>
+        <div class="status-item">
+          <i class="ph ph-coins status-icon"></i>
+          <span class="status-label">정산대기</span>
+          <span class="status-count">5</span>
+        </div>
+      </div>
+    </section>
+
+    <div class="list-header">
+      <div class="section-title">맞춤 추천 오더</div>
+      <div class="btn-text">전체보기</div>
+    </div>
+
+    <div class="order-list">
+      <div class="order-card">
+        <div class="card-top">
+          <span class="badge rec">AI 추천</span>
+          <span style="font-size: 12px; color: var(--text-sub);">지금 막 등록됨</span>
+        </div>
+        <div class="route">
+          <span class="loc-text">경기 수원</span>
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 2px;">
+            <span class="dist-badge">340km</span>
+            <i class="ph ph-arrow-right" style="color: var(--text-sub); font-size: 14px;"></i>
+          </div>
+          <span class="loc-text">부산 강서</span>
+        </div>
+        <div class="card-info">
+          <span class="info-item">11톤 윙바디 · 당상익착</span>
+          <span class="info-price">420,000원</span>
+        </div>
+      </div>
+
+      <div class="order-card">
+        <div class="card-top">
+          <span class="badge" style="background: #F3F4F6; color: var(--text-sub);">선호 지역</span>
+          <span style="font-size: 12px; color: var(--text-sub);">10분 전</span>
+        </div>
+        <div class="route">
+          <span class="loc-text">서울 강동</span>
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 2px;">
+            <span class="dist-badge">85km</span>
+            <i class="ph ph-arrow-right" style="color: var(--text-sub); font-size: 14px;"></i>
+          </div>
+          <span class="loc-text">강원 원주</span>
+        </div>
+        <div class="card-info">
+          <span class="info-item">5톤 카고 · 내일 상차</span>
+          <span class="info-price">150,000원</span>
+        </div>
+      </div>
+    </div>
+
+
+    <nav class="bottom-nav">
+      <div class="nav-item active">
+        <i class="ph ph-house"></i>
+        <span>홈</span>
+      </div>
+      <div class="nav-item">
+        <i class="ph ph-list-dashes"></i>
+        <span>오더</span>
+      </div>
+      <div class="nav-item">
+        <i class="ph ph-steering-wheel"></i>
+        <span>운행</span>
+      </div>
+      <div class="nav-item">
+        <i class="ph ph-wallet"></i>
+        <span>정산</span>
+      </div>
+      <div class="nav-item">
+        <i class="ph ph-list"></i>
+        <span>더보기</span>
+      </div>
+    </nav>
+
+  </div>
+
+  <script>
+    function toggleWork(btn) {
+      btn.classList.toggle('on');
+      const text = btn.querySelector('.toggle-text');
+      const circle = btn.querySelector('.toggle-circle');
+      
+      if (btn.classList.contains('on')) {
+        text.innerText = "영업중";
+        text.style.color = "white";
+        // circle.style.background = "var(--primary)";
+      } else {
+        text.innerText = "휴식중";
+        text.style.color = "var(--text-sub)";
+        // circle.style.background = "white";
+      }
+    }
+  </script>
+
+</body>
+</html>

@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>바로트럭 - 배차관리</title>
+  
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+  <style>
+    /* =========================================
+       1. 통합 스타일 (CSS 파일 내용 포함)
+       ========================================= */
+    :root {
+      --primary: #4E46E5;       
+      --primary-light: #EEF2FF; 
+      --accent: #A3E635;        
+      
+      --bg-app: #F8FAFC;        
+      --bg-surface: #FFFFFF;    
+      
+      --text-main: #0F172A;     
+      --text-sub: #64748B;      
+      --border: #E2E8F0;        
+
+      --radius-sm: 8px;
+      --radius-md: 16px;        
+      
+      --shadow-card: 0 4px 20px rgba(0, 0, 0, 0.05);
+      --shadow-float: 0 10px 25px rgba(78, 70, 229, 0.3);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Pretendard', sans-serif; -webkit-tap-highlight-color: transparent; }
+    
+    body {
+      background-color: #eee;
+      display: flex; justify-content: center; min-height: 100vh;
+    }
+
+    .app-container {
+      width: 100%; max-width: 420px;
+      background-color: var(--bg-app);
+      position: relative; min-height: 100vh;
+      padding-bottom: 90px;
+      box-shadow: 0 0 30px rgba(0,0,0,0.1);
+    }
+
+    /* --- [헤더 & 탭] --- */
+    header {
+      padding: 16px 24px; display: flex; justify-content: center; align-items: center;
+      background: var(--bg-surface); border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; z-index: 50;
+    }
+    .page-title { font-size: 18px; font-weight: 700; color: var(--text-main); }
+
+    .tab-header {
+      display: flex; background: var(--bg-surface);
+      border-bottom: 1px solid var(--border);
+      position: sticky; top: 60px; z-index: 40;
+    }
+    .tab-item {
+      flex: 1; text-align: center; padding: 14px 0;
+      font-size: 15px; color: var(--text-sub); cursor: pointer; position: relative;
+    }
+    .tab-item.active { color: var(--text-main); font-weight: 700; }
+    .tab-item.active::after {
+      content: ''; position: absolute; bottom: 0; left: 0; width: 100%;
+      height: 2px; background: var(--text-main);
+    }
+    .badge-dot {
+      width: 6px; height: 6px; background: #EF4444; border-radius: 50%;
+      position: absolute; top: 12px; right: 25%;
+    }
+
+    /* --- [리스트 컨테이너] --- */
+    .list-container { padding: 20px 24px; display: none; }
+    .list-container.show { display: block; }
+
+    /* --- [카드 공통 스타일] --- */
+    .card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 20px; margin-bottom: 16px;
+      box-shadow: var(--shadow-card);
+      position: relative; cursor: pointer;
+    }
+    
+    .card-top { display: flex; justify-content: space-between; margin-bottom: 16px; }
+    .badge { padding: 6px 10px; border-radius: 8px; font-size: 12px; font-weight: 600; }
+    .badge.warn { background: #FEF3C7; color: #B45309; }
+    .badge.info { background: #E0F2FE; color: #0369A1; }
+    .badge.success { background: #DCFCE7; color: #15803D; }
+    .badge.gray { background: #F1F5F9; color: #64748B; }
+
+    .route { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+    .loc-text { font-size: 16px; font-weight: 600; color: var(--text-main); }
+    
+    .route-arrow-box { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+    .arrow-icon { color: var(--text-sub); font-size: 14px; }
+    .dist-badge {
+      font-size: 11px; color: var(--text-sub); background: #F1F5F9;
+      padding: 2px 6px; border-radius: 4px; font-weight: 500;
+    }
+
+    .card-info {
+      display: flex; align-items: center; padding-top: 16px;
+      border-top: 1px solid #F8FAFC;
+    }
+    .info-item { font-size: 14px; color: var(--text-sub); font-weight: 500; }
+    .info-price { font-size: 16px; font-weight: 700; color: var(--text-main); margin-left: auto; }
+
+    /* --- [버튼 스타일] --- */
+    .card-actions { margin-top: 16px; display: flex; gap: 8px; }
+
+    .btn {
+      width: 100%; height: 52px;
+      border-radius: 12px; font-size: 16px; font-weight: 700;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      cursor: pointer; border: none; transition: 0.2s;
+    }
+    .btn-primary { background-color: var(--primary); color: white; box-shadow: var(--shadow-float); }
+    .btn-primary:active { transform: scale(0.98); }
+
+    .btn-sm {
+      flex: 1; height: 42px;
+      border-radius: 8px; border: 1px solid var(--border);
+      background: white; color: var(--text-sub);
+      font-size: 13px; font-weight: 600;
+      display: flex; align-items: center; justify-content: center; gap: 4px;
+      cursor: pointer;
+    }
+    .btn-sm.active { background: #EEF2FF; border-color: var(--primary); color: var(--primary); }
+
+    /* --- [기사 정보 미니 프로필] --- */
+    .driver-row-sm {
+      display: flex; align-items: center; gap: 10px; margin-top: 12px;
+      padding: 12px; background: #F8FAFC; border-radius: 8px;
+    }
+    .avatar-sm {
+      width: 32px; height: 32px; border-radius: 50%; background: #CBD5E1;
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    /* --- [모달 (Bottom Sheet)] --- */
+    .modal-overlay {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.5); z-index: 200;
+      display: none; justify-content: center; align-items: flex-end;
+    }
+    .modal-overlay.open { display: flex; }
+    
+    .modal-sheet {
+      width: 100%; max-width: 420px; height: 85vh;
+      background: #F8FAFC;
+      border-top-left-radius: 24px; border-top-right-radius: 24px;
+      overflow-y: auto; position: relative;
+      animation: slideUp 0.3s ease-out;
+    }
+    @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+
+    .modal-header {
+      position: sticky; top: 0; background: white; z-index: 10;
+      padding: 20px; border-bottom: 1px solid var(--border);
+      display: flex; justify-content: space-between; align-items: center;
+    }
+
+    /* 모달 내부: 기사 선택 카드 */
+    .driver-card {
+      background: white; padding: 16px; border-radius: 16px;
+      margin-bottom: 12px; border: 1px solid var(--border);
+    }
+    .driver-card.recommend { border: 1px solid var(--primary); box-shadow: 0 4px 12px rgba(78,70,229,0.1); }
+    .rating { color: #D97706; font-weight: 700; font-size: 13px; margin-left: 4px; }
+
+    /* 모달 내부: 타임라인 */
+    .timeline-box { background: white; padding: 24px 20px; margin-bottom: 20px; }
+    .tl-item { display: flex; gap: 16px; margin-bottom: 24px; position: relative; }
+    .tl-item:last-child { margin-bottom: 0; }
+    .tl-line {
+      position: absolute; left: 11px; top: 24px; bottom: -24px;
+      width: 2px; background: #E2E8F0; z-index: 0;
+    }
+    .tl-dot {
+      width: 24px; height: 24px; border-radius: 50%;
+      background: #E2E8F0; color: white;
+      display: flex; align-items: center; justify-content: center;
+      position: relative; z-index: 1; font-size: 12px;
+    }
+    .tl-dot.active { background: var(--primary); }
+
+    /* --- [하단 탭바] --- */
+    .bottom-nav {
+      position: fixed; bottom: 0; width: 100%; max-width: 420px;
+      height: 80px; background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px); border-top: 1px solid var(--border);
+      display: flex; justify-content: space-around; padding-bottom: 10px; z-index: 100;
+    }
+    .nav-item {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      color: #94A3B8; cursor: pointer;
+    }
+    .nav-item.active { color: var(--primary); }
+    .nav-item i { font-size: 26px; margin-bottom: 4px; }
+    .nav-item span { font-size: 10px; font-weight: 500; }
+    .nav-item.active i { font-weight: fill; }
+
+  </style>
+</head>
+<body>
+
+  <div class="app-container">
+    
+    <header>
+      <div class="page-title">배차 관리</div>
+    </header>
+
+    <div class="tab-header">
+      <div class="tab-item active" onclick="switchTab('waiting')">
+        배차 대기
+        <div class="badge-dot"></div>
+      </div>
+      <div class="tab-item" onclick="switchTab('moving')">진행 중</div>
+      <div class="tab-item" onclick="switchTab('done')">완료</div>
+    </div>
+
+    <div id="tab-waiting" class="list-container show">
+      
+      <div class="card" onclick="openModal('modal-waiting')">
+        <div class="card-top">
+          <span class="badge warn">신청 3명</span>
+          <span style="font-size: 12px; color: var(--text-sub);">10분 전</span>
+        </div>
+        <div class="route">
+          <span class="loc-text">서울 강남</span>
+          <div class="route-arrow-box">
+            <span class="dist-badge">340km</span>
+            <i class="ph ph-arrow-right arrow-icon"></i>
+          </div>
+          <span class="loc-text">부산 해운대</span>
+        </div>
+        <div class="card-info">
+          <span class="info-item">11톤 윙바디</span>
+          <span class="info-price">350,000원</span>
+        </div>
+        <div class="card-actions">
+          <button class="btn btn-primary">기사 선택하기</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-top">
+          <span class="badge gray">대기중</span>
+          <span style="font-size: 12px; color: var(--text-sub);">50분 전</span>
+        </div>
+        <div class="route">
+          <span class="loc-text">경기 파주</span>
+          <div class="route-arrow-box">
+            <span class="dist-badge">80km</span>
+            <i class="ph ph-arrow-right arrow-icon"></i>
+          </div>
+          <span class="loc-text">인천항</span>
+        </div>
+        <div class="card-info">
+          <span class="info-item">5톤 카고</span>
+          <span class="info-price">150,000원</span>
+        </div>
+        <div class="card-actions">
+          <button class="btn-sm"><i class="ph ph-trash"></i> 취소</button>
+          <button class="btn-sm"><i class="ph ph-pencil-simple"></i> 수정</button>
+          <button class="btn-sm active"><i class="ph ph-trend-up"></i> 운임UP</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="tab-moving" class="list-container">
+      <div class="card" onclick="openModal('modal-moving')">
+        <div class="card-top">
+          <span class="badge info">이동 중</span>
+          <span style="font-size: 12px; color: var(--text-sub);">오늘 14:00 상차</span>
+        </div>
+        <div class="route">
+          <span class="loc-text">인천 남동</span>
+          <div class="route-arrow-box">
+            <span class="dist-badge">120km</span>
+            <i class="ph ph-arrow-right arrow-icon"></i>
+          </div>
+          <span class="loc-text">대전 유성</span>
+        </div>
+        
+        <div class="driver-row-sm">
+          <div class="avatar-sm"><i class="ph ph-user"></i></div>
+          <div style="flex: 1;">
+            <div style="font-weight: 600; font-size: 14px;">김기사 <span style="font-weight: 400; color: var(--text-sub);">5톤 카고</span></div>
+            <!-- <div style="font-size: 12px; color: var(--text-sub);">현재 고속도로 주행중</div> -->
+          </div>
+        </div>
+
+        <div class="card-actions">
+          <button class="btn-sm"><i class="ph ph-map-pin"></i> 위치</button>
+          <button class="btn-sm active"><i class="ph ph-phone"></i> 전화</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="tab-done" class="list-container">
+      <div class="card" onclick="openModal('modal-done')">
+        <div class="card-top">
+          <span class="badge success">정산 대기</span>
+          <span style="font-size: 12px; color: var(--text-sub);">어제 완료</span>
+        </div>
+        <div class="route">
+          <span class="loc-text">서울 영등포</span>
+          <div class="route-arrow-box">
+            <span class="dist-badge">45km</span>
+            <i class="ph ph-arrow-right arrow-icon"></i>
+          </div>
+          <span class="loc-text">경기 수원</span>
+        </div>
+        <div class="card-info">
+          <span class="info-item">1톤 용달</span>
+          <span class="info-price">80,000원</span>
+        </div>
+        <div class="card-actions">
+          <button class="btn-sm"><i class="ph ph-receipt"></i> 인수증 확인</button>
+        </div>
+      </div>
+    </div>
+
+
+    <div id="modal-waiting" class="modal-overlay">
+      <div class="modal-sheet">
+        <div class="modal-header">
+          <div class="page-title">배차 신청 (3명)</div>
+          <i class="ph ph-x" style="font-size: 24px; cursor: pointer;" onclick="closeModal('modal-waiting')"></i>
+        </div>
+        
+        <div style="padding: 20px;">
+          <div class="driver-card recommend">
+            <div style="display: flex; gap: 12px; margin-bottom: 8px;">
+              <div class="avatar-sm" style="background: #FEF3C7; color: #B45309;">
+                <i class="ph ph-crown-simple" style="font-weight: bold;"></i>
+              </div>
+              <div>
+                <div style="font-weight: 700;">박베테랑 <span class="rating"><i class="ph ph-star-fill"></i> 4.9</span></div>
+                <div style="font-size: 12px; color: var(--text-sub);">11톤 윙바디 · 무사고 10년</div>
+              </div>
+            </div>
+            
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--border);">
+              <div class="info-price">350,000원</div>
+              <div style="display: flex; gap: 8px;">
+                <button class="btn-sm" style="width: 60px;">채팅</button>
+                <button class="btn-sm active" style="width: 80px;">배차 확정</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="driver-card">
+            <div style="display: flex; gap: 12px; margin-bottom: 8px;">
+              <div class="avatar-sm"><i class="ph ph-user"></i></div>
+              <div>
+                <div style="font-weight: 700;">김신속 <span class="rating"><i class="ph ph-star-fill"></i> 4.5</span></div>
+                <div style="font-size: 12px; color: var(--text-sub);">11톤 윙바디 · 거리 5km</div>
+              </div>
+            </div>
+            
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--border);">
+              <div class="info-price">350,000원</div>
+              <div style="display: flex; gap: 8px;">
+                <button class="btn-sm" style="width: 60px;">채팅</button>
+                <button class="btn-sm active" style="width: 80px;">배차 확정</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+
+    <div id="modal-moving" class="modal-overlay">
+      <div class="modal-sheet">
+        <div class="modal-header">
+          <div class="page-title">운송 상세</div>
+          <i class="ph ph-x" style="font-size: 24px; cursor: pointer;" onclick="closeModal('modal-moving')"></i>
+        </div>
+        
+        <div style="width: 100%; height: 200px; background: #E2E8F0; display: flex; align-items: center; justify-content: center; color: var(--text-sub);">
+          <div style="text-align: center;">
+            <i class="ph ph-map-trifold" style="font-size: 32px; margin-bottom: 8px;"></i>
+            <div>실시간 지도</div>
+          </div>
+        </div>
+
+        <div class="timeline-box">
+          <div style="font-weight: 700; margin-bottom: 20px;">운송 현황</div>
+          <div class="tl-item">
+            <div class="tl-line"></div>
+            <div class="tl-dot active"><i class="ph ph-check"></i></div>
+            <div>
+              <div style="font-weight: 600; font-size: 14px;">상차지 도착</div>
+              <div style="font-size: 12px; color: var(--text-sub);">13:50</div>
+            </div>
+          </div>
+          <div class="tl-item">
+            <div class="tl-line"></div>
+            <div class="tl-dot active" style="box-shadow: 0 0 0 4px #DBEAFE;"><i class="ph ph-truck"></i></div>
+            <div>
+              <div style="font-weight: 700; font-size: 14px; color: var(--primary);">이동 중</div>
+              <div style="font-size: 12px; color: var(--text-sub);">예상 도착 18:30</div>
+            </div>
+          </div>
+          <div class="tl-item">
+            <div class="tl-dot"></div>
+            <div>
+              <div style="color: var(--text-sub); font-size: 14px;">하차 완료</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+
+    <div id="modal-done" class="modal-overlay">
+      <div class="modal-sheet">
+        <div class="modal-header">
+          <div class="page-title">운송 완료</div>
+          <i class="ph ph-x" style="font-size: 24px; cursor: pointer;" onclick="closeModal('modal-done')"></i>
+        </div>
+        
+        <div style="padding: 24px;">
+          <div style="text-align: center; margin-bottom: 24px;">
+            <i class="ph ph-check-circle" style="font-size: 48px; color: #10B981; margin-bottom: 12px;"></i>
+            <div style="font-size: 18px; font-weight: 700;">운송이 완료되었습니다</div>
+            <div style="font-size: 13px; color: var(--text-sub);">2026.02.02 16:30 하차완료</div>
+          </div>
+
+          <div style="font-weight: 700; margin-bottom: 12px;">인수증</div>
+          <div style="height: 150px; background: #E2E8F0; border-radius: 12px; display: flex; align-items: center; justify-content: center; margin-bottom: 24px;">
+            <span style="font-size: 13px; color: var(--text-sub);">이미지 영역</span>
+          </div>
+
+          <div style="font-weight: 700; margin-bottom: 12px;">별점 평가</div>
+          <div style="display: flex; justify-content: center; gap: 8px; margin-bottom: 30px;">
+            <i class="ph ph-star-fill" style="font-size: 32px; color: #F59E0B;"></i>
+            <i class="ph ph-star-fill" style="font-size: 32px; color: #F59E0B;"></i>
+            <i class="ph ph-star-fill" style="font-size: 32px; color: #F59E0B;"></i>
+            <i class="ph ph-star-fill" style="font-size: 32px; color: #F59E0B;"></i>
+            <i class="ph ph-star" style="font-size: 32px; color: #E2E8F0;"></i>
+          </div>
+
+          <button class="btn btn-primary">거래 종료</button>
+        </div>
+      </div>
+    </div>
+
+
+    <nav class="bottom-nav">
+      <div class="nav-item">
+        <i class="ph ph-house"></i>
+        <span>홈</span>
+      </div>
+      <div class="nav-item active">
+        <i class="ph ph-truck"></i>
+        <span>배차관리</span>
+      </div>
+      <div class="nav-item">
+        <i class="ph ph-receipt"></i>
+        <span>정산내역</span>
+      </div>
+      <div class="nav-item">
+        <i class="ph ph-user"></i>
+        <span>내 정보</span>
+      </div>
+    </nav>
+
+  </div>
+
+  <script>
+    /* 탭 전환 로직 */
+    function switchTab(tabId) {
+      document.querySelectorAll('.list-container').forEach(el => el.classList.remove('show'));
+      document.getElementById('tab-' + tabId).classList.add('show');
+      document.querySelectorAll('.tab-item').forEach(el => el.classList.remove('active'));
+      event.currentTarget.classList.add('active');
+    }
+
+    /* 모달 제어 로직 */
+    function openModal(modalId) {
+      document.getElementById(modalId).classList.add('open');
+      document.body.style.overflow = 'hidden';
+    }
+    function closeModal(modalId) {
+      document.getElementById(modalId).classList.remove('open');
+      document.body.style.overflow = 'auto';
+    }
+  </script>
+
+</body>
+</html>

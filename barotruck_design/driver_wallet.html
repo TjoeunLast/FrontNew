@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>바로트럭(차주) - 정산</title>
+  
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@700&display=swap" rel="stylesheet">
+
+  <style>
+    /* =========================================
+       기존 디자인 토큰 유지
+       ========================================= */
+    :root {
+      --primary: #4E46E5; --primary-dark: #3730A3;
+      --bg-app: #F8FAFC; --bg-surface: #FFFFFF;    
+      --text-main: #0F172A; --text-sub: #64748B;
+      --border: #E2E8F0;
+      
+      --status-done: #10B981;   
+      --status-wait: #F59E0B;   
+      --status-plan: #64748B;   
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Pretendard', sans-serif; -webkit-tap-highlight-color: transparent; }
+    body { background-color: #eee; display: flex; justify-content: center; min-height: 100vh; }
+    .app-container { width: 100%; max-width: 420px; background-color: var(--bg-app); position: relative; min-height: 100vh; padding-bottom: 90px; box-shadow: 0 0 30px rgba(0,0,0,0.1); }
+
+    /* 헤더 & 상단 요약 (변경 없음) */
+    header { padding: 16px 24px; display: flex; justify-content: space-between; align-items: center; background: var(--bg-app); position: sticky; top: 0; z-index: 50; }
+    .page-title { font-size: 20px; font-weight: 800; color: var(--text-main); }
+    .header-link { font-size: 14px; color: var(--text-sub); text-decoration: underline; cursor: pointer; }
+
+    .content-area { padding: 0 24px 24px; }
+    .month-filter { display: flex; justify-content: center; align-items: center; margin-bottom: 20px; gap: 20px; }
+    .month-text { font-size: 20px; font-weight: 800; color: var(--text-main); }
+    .arrow-btn { width: 36px; height: 36px; border-radius: 50%; background: white; border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 18px; cursor: pointer; color: var(--text-sub); }
+
+    .revenue-card { background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%); border-radius: 24px; padding: 24px; color: white; margin-bottom: 20px; box-shadow: 0 10px 25px rgba(78, 70, 229, 0.3); }
+    .total-amount { font-size: 34px; font-weight: 700; letter-spacing: -1px; margin-bottom: 24px; }
+    .progress-bar-bg { width: 100%; height: 6px; background: rgba(255,255,255,0.2); border-radius: 3px; overflow: hidden; }
+    .progress-bar-fill { width: 65%; height: 100%; background: #10B981; border-radius: 3px; }
+    .stat-row { display: flex; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 16px; margin-top: 20px;}
+    .stat-item { flex: 1; }
+    .stat-val { font-size: 16px; font-weight: 700; }
+    .stat-val.done { color: #10B981; }
+
+    .account-box { background: #EFF6FF; border: 1px solid #DBEAFE; border-radius: 12px; padding: 12px 16px; margin-bottom: 24px; display: flex; align-items: center; justify-content: space-between; }
+    .acc-info { font-size: 13px; color: var(--text-main); font-weight: 600; display: flex; align-items: center; gap: 6px; }
+    .acc-manage { font-size: 12px; color: var(--text-sub); text-decoration: underline; cursor: pointer;}
+
+    .list-header-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .list-title { font-size: 16px; font-weight: 700; color: var(--text-main); }
+    .tax-btn { font-size: 12px; font-weight: 600; color: var(--text-sub); background: white; border: 1px solid var(--border); padding: 4px 10px; border-radius: 12px; cursor: pointer; }
+
+    /* =========================================
+       [수정된 카드 레이아웃]
+       기존 스타일 유지 + 위치 변경 + 버튼 추가
+       ========================================= */
+    .settle-item-fixed {
+      background: white; border-radius: 16px; padding: 16px 20px;
+      margin-bottom: 12px; border: 1px solid var(--border);
+      display: flex; justify-content: space-between; /* 좌우 분할 유지 */
+      align-items: flex-start; /* 상단 정렬 */
+    }
+
+    /* 왼쪽 영역 (날짜+뱃지, 경로) */
+    .sif-left { display: flex; flex-direction: column; gap: 8px; }
+    .sif-date-row { display: flex; align-items: center; gap: 8px; } /* 날짜와 뱃지 가로 정렬 */
+    .si-date { font-size: 13px; color: var(--text-sub); }
+    .si-route { font-size: 16px; font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 6px; }
+
+    /* 오른쪽 영역 (금액, 버튼) */
+    .sif-right { text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+    .si-amount { font-size: 17px; font-weight: 700; color: var(--text-main); letter-spacing: -0.5px; }
+
+    /* 상태 뱃지 (스타일 유지) */
+    .status-badge { font-size: 11px; padding: 3px 8px; border-radius: 6px; font-weight: 700; display: inline-block; }
+    .status-badge.done { background: #DCFCE7; color: var(--status-done); }
+    .status-badge.wait { background: #FEF3C7; color: var(--status-wait); }
+    .status-badge.plan { background: #F1F5F9; color: var(--status-plan); }
+
+    /* [NEW] 영수증 확인 버튼 (새로 추가됨) */
+    .btn-receipt-inline {
+      padding: 6px 12px; background: #F1F5F9; color: var(--text-sub);
+      border-radius: 8px; border: none; font-size: 12px; font-weight: 600;
+      display: flex; align-items: center; gap: 4px; cursor: pointer;
+    }
+    .btn-receipt-inline:active { background: #E2E8F0; }
+
+
+    /* 모달 및 하단 탭바 (기존 동일) */
+    .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 200; display: none; justify-content: center; align-items: flex-end; backdrop-filter: blur(2px); }
+    .modal-overlay.open { display: flex; }
+    .modal-sheet { width: 100%; max-width: 420px; background: #F9FAFB; border-top-left-radius: 24px; border-top-right-radius: 24px; padding: 0; animation: slideUp 0.3s; display: flex; flex-direction: column; max-height: 90vh; }
+    .receipt-paper { background: white; margin: 0 20px 30px; padding: 24px; border-radius: 16px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border: 1px solid var(--border); }
+    .rp-header { text-align: center; border-bottom: 2px dashed #E2E8F0; padding-bottom: 20px; margin-bottom: 20px; }
+    .rp-amount { font-size: 32px; font-weight: 800; color: var(--text-main);; }
+    .rp-row { display: flex; justify-content: space-between; margin-bottom: 12px; font-size: 14px; }
+    .rp-label { color: var(--text-sub); }
+    .rp-val { color: var(--text-main); font-weight: 600; text-align: right;}
+    @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+
+    .bottom-nav { position: fixed; bottom: 0; width: 100%; max-width: 420px; height: 80px; background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); border-top: 1px solid var(--border); display: flex; justify-content: space-around; padding-bottom: 10px; z-index: 100; }
+    .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #94A3B8; cursor: pointer; }
+    .nav-item.active { color: var(--primary); }
+    .nav-item i { font-size: 26px; margin-bottom: 4px; }
+    .nav-item span { font-size: 10px; font-weight: 500; }
+    .nav-item.active i { font-weight: fill; }
+  </style>
+</head>
+<body>
+
+  <div class="app-container">
+    
+    <header>
+      <div class="page-title">매출/정산</div>
+      <div class="header-link">계좌관리</div>
+    </header>
+
+    <div class="content-area">
+
+      <div class="month-filter">
+        <div class="arrow-btn"><i class="ph ph-caret-left"></i></div>
+        <span class="month-text">2026년 2월</span>
+        <div class="arrow-btn"><i class="ph ph-caret-right"></i></div>
+      </div>
+
+      <div class="revenue-card">
+        <div style="font-size:14px; opacity:0.8; margin-bottom:4px;">2월 총 운송 매출</div>
+        <div class="total-amount">3,540,000</div>
+        <div class="progress-bar-bg"><div class="progress-bar-fill"></div></div>
+        <div class="stat-row">
+          <div class="stat-item"><div style="font-size:12px; opacity:0.7;">입금 완료</div><div class="stat-val done">2,290,000원</div></div>
+          <div class="stat-item" style="text-align: right;"><div style="font-size:12px; opacity:0.7;">입금 예정</div><div class="stat-val">1,250,000원</div></div>
+        </div>
+      </div>
+
+      <div class="account-box">
+        <div class="acc-info"><i class="ph ph-bank" style="font-size: 18px; color: var(--primary);"></i> 신한 110-123-456789 (김차주)</div>
+        <div class="acc-manage">변경</div>
+      </div>
+
+      <div class="list-header-row">
+        <div class="list-title">상세 내역 (12건)</div>
+        <button class="tax-btn">세금계산서 관리</button>
+      </div>
+
+      <div class="settle-item-fixed">
+        <div class="sif-left">
+          <div class="sif-date-row">
+            <span class="si-date">2.28 (토)</span>
+            <span class="status-badge wait">입금대기</span>
+          </div>
+          <div class="si-route">경기 평택 <i class="ph ph-arrow-right" style="font-size:12px; color:#CBD5E1;"></i> 부산 신항</div>
+        </div>
+        <div class="sif-right">
+          <div class="si-amount">450,000원</div>
+          <button class="btn-receipt-inline" onclick="openModal('450,000', '입금대기')">
+            <i class="ph ph-receipt"></i> 영수증 확인
+          </button>
+        </div>
+      </div>
+
+      <div class="settle-item-fixed">
+        <div class="sif-left">
+          <div class="sif-date-row">
+            <span class="si-date">2.27 (금)</span>
+            <span class="status-badge plan">정산예정</span>
+          </div>
+          <div class="si-route">인천 남동 <i class="ph ph-arrow-right" style="font-size:12px; color:#CBD5E1;"></i> 충남 천안</div>
+        </div>
+        <div class="sif-right">
+          <div class="si-amount">160,000원</div>
+          <button class="btn-receipt-inline" onclick="openModal('160,000', '정산예정')">
+            <i class="ph ph-receipt"></i> 영수증 확인
+          </button>
+        </div>
+      </div>
+
+      <div class="settle-item-fixed">
+        <div class="sif-left">
+          <div class="sif-date-row">
+            <span class="si-date">2.25 (수)</span>
+            <span class="status-badge done">입금완료</span>
+          </div>
+          <div class="si-route">서울 강서 <i class="ph ph-arrow-right" style="font-size:12px; color:#CBD5E1;"></i> 경기 일산</div>
+        </div>
+        <div class="sif-right">
+          <div class="si-amount">60,000원</div>
+          <button class="btn-receipt-inline" onclick="openModal('60,000', '입금완료')">
+            <i class="ph ph-receipt"></i> 영수증 확인
+          </button>
+        </div>
+      </div>
+
+    </div>
+
+    <div id="receiptModal" class="modal-overlay">
+      <div class="modal-sheet">
+        <div style="padding:20px 24px; display:flex; justify-content:space-between; align-items:center;">
+          <div style="font-size:18px; font-weight:700;">정산 상세정보</div>
+          <i class="ph ph-x" style="font-size:24px; cursor:pointer;" onclick="closeModal()"></i>
+        </div>
+        <div class="receipt-paper">
+          <div class="rp-header">
+            <div class="rp-amount" id="mAmount">0원</div>
+            <div style="font-size:13px; color:#64748B; margin-top:4px;" id="mStatus">상태</div>
+          </div>
+          <div class="rp-row"><span class="rp-label">운행일자</span><span class="rp-val">2026.02.28</span></div>
+          <div class="rp-row"><span class="rp-label">입금예정</span><span class="rp-val">2026.03.31</span></div>
+          <div class="rp-row" style="margin-top:20px; padding-top:12px; border-top:1px dashed #E2E8F0;">
+            <span class="rp-label">운송료</span><span class="rp-val" id="mSupply">0원</span>
+          </div>
+          <div class="rp-row"><span class="rp-label">세금 (3.3%)</span><span class="rp-val">- 0원</span></div>
+        </div>
+      </div>
+    </div>
+
+    <nav class="bottom-nav">
+      <div class="nav-item"><i class="ph ph-house"></i><span>홈</span></div>
+      <div class="nav-item"><i class="ph ph-list-dashes"></i><span>오더</span></div>
+      <div class="nav-item"><i class="ph ph-steering-wheel"></i><span>운행</span></div>
+      <div class="nav-item active"><i class="ph ph-wallet"></i><span>정산</span></div>
+      <div class="nav-item"><i class="ph ph-list"></i><span>더보기</span></div>
+    </nav>
+
+  </div>
+
+  <script>
+    function openModal(amount, status) {
+      document.getElementById('mAmount').innerText = amount;
+      document.getElementById('mSupply').innerText = amount;
+      document.getElementById('mStatus').innerText = status;
+      document.getElementById('receiptModal').classList.add('open');
+    }
+    function closeModal() {
+      document.getElementById('receiptModal').classList.remove('open');
+    }
+  </script>
+
+</body>
+</html>

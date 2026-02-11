@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>회원가입</title>
+  
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+  <style>
+    /* 1. 디자인 토큰 */
+    :root {
+      --primary: #4E46E5;       
+      --bg-app: #FFFFFF;
+      --text-main: #0F172A;     
+      --text-sub: #64748B;      
+      --border: #E2E8F0;        
+      --radius-md: 12px;        
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Pretendard', sans-serif; }
+    
+    body { background-color: #eee; display: flex; justify-content: center; min-height: 100vh; }
+
+    .app-container {
+      width: 100%; max-width: 420px;
+      background-color: var(--bg-app);
+      position: relative; min-height: 100vh;
+      padding: 24px;
+      display: flex; flex-direction: column;
+      box-shadow: 0 0 30px rgba(0,0,0,0.1);
+    }
+
+    /* 네비게이션 */
+    .nav-bar {
+      height: 50px; display: flex; align-items: center; margin-bottom: 20px;
+    }
+    .back-btn { font-size: 24px; cursor: pointer; color: var(--text-main); }
+
+    /* 스텝 컨테이너 */
+    .step-content {
+      flex: 1; display: none;
+      animation: fadeIn 0.4s ease-out;
+    }
+    .step-content.active { display: block; }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* 타이포그래피 */
+    .step-title { font-size: 24px; font-weight: 800; color: var(--text-main); margin-bottom: 8px; line-height: 1.3; }
+    .step-sub { font-size: 15px; color: var(--text-sub); margin-bottom: 30px; }
+
+    /* 폼 요소 */
+    .input-label { font-size: 13px; font-weight: 600; color: var(--text-sub); margin-bottom: 6px; display: block; }
+    
+    .input-field {
+      width: 100%; height: 52px; padding: 0 16px;
+      border: 1px solid var(--border); border-radius: var(--radius-md);
+      font-size: 16px; margin-bottom: 16px; background: #fff;
+      transition: 0.2s;
+    }
+    .input-field:focus { border-color: var(--primary); outline: none; }
+    
+    /* 버튼이 붙은 입력창 (Flex) */
+    .input-row {
+      display: flex; gap: 8px; margin-bottom: 16px;
+    }
+    .input-row .input-field { margin-bottom: 0; }
+    
+    .btn-check {
+      width: 100px; height: 52px;
+      background: #F1F5F9; color: var(--text-main);
+      border: 1px solid var(--border); border-radius: var(--radius-md);
+      font-size: 13px; font-weight: 600; cursor: pointer;
+    }
+    .btn-check:hover { background: #E2E8F0; }
+
+    /* 개인/사업자 선택 탭 */
+    .type-selector {
+      display: flex; background: #F1F5F9; padding: 4px;
+      border-radius: var(--radius-md); margin-bottom: 24px;
+    }
+    .type-tab {
+      flex: 1; text-align: center; padding: 10px;
+      border-radius: 8px; font-size: 14px; font-weight: 600;
+      color: var(--text-sub); cursor: pointer; transition: 0.2s;
+    }
+    .type-tab.active {
+      background: white; color: var(--primary);
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+
+    /* 역할 선택 카드 (Step 1) */
+    .role-card {
+      border: 1px solid var(--border); border-radius: 16px;
+      padding: 24px; margin-bottom: 16px; cursor: pointer;
+      display: flex; align-items: center; justify-content: space-between;
+      transition: 0.2s;
+    }
+    .role-card:hover, .role-card.selected {
+      border-color: var(--primary); background-color: #EEF2FF;
+    }
+    .role-icon {
+      width: 48px; height: 48px; border-radius: 50%; background: #fff;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 24px; color: var(--text-main); border: 1px solid var(--border);
+    }
+
+    /* 하단 버튼 */
+    .bottom-btn-area {
+      position: sticky; bottom: 20px; margin-top: auto; padding-top: 20px; background: var(--bg-app);
+    }
+    .btn-next {
+      width: 100%; height: 56px;
+      background-color: var(--primary); color: white;
+      border-radius: var(--radius-md);
+      font-size: 17px; font-weight: 700;
+      border: none; cursor: pointer;
+    }
+
+  </style>
+</head>
+<body>
+
+  <div class="app-container">
+    
+    <div class="nav-bar">
+      <i class="ph ph-arrow-left back-btn" onclick="prevStep()"></i>
+    </div>
+
+    <form id="signupForm" onsubmit="return false;">
+      
+      <div class="step-content active" id="step1">
+        <div class="step-title">반갑습니다!<br>어떤 분이신가요?</div>
+        <div class="step-sub">서비스 이용 목적을 선택해주세요.</div>
+
+        <div class="role-card" onclick="selectRole('SHIPPER')">
+          <div style="display: flex; align-items: center; gap: 16px;">
+            <div class="role-icon">📦</div>
+            <div>
+              <div style="font-weight: 700; font-size: 17px;">화주 (보내는 분)</div>
+              <div style="font-size: 13px; color: var(--text-sub);">화물을 등록하고 배차를 요청해요</div>
+            </div>
+          </div>
+          <i class="ph ph-caret-right" style="color: var(--text-sub);"></i>
+        </div>
+
+        <div class="role-card" onclick="selectRole('DRIVER')">
+          <div style="display: flex; align-items: center; gap: 16px;">
+            <div class="role-icon">🚛</div>
+            <div>
+              <div style="font-weight: 700; font-size: 17px;">차주 (기사님)</div>
+              <div style="font-size: 13px; color: var(--text-sub);">오더를 수행하고 수익을 내요</div>
+            </div>
+          </div>
+          <i class="ph ph-caret-right" style="color: var(--text-sub);"></i>
+        </div>
+      </div>
+
+      <div class="step-content" id="step2">
+        <div class="step-title">계정 정보를<br>입력해주세요.</div>
+        <div class="step-sub">로그인과 연락에 사용됩니다.</div>
+
+        <label class="input-label">이메일 (아이디)</label>
+        <div class="input-row">
+          <input type="email" class="input-field" placeholder="example@email.com">
+          <button class="btn-check" onclick="alert('사용 가능한 이메일입니다.')">중복확인</button>
+        </div>
+
+        <label class="input-label">비밀번호</label>
+        <input type="password" class="input-field" placeholder="8자리 이상 입력">
+        
+        <label class="input-label">비밀번호 확인</label>
+        <input type="password" class="input-field" placeholder="한 번 더 입력">
+
+        <label class="input-label">이름</label>
+        <input type="text" class="input-field" placeholder="실명 입력">
+
+        <label class="input-label">휴대폰 번호</label>
+        <div class="input-row">
+          <input type="tel" class="input-field" placeholder="010-1234-5678">
+          <button class="btn-check" onclick="alert('인증번호가 발송되었습니다.')">인증요청</button>
+        </div>
+
+        <div class="bottom-btn-area">
+          <button class="btn-next" onclick="nextStep()">다음</button>
+        </div>
+      </div>
+
+      <div class="step-content" id="step3-shipper">
+        <div class="step-title">화주 정보를<br>입력해주세요.</div>
+        <div class="step-sub">개인 화주인지 사업자 화주인지 선택해주세요.</div>
+
+        <div class="type-selector">
+          <div class="type-tab active" id="tab-individual" onclick="setShipperType('INDIVIDUAL')">개인</div>
+          <div class="type-tab" id="tab-business" onclick="setShipperType('BUSINESS')">사업자</div>
+        </div>
+
+        <label class="input-label">닉네임</label>
+        <input type="text" class="input-field" placeholder="앱에서 사용할 닉네임">
+
+        <div id="biz-fields" style="display: none;">
+          <label class="input-label">사업자 등록번호</label>
+          <div class="input-row">
+            <input type="number" class="input-field" placeholder="숫자만 입력">
+            <button class="btn-check" onclick="alert('조회되었습니다.')">조회</button>
+          </div>
+
+          <label class="input-label">회사명 (상호)</label>
+          <input type="text" class="input-field" placeholder="예: (주)대한물류">
+          
+          <label class="input-label">대표자명</label>
+          <input type="text" class="input-field" placeholder="대표자 성함">
+        </div>
+
+        <div class="bottom-btn-area">
+          <button class="btn-next" onclick="completeSignup()">가입 완료</button>
+        </div>
+      </div>
+
+      <div class="step-content" id="step3-driver">
+        <div class="step-title">차량 정보를<br>입력해주세요.</div>
+        <div class="step-sub">정확한 배차를 위해 필요합니다.</div>
+
+        <label class="input-label">차량 번호</label>
+        <input type="text" class="input-field" placeholder="예: 80바 1234">
+
+        <div style="display: flex; gap: 10px;">
+          <div style="flex: 1;">
+            <label class="input-label">차종</label>
+            <select class="input-field" style="background-image: none;"> <option>카고</option>
+              <option>윙바디</option>
+              <option>탑차</option>
+            </select>
+          </div>
+          <div style="flex: 1;">
+            <label class="input-label">톤수</label>
+            <select class="input-field" style="background-image: none;">
+              <option>1톤</option>
+              <option>3.5톤</option>
+              <option>5톤</option>
+              <option>11톤</option>
+            </select>
+          </div>
+        </div>
+        
+        <label class="input-label">경력 (년)</label>
+        <input type="number" class="input-field" placeholder="예: 3">
+
+        <div class="bottom-btn-area">
+          <button class="btn-next" onclick="completeSignup()">가입 완료</button>
+        </div>
+      </div>
+
+    </form>
+  </div>
+
+  <script>
+    let currentStep = 1;
+    let selectedRole = ''; 
+    let shipperType = 'INDIVIDUAL'; // 화주 타입 (INDIVIDUAL / BUSINESS)
+
+    // 다음 스텝
+    function nextStep() {
+      document.querySelector('.step-content.active').classList.remove('active');
+      currentStep++;
+      
+      if (currentStep === 3) {
+        if (selectedRole === 'SHIPPER') {
+          document.getElementById('step3-shipper').classList.add('active');
+        } else {
+          document.getElementById('step3-driver').classList.add('active');
+        }
+      } else {
+        document.querySelectorAll('.step-content')[currentStep - 1].classList.add('active');
+      }
+    }
+
+    // 이전 스텝
+    function prevStep() {
+      if (currentStep === 1) { history.back(); return; }
+      document.querySelector('.step-content.active').classList.remove('active');
+      currentStep--;
+      
+      if (currentStep === 2) document.getElementById('step2').classList.add('active');
+      else if (currentStep === 1) document.getElementById('step1').classList.add('active');
+    }
+
+    // 역할 선택
+    function selectRole(role) {
+      selectedRole = role;
+      setTimeout(() => nextStep(), 100);
+    }
+
+    // 화주 타입 선택 (개인/사업자)
+    function setShipperType(type) {
+      shipperType = type;
+      const bizFields = document.getElementById('biz-fields');
+      
+      if (type === 'BUSINESS') {
+        document.getElementById('tab-business').classList.add('active');
+        document.getElementById('tab-individual').classList.remove('active');
+        bizFields.style.display = 'block'; // 사업자 입력창 보이기
+      } else {
+        document.getElementById('tab-individual').classList.add('active');
+        document.getElementById('tab-business').classList.remove('active');
+        bizFields.style.display = 'none'; // 숨기기
+      }
+    }  
+
+    // 가입 완료
+    function completeSignup() {
+      alert('회원가입이 완료되었습니다!\n로그인 페이지로 이동합니다.');
+      location.href = 'login.html';
+    }
+  </script>
+
+</body>
+</html>

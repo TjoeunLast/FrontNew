@@ -1,0 +1,121 @@
+@charset "UTF-8";
+@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css");
+
+/* =========================================
+   1. 디자인 토큰 (Variables)
+   ========================================= */
+:root {
+  --primary: #4E46E5;       /* 메인 보라색 */
+  --primary-light: #EEF2FF; /* 연한 보라 (배경용) */
+  --accent: #A3E635;        /* 포인트 라임색 */
+  
+  --bg-app: #F8FAFC;        /* 앱 배경 */
+  --bg-surface: #FFFFFF;    /* 카드 배경 */
+  
+  --text-main: #0F172A;     /* 진한 글씨 */
+  --text-sub: #64748B;      /* 연한 글씨 */
+  --border: #E2E8F0;        /* 테두리 */
+
+  --radius-sm: 8px;
+  --radius-md: 16px;        /* 카드/버튼 둥글기 통일 */
+  
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+  --shadow-card: 0 4px 20px rgba(0, 0, 0, 0.05);
+}
+
+/* =========================================
+   2. 초기화 (Reset)
+   ========================================= */
+* { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Pretendard', sans-serif; -webkit-tap-highlight-color: transparent; }
+
+body {
+  background-color: #eee; /* 데스크탑 배경 */
+  display: flex; justify-content: center; min-height: 100vh;
+}
+
+/* 모바일 프레임 공통 */
+.app-container {
+  width: 100%; max-width: 420px;
+  background-color: var(--bg-app);
+  position: relative; min-height: 100vh;
+  padding-bottom: 90px; /* 하단 탭바 공간 확보 */
+  box-shadow: 0 0 30px rgba(0,0,0,0.1);
+}
+
+/* =========================================
+   3. 공통 컴포넌트 (Components)
+   ========================================= */
+
+/* [카드] 어디서나 똑같은 모양 */
+.card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 20px;
+  margin-bottom: 16px;
+  box-shadow: var(--shadow-card);
+  position: relative;
+}
+
+/* [버튼] 높이 52px로 통일 */
+.btn {
+  width: 100%;
+  height: 52px;
+  border-radius: 12px;
+  font-size: 16px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  cursor: pointer; border: none; transition: 0.2s;
+}
+
+/* 메인 버튼 (보라색) */
+.btn-primary {
+  background-color: var(--primary);
+  color: white;
+  box-shadow: 0 4px 12px rgba(78, 70, 229, 0.3);
+}
+.btn-primary:active { transform: scale(0.98); }
+
+/* 서브 버튼 (테두리 or 연한 배경) */
+.btn-sub {
+  height: 40px; /* 작은 버튼용 */
+  font-size: 13px;
+  background-color: white;
+  border: 1px solid var(--border);
+  color: var(--text-sub);
+}
+.btn-sub.active {
+  background-color: var(--primary-light);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+/* [배지/태그] 상태 표시용 */
+.badge {
+  padding: 6px 10px; border-radius: 8px;
+  font-size: 12px; font-weight: 600;
+}
+.badge.warn { background: #FEF3C7; color: #B45309; }
+.badge.info { background: #E0F2FE; color: #0369A1; }
+.badge.success { background: #DCFCE7; color: #15803D; }
+
+/* [텍스트] 타이포그래피 */
+.text-title { font-size: 18px; font-weight: 700; color: var(--text-main); }
+.text-body { font-size: 15px; font-weight: 500; color: var(--text-main); }
+.text-sub { font-size: 13px; color: var(--text-sub); }
+.text-price { font-size: 18px; font-weight: 800; color: var(--text-main); }
+
+/* [하단 탭바] */
+.bottom-nav {
+  position: fixed; bottom: 0; width: 100%; max-width: 420px;
+  height: 80px; background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px); border-top: 1px solid var(--border);
+  display: flex; justify-content: space-around; padding-bottom: 10px; z-index: 100;
+}
+.nav-item {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  color: #94A3B8; cursor: pointer;
+}
+.nav-item.active { color: var(--primary); }
+.nav-item i { font-size: 26px; margin-bottom: 4px; }
+.nav-item span { font-size: 10px; font-weight: 500; }

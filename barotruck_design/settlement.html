@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>바로트럭(화주) - 정산내역</title>
+  
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@700&display=swap" rel="stylesheet">
+
+  <style>
+    /* =========================================
+       디자인 토큰 (차주 앱과 동일)
+       ========================================= */
+    :root {
+      --primary: #4E46E5;       
+      --bg-app: #F8FAFC;        
+      --bg-surface: #FFFFFF;    
+      --text-main: #0F172A;     
+      --text-sub: #64748B;      
+      --border: #E2E8F0;        
+      --radius-md: 16px;        
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Pretendard', sans-serif; -webkit-tap-highlight-color: transparent; }
+    body { background-color: #eee; display: flex; justify-content: center; min-height: 100vh; }
+    .app-container { width: 100%; max-width: 420px; background-color: var(--bg-app); position: relative; min-height: 100vh; padding-bottom: 90px; box-shadow: 0 0 30px rgba(0,0,0,0.1); }
+
+    /* 헤더 & 요약 */
+    header { padding: 16px 24px; display: flex; justify-content: center; align-items: center; background: var(--bg-surface); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 50; }
+    .page-title { font-size: 18px; font-weight: 700; color: var(--text-main); }
+
+    .summary-section { padding: 24px; background: var(--bg-surface); border-bottom: 1px solid var(--border); }
+    .month-selector { display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 18px; font-weight: 700; margin-bottom: 20px; cursor: pointer; }
+    .summary-box { background: var(--primary); color: white; border-radius: 20px; padding: 24px; box-shadow: 0 8px 20px rgba(78, 70, 229, 0.25); }
+    .summary-total { font-size: 28px; font-weight: 800; margin-bottom: 16px; }
+    .summary-row { display: flex; justify-content: space-between; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 16px; }
+    .stat-val { font-size: 16px; font-weight: 700; text-align: center; }
+    .stat-lbl { font-size: 12px; opacity: 0.8; text-align: center; }
+
+    .filter-section { padding: 16px 24px; display: flex; gap: 8px; overflow-x: auto; }
+    .chip { padding: 6px 12px; border-radius: 20px; border: 1px solid var(--border); background: var(--bg-surface); color: var(--text-sub); font-size: 13px; font-weight: 600; }
+    .chip.active { background: var(--text-main); color: white; border-color: var(--text-main); }
+
+    .list-container { padding: 0 24px 24px; }
+
+    /* =========================================
+       [카드 레이아웃] - 차주 앱과 완벽 통일
+       ========================================= */
+    .settle-item-fixed {
+      background: white; border-radius: 16px; padding: 16px 20px;
+      margin-bottom: 12px; border: 1px solid var(--border);
+      display: flex; justify-content: space-between; /* 좌우 분할 */
+      align-items: flex-start; /* 상단 정렬 */
+      box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+    }
+
+    /* 왼쪽 영역 (날짜+뱃지, 경로) */
+    .sif-left { display: flex; flex-direction: column; gap: 8px; }
+    .sif-date-row { display: flex; align-items: center; gap: 8px; }
+    .si-date { font-size: 13px; color: var(--text-sub); }
+    .si-route { font-size: 16px; font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 6px; }
+
+    /* 오른쪽 영역 (금액, 버튼) */
+    .sif-right { text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+    .si-amount { font-size: 17px; font-weight: 700; color: var(--text-main); letter-spacing: -0.5px; }
+    .si-amount.unpaid { color: #EF4444; } /* 미결제 강조 */
+
+    /* 상태 뱃지 (화주용 컬러) */
+    .status-badge { font-size: 11px; padding: 3px 8px; border-radius: 6px; font-weight: 700; display: inline-block; }
+    .status-badge.wait { background: #FEE2E2; color: #B91C1C; } /* 미결제 (Red) */
+    .status-badge.done { background: #DCFCE7; color: #15803D; } /* 결제완료 (Green) */
+    .status-badge.bill { background: #E0F2FE; color: #0369A1; } /* 계산서 (Blue) */
+
+    /* 버튼 스타일 */
+    .btn-receipt-inline {
+      padding: 6px 12px; background: #F1F5F9; color: var(--text-sub);
+      border-radius: 8px; border: none; font-size: 12px; font-weight: 600;
+      display: flex; align-items: center; gap: 4px; cursor: pointer;
+    }
+    .btn-receipt-inline:active { background: #E2E8F0; }
+    
+    /* 결제하기 버튼 강조 */
+    .btn-receipt-inline.pay { background: #EEF2FF; color: var(--primary); }
+
+    /* 모달 스타일 */
+    .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 200; display: none; justify-content: center; align-items: flex-end; backdrop-filter: blur(2px); }
+    .modal-overlay.open { display: flex; }
+    .modal-sheet { width: 100%; max-width: 420px; background: #F9FAFB; border-top-left-radius: 24px; border-top-right-radius: 24px; padding: 0; animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+    .modal-header { padding: 20px 24px; display: flex; justify-content: space-between; align-items: center; }
+    .receipt-paper { background: white; margin: 0 20px 30px; padding: 24px; border-radius: 16px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border: 1px solid var(--border); }
+    .rp-header { text-align: center; border-bottom: 2px dashed #E2E8F0; padding-bottom: 20px; margin-bottom: 20px; }
+    .rp-amount { font-size: 32px; font-weight: 800; color: var(--text-main); letter-spacing: -1px;}
+    .rp-row { display: flex; justify-content: space-between; margin-bottom: 12px; font-size: 14px; }
+    .rp-label { color: var(--text-sub); }
+    .rp-val { color: var(--text-main); font-weight: 600; text-align: right;}
+    @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+
+    /* 화주용 탭바 */
+    .bottom-nav { position: fixed; bottom: 0; width: 100%; max-width: 420px; height: 80px; background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); border-top: 1px solid var(--border); display: flex; justify-content: space-around; padding-bottom: 10px; z-index: 100; }
+    .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #94A3B8; cursor: pointer; }
+    .nav-item.active { color: var(--primary); }
+    .nav-item i { font-size: 26px; margin-bottom: 4px; }
+    .nav-item span { font-size: 10px; font-weight: 500; }
+    .nav-item.active i { font-weight: fill; }
+  </style>
+</head>
+<body>
+  <div class="app-container">
+    <header><div class="page-title">정산 내역</div></header>
+
+    <section class="summary-section">
+      <div class="month-selector"><i class="ph ph-caret-left"></i><span>2026년 2월</span><i class="ph ph-caret-right"></i></div>
+      <div class="summary-box">
+        <div style="font-size:14px; opacity:0.8; margin-bottom:4px;">2월 총 지출 예정</div><div class="summary-total">1,280,000원</div>
+        <div class="summary-row">
+          <div class="stat-item"><div class="stat-val">4건</div><div class="stat-lbl">완료</div></div>
+          <div style="width: 1px; background: rgba(255,255,255,0.3);"></div>
+          <div class="stat-item"><div class="stat-val">350,000원</div><div class="stat-lbl">미결제</div></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="filter-section">
+      <button class="chip active">전체</button><button class="chip">미결제</button><button class="chip">세금계산서</button>
+    </section>
+
+    <section class="list-container">
+      
+      <div class="settle-item-fixed" style="border-left: 3px solid #EF4444;">
+        <div class="sif-left">
+          <div class="sif-date-row">
+            <span class="si-date">2.28 (토)</span>
+            <span class="status-badge wait">미결제</span> </div>
+          <div class="si-route">
+            서울 강남 <i class="ph ph-arrow-right" style="font-size:12px; color:#94A3B8;"></i> 부산 해운대
+          </div>
+        </div>
+        <div class="sif-right">
+          <div class="si-amount unpaid">350,000원</div>
+          <button class="btn-receipt-inline pay" onclick="openModal('350,000','미결제')">
+            <i class="ph ph-credit-card"></i> 결제하기
+          </button>
+        </div>
+      </div>
+
+      <div class="settle-item-fixed">
+        <div class="sif-left">
+          <div class="sif-date-row">
+            <span class="si-date">2.27 (금)</span>
+            <span class="status-badge done">결제완료</span>
+          </div>
+          <div class="si-route">
+            인천 남동 <i class="ph ph-arrow-right" style="font-size:12px; color:#94A3B8;"></i> 대전 유성
+          </div>
+        </div>
+        <div class="sif-right">
+          <div class="si-amount">180,000원</div>
+          <button class="btn-receipt-inline" onclick="openModal('180,000','결제완료')">
+            <i class="ph ph-receipt"></i> 영수증 확인
+          </button>
+        </div>
+      </div>
+
+      <div class="settle-item-fixed">
+        <div class="sif-left">
+          <div class="sif-date-row">
+            <span class="si-date">2.25 (수)</span>
+            <span class="status-badge bill">계산서 발행</span>
+          </div>
+          <div class="si-route">
+            서울 강서 <i class="ph ph-arrow-right" style="font-size:12px; color:#94A3B8;"></i> 경기 일산
+          </div>
+        </div>
+        <div class="sif-right">
+          <div class="si-amount">60,000원</div>
+          <button class="btn-receipt-inline" onclick="openModal('60,000','계산서발행')">
+            <i class="ph ph-file-text"></i> 계산서 보기
+          </button>
+        </div>
+      </div>
+
+    </section>
+
+    <div id="receiptModal" class="modal-overlay">
+      <div class="modal-sheet">
+        <div class="modal-header">
+          <div style="font-size:18px; font-weight:700;">운송 영수증</div>
+          <i class="ph ph-x" style="font-size:24px; cursor:pointer;" onclick="closeModal()"></i>
+        </div>
+        <div class="receipt-paper">
+          <div class="rp-header">
+            <div class="rp-amount" id="mAmount">0원</div>
+            <div style="font-size:13px; color:#64748B; margin-top:4px;" id="mStatus">상태</div>
+          </div>
+          <div class="rp-row"><span class="rp-label">운송일시</span><span class="rp-val">2026.02.28 14:00</span></div>
+          <div class="rp-row"><span class="rp-label">차량정보</span><span class="rp-val">경기80바 1234</span></div>
+          <div class="rp-row" style="margin-top:20px; padding-top:12px; border-top:1px dashed #E2E8F0;">
+            <span class="rp-label">공급가액</span><span class="rp-val" id="mSupply">0원</span>
+          </div>
+          <div class="rp-row"><span class="rp-label">세액</span><span class="rp-val">0원</span></div>
+        </div>
+      </div>
+    </div>
+
+    <nav class="bottom-nav">
+      <div class="nav-item"><i class="ph ph-house"></i><span>홈</span></div>
+      <div class="nav-item"><i class="ph ph-truck"></i><span>배차관리</span></div>
+      <div class="nav-item active"><i class="ph ph-receipt"></i><span>정산내역</span></div>
+      <div class="nav-item"><i class="ph ph-user"></i><span>내 정보</span></div>
+    </nav>
+  </div>
+
+  <script>
+    function openModal(amount, status) {
+      document.getElementById('mAmount').innerText = amount;
+      document.getElementById('mSupply').innerText = amount;
+      document.getElementById('mStatus').innerText = status;
+      document.getElementById('receiptModal').classList.add('open');
+    }
+    function closeModal() {
+      document.getElementById('receiptModal').classList.remove('open');
+    }
+  </script>
+</body>
+</html>

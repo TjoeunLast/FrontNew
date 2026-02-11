@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>바로트럭(화주) - 더보기</title>
+  
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+  <style>
+    /* =========================================
+       1. 디자인 토큰 (제공해주신 코드와 동일)
+       ========================================= */
+    :root {
+      --primary: #4E46E5;       
+      --bg-app: #F8FAFC;        
+      --bg-surface: #FFFFFF;    
+      --text-main: #0F172A;     
+      --text-sub: #64748B;      
+      --border: #E2E8F0;        
+      --radius-md: 16px;        
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Pretendard', sans-serif; -webkit-tap-highlight-color: transparent; }
+    
+    body { background-color: #eee; display: flex; justify-content: center; min-height: 100vh; }
+
+    .app-container {
+      width: 100%; max-width: 420px;
+      background-color: var(--bg-app);
+      position: relative; min-height: 100vh;
+      padding-bottom: 90px;
+      box-shadow: 0 0 30px rgba(0,0,0,0.1);
+    }
+
+    /* 헤더 */
+    header {
+      padding: 16px 24px; display: flex; justify-content: space-between; align-items: center;
+      background: var(--bg-surface);
+    }
+    .page-title { font-size: 20px; font-weight: 800; color: var(--text-main); }
+    .header-icon { font-size: 24px; color: var(--text-main); cursor: pointer; }
+
+    .content-area { padding: 20px 24px; }
+
+    /* 1. 프로필 카드 */
+    .profile-card {
+      display: flex; align-items: center; gap: 16px;
+      background: white; padding: 24px; border-radius: 20px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.05); margin-bottom: 24px;
+      cursor: pointer; transition: 0.2s;
+    }
+    .profile-card:active { transform: scale(0.98); }
+
+    .avatar {
+      width: 64px; height: 64px; border-radius: 50%; background: #EEF2FF;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 32px; color: var(--primary); border: 1px solid #E0E7FF;
+    }
+    
+    .profile-info { flex: 1; }
+    .user-name { font-size: 18px; font-weight: 700; color: var(--text-main); margin-bottom: 4px; }
+    .user-meta { font-size: 13px; color: var(--text-sub); display: flex; align-items: center; gap: 6px; }
+    
+    /* 화주용 뱃지 스타일 추가 (기존 CSS 활용) */
+    .biz-badge {
+      background: #F1F5F9; color: var(--text-sub); 
+      padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 11px;
+    }
+    
+    .edit-btn {
+      width: 32px; height: 32px; border-radius: 50%; background: #F1F5F9;
+      display: flex; align-items: center; justify-content: center; color: var(--text-sub);
+    }
+
+    /* 2. 메뉴 리스트 공통 */
+    .menu-group {
+      background: white; border-radius: 16px; padding: 8px 0;
+      margin-bottom: 20px; border: 1px solid var(--border);
+    }
+    .menu-title {
+      padding: 0 24px; margin-bottom: 8px; margin-top: 8px;
+      font-size: 13px; font-weight: 600; color: var(--text-sub);
+    }
+
+    .menu-item {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 24px; cursor: pointer; transition: 0.2s;
+    }
+    .menu-item:active { background: #F8FAFC; }
+    
+    .mi-left { display: flex; align-items: center; gap: 12px; }
+    .mi-icon { font-size: 20px; color: var(--text-sub); width: 24px; text-align: center; }
+    .mi-text { font-size: 15px; color: var(--text-main); font-weight: 500; }
+    
+    .mi-right { color: #94A3B8; font-size: 16px; display: flex; align-items: center; gap: 8px;}
+    .mi-val { font-size: 13px; color: var(--primary); font-weight: 600; }
+
+    /* 토글 스위치 */
+    .toggle-switch {
+      width: 44px; height: 24px; background: #E2E8F0; border-radius: 12px;
+      position: relative; transition: 0.3s;
+    }
+    .toggle-switch.on { background: var(--primary); }
+    .toggle-circle {
+      width: 20px; height: 20px; background: white; border-radius: 50%;
+      position: absolute; top: 2px; left: 2px; transition: 0.3s;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    }
+    .toggle-switch.on .toggle-circle { transform: translateX(20px); }
+
+    /* 하단 정보 */
+    .app-version { text-align: center; color: #94A3B8; font-size: 12px; margin-top: 10px; margin-bottom: 30px; }
+    .logout-btn {
+      display: block; width: 100%; text-align: center; padding: 16px;
+      color: #EF4444; font-size: 14px; font-weight: 600; cursor: pointer;
+    }
+
+    /* 하단 탭바 */
+    .bottom-nav {
+      position: fixed; bottom: 0; width: 100%; max-width: 420px;
+      height: 80px; background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px); border-top: 1px solid var(--border);
+      display: flex; justify-content: space-around; padding-bottom: 10px; z-index: 100;
+    }
+    .nav-item {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      color: #94A3B8; cursor: pointer;
+    }
+    .nav-item.active { color: var(--primary); }
+    .nav-item i { font-size: 26px; margin-bottom: 4px; }
+    .nav-item span { font-size: 10px; font-weight: 500; }
+    .nav-item.active i { font-weight: fill; }
+
+  </style>
+</head>
+<body>
+
+  <div class="app-container">
+    
+    <header>
+      <div class="page-title">내 정보</div>
+      <i class="ph ph-gear header-icon"></i>
+    </header>
+
+    <div class="content-area">
+      
+      <div class="profile-card" onclick="alert('프로필 수정 페이지로 이동')">
+        <div class="avatar">
+          <i class="ph ph-buildings"></i> </div>
+        <div class="profile-info">
+          <div class="user-name">김화주 님</div>
+          <div class="user-meta">
+            <span>(주)대한물류</span>
+            <span>·</span>
+            <span class="biz-badge">사업자 회원</span>
+          </div>
+        </div>
+        <div class="edit-btn"><i class="ph ph-caret-right"></i></div>
+      </div>
+
+      <div class="menu-title">화주 관리</div>
+      <div class="menu-group">
+        <div class="menu-item" onclick="alert('결제 수단 관리')">
+          <div class="mi-left">
+            <div class="mi-icon" style="background: #EEF2FF; color: var(--primary);">
+              <i class="ph ph-credit-card"></i>
+            </div>
+            <span class="mi-text">결제 수단 관리</span>
+          </div>
+          <div class="mi-right">
+            <span class="mi-val">신한카드</span>
+            <i class="ph ph-caret-right"></i>
+          </div>
+        </div>
+        <div class="menu-item" onclick="alert('주소지 관리')">
+          <div class="mi-left">
+            <div class="mi-icon" style="background: #ECFCCB; color: #4D7C0F;">
+              <i class="ph ph-map-pin"></i>
+            </div>
+            <span class="mi-text">자주 쓰는 주소지</span>
+          </div>
+          <div class="mi-right">
+            <span class="mi-val" style="color:#64748B; font-weight:400;">3곳</span>
+            <i class="ph ph-caret-right"></i>
+          </div>
+        </div>
+        <div class="menu-item" onclick="alert('세금계산서 관리')">
+          <div class="mi-left">
+            <div class="mi-icon" style="background: #F1F5F9; color: #475569;">
+              <i class="ph ph-receipt"></i>
+            </div>
+            <span class="mi-text">세금계산서 관리</span>
+          </div>
+          <div class="mi-right"><i class="ph ph-caret-right"></i></div>
+        </div>
+      </div>
+
+      <div class="menu-title">고객 지원</div>
+      <div class="menu-group">
+        <div class="menu-item">
+          <div class="mi-left">
+            <i class="ph ph-megaphone mi-icon"></i>
+            <span class="mi-text">공지사항</span>
+          </div>
+          <div class="mi-right"><i class="ph ph-caret-right"></i></div>
+        </div>
+        <div class="menu-item">
+          <div class="mi-left">
+            <i class="ph ph-headset mi-icon"></i>
+            <span class="mi-text">1:1 문의하기</span>
+          </div>
+          <div class="mi-right"><i class="ph ph-caret-right"></i></div>
+        </div>
+      </div>
+
+      <div class="menu-title">앱 설정</div>
+      <div class="menu-group">
+        <div class="menu-item">
+          <div class="mi-left">
+            <i class="ph ph-bell mi-icon"></i>
+            <span class="mi-text">배차 알림 받기</span>
+          </div>
+          <div class="mi-right">
+            <div class="toggle-switch on" onclick="toggleSwitch(this)">
+              <div class="toggle-circle"></div>
+            </div>
+          </div>
+        </div>
+        <div class="menu-item">
+          <div class="mi-left">
+            <i class="ph ph-file-text mi-icon"></i>
+            <span class="mi-text">이용약관 및 정책</span>
+          </div>
+          <div class="mi-right"><i class="ph ph-caret-right"></i></div>
+        </div>
+      </div>
+
+      <div class="logout-btn" onclick="confirm('로그아웃 하시겠습니까?')">로그아웃</div>
+      <div class="app-version">현재 버전 1.0.2</div>
+
+    </div>
+
+    <nav class="bottom-nav">
+      <div class="nav-item">
+        <i class="ph ph-house"></i>
+        <span>홈</span>
+      </div>
+      <div class="nav-item">
+        <i class="ph ph-plus-circle" style="font-weight: fill; font-size: 28px; color: var(--text-sub);"></i>
+        <span>화물등록</span>
+      </div>
+      <div class="nav-item">
+        <i class="ph ph-list-dashes"></i>
+        <span>배차내역</span>
+      </div>
+      <div class="nav-item active">
+        <i class="ph ph-user"></i>
+        <span>내 정보</span>
+      </div>
+    </nav>
+
+  </div>
+
+  <script>
+    function toggleSwitch(el) {
+      el.classList.toggle('on');
+    }
+  </script>
+
+</body>
+</html>

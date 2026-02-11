@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>바로트럭 - 운행 관리 통합</title>
+  
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+  <style>
+    /* =========================================
+       1. 디자인 시스템
+       ========================================= */
+    :root {
+      --primary: #4E46E5;       
+      --bg-app: #F8FAFC;        
+      --bg-surface: #FFFFFF;    
+      --text-main: #0F172A;     
+      --text-sub: #64748B;      
+      --border: #E2E8F0;        
+      --radius-md: 16px;
+      
+      /* 상태 컬러 */
+      --color-pending: #F59E0B; /* 대기 (주황) */
+      --color-success: #10B981; /* 완료 (초록) */
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Pretendard', sans-serif; -webkit-tap-highlight-color: transparent; }
+    body { background-color: #eee; display: flex; justify-content: center; min-height: 100vh; }
+
+    .app-container {
+      width: 100%; max-width: 420px; background-color: var(--bg-app);
+      position: relative; min-height: 100vh; padding-bottom: 90px;
+      box-shadow: 0 0 30px rgba(0,0,0,0.1); overflow: hidden;
+    }
+
+    /* 헤더 & 탭 */
+    .sticky-area { position: sticky; top: 0; z-index: 50; background: var(--bg-surface); }
+    
+    header {
+      padding: 16px 24px; display: flex; justify-content: center; align-items: center;
+      border-bottom: 1px solid var(--border);
+    }
+    .page-title { font-size: 18px; font-weight: 700; color: var(--text-main); }
+
+    .tab-header { display: flex; border-bottom: 1px solid var(--border); }
+    .tab-item {
+      flex: 1; text-align: center; padding: 14px 0; font-size: 15px;
+      color: var(--text-sub); cursor: pointer; position: relative; transition: 0.2s;
+    }
+    .tab-item.active { color: var(--text-main); font-weight: 700; }
+    .tab-item.active::after {
+      content: ''; position: absolute; bottom: 0; left: 0; width: 100%;
+      height: 2px; background: var(--text-main);
+    }
+
+    .content-area { padding: 20px 24px; min-height: 60vh; }
+    .section-title { font-size: 14px; font-weight: 700; color: var(--text-sub); margin-bottom: 12px; display: flex; justify-content: space-between; }
+
+    /* 탭 컨텐츠 제어 */
+    .tab-pane { display: none; animation: fadeIn 0.3s; }
+    .tab-pane.show { display: block; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+    /* =========================================
+       카드 스타일: 신청 대기 (Pending)
+       ========================================= */
+    .pending-card {
+      background: #FFFBEB; border: 1px solid #FCD34D;
+      border-radius: var(--radius-md); padding: 16px; margin-bottom: 24px;
+    }
+    .pending-badge {
+      font-size: 11px; font-weight: 700; color: #B45309; background: #FEF3C7;
+      padding: 2px 6px; border-radius: 4px; display: inline-block; margin-bottom: 8px;
+    }
+    .route-text { font-size: 16px; font-weight: 700; color: var(--text-main); margin-bottom: 4px; display: flex; align-items: center; gap: 6px; }
+    .info-text { font-size: 13px; color: var(--text-sub); margin-bottom: 12px; }
+    
+    .btn-cancel {
+      width: 100%; height: 40px; background: white; border: 1px solid #FCD34D;
+      border-radius: 8px; font-size: 13px; font-weight: 600; color: #B45309;
+      cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px;
+    }
+
+    /* =========================================
+       카드 스타일: 운행 중 (Active)
+       ========================================= */
+    .active-card {
+      background: white; border-radius: var(--radius-md); padding: 20px;
+      margin-bottom: 16px; border: 1px solid var(--border);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.05); transition: 0.3s;
+    }
+    
+    .status-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .status-pill {
+      font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 20px;
+      display: flex; align-items: center; gap: 4px; transition: 0.3s;
+    }
+    .status-pill.blue { background: #EEF2FF; color: var(--primary); }
+    
+    .card-actions {
+      margin-top: 16px; padding-top: 16px; border-top: 1px solid #F1F5F9;
+      display: grid; grid-template-columns: 1fr 2fr; gap: 8px; 
+    }
+    
+    .btn-nav {
+      height: 48px; border-radius: 10px; border: 1px solid #E2E8F0;
+      background: white; color: var(--text-main); font-weight: 600; font-size: 13px;
+      display: flex; align-items: center; justify-content: center; gap: 4px; cursor: pointer;
+    }
+    
+    /* 상태 변경 버튼 (메인) */
+    .btn-status {
+      height: 48px; border-radius: 10px; border: none;
+      background: var(--text-main); color: white; font-weight: 700; font-size: 15px;
+      display: flex; align-items: center; justify-content: center; gap: 6px; cursor: pointer;
+      transition: 0.2s;
+    }
+    .btn-status.step-1 { background: var(--text-main); } /* 상차지 도착 */
+    .btn-status.step-2 { background: var(--primary); }   /* 상차 완료 */
+    .btn-status.step-3 { background: var(--text-main); } /* 하차지 도착 */
+    .btn-status.step-4 { background: var(--color-success); } /* 하차 완료 */
+
+    /* =========================================
+       카드 스타일: 완료 내역 (History)
+       ========================================= */
+    .history-card {
+      background: #F9FAFB; border-radius: var(--radius-md); padding: 16px;
+      margin-bottom: 12px; border: 1px solid var(--border); position: relative;
+    }
+    .h-badge {
+      font-size: 11px; font-weight: 700; color: #059669; background: #ECFDF5;
+      padding: 2px 6px; border-radius: 4px; display: inline-block; margin-bottom: 8px;
+    }
+    .h-date { position: absolute; top: 16px; right: 16px; font-size: 12px; color: #94A3B8; }
+
+    /* 빈 화면 메시지 */
+    .empty-msg {
+      text-align: center; color: var(--text-sub); margin-top: 60px;
+      display: none;
+    }
+    .empty-msg.show { display: block; }
+
+    /* =========================================
+       모달 (인수증 업로드)
+       ========================================= */
+    .modal-overlay {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.5); z-index: 100;
+      display: none; justify-content: center; align-items: flex-end;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal-sheet {
+      width: 100%; max-width: 420px; background: white;
+      border-top-left-radius: 24px; border-top-right-radius: 24px;
+      padding: 24px; animation: slideUp 0.3s;
+    }
+    .upload-area {
+      height: 140px; background: #F8FAFC; border: 2px dashed #CBD5E1;
+      border-radius: 16px; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; color: var(--text-sub);
+      cursor: pointer; margin: 20px 0;
+    }
+    .btn-submit {
+      width: 100%; height: 56px; background: var(--primary); color: white;
+      border-radius: 12px; font-size: 16px; font-weight: 700; border: none; cursor: pointer;
+    }
+    @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+
+    /* 하단 탭바 */
+    .bottom-nav {
+      position: fixed; bottom: 0; width: 100%; max-width: 420px;
+      height: 80px; background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px); border-top: 1px solid var(--border);
+      display: flex; justify-content: space-around; padding-bottom: 10px; z-index: 100;
+    }
+    .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #94A3B8; cursor: pointer; }
+    .nav-item.active { color: var(--primary); }
+    .nav-item i { font-size: 26px; margin-bottom: 4px; }
+    .nav-item span { font-size: 10px; font-weight: 500; }
+    .nav-item.active i { font-weight: fill; }
+
+  </style>
+</head>
+<body>
+
+  <div class="app-container">
+    
+    <div class="sticky-area">
+      <header>
+        <div class="page-title">운행 관리</div>
+      </header>
+      <div class="tab-header">
+        <div class="tab-item active" id="tab-btn-ing" onclick="switchTab('ing')">진행 중 (2)</div>
+        <div class="tab-item" id="tab-btn-done" onclick="switchTab('done')">완료 (5)</div>
+      </div>
+    </div>
+
+    <div class="content-area">
+      
+      <div id="tab-pane-ing" class="tab-pane show">
+        
+        <div id="pendingSection">
+          <div class="section-title">
+            <span>신청 현황 (1)</span>
+            <span style="font-weight:400; font-size:12px;">승인 대기</span>
+          </div>
+          <div class="pending-card" id="pendingCard">
+            <span class="pending-badge">화주 승인 대기</span>
+            <div class="route-text">인천 남동 <i class="ph ph-arrow-right"></i> 충남 천안</div>
+            <div class="info-text">5톤 카고 · 160,000원 · 내일 상차</div>
+            <button class="btn-cancel" onclick="cancelOrder()">
+              <i class="ph ph-x"></i> 배차 신청 취소
+            </button>
+          </div>
+        </div>
+
+        <div class="section-title" style="margin-top: 30px;">
+          <span>운행 현황 (1)</span>
+          <span style="font-weight:400; font-size:12px;">진행중</span>
+        </div>
+
+        <div class="active-card" id="activeCard">
+          <div class="status-row">
+            <div class="status-pill blue" id="statusBadge">
+              <i class="ph ph-steering-wheel"></i> 이동 중
+            </div>
+            <span style="font-size:12px; font-weight:600; color:var(--primary);">#2491</span>
+          </div>
+          
+          <div class="route-text">경기 평택 <i class="ph ph-arrow-right" style="font-size:14px; color:#CBD5E1;"></i> 부산 강서</div>
+          <div class="info-text">
+            11톤 윙바디 · 450,000원<br>
+            <span id="targetLoc" style="color:var(--text-main); font-weight:600;">상차지: 경기 평택시 포승읍</span>
+          </div>
+
+          <div class="card-actions">
+            <button class="btn-nav" onclick="alert('네비게이션 연동')"><i class="ph ph-navigation-arrow"></i> 길안내</button>
+            
+            <button class="btn-status step-1" data-step="1" onclick="changeStatus(this)">
+              <i class="ph ph-map-pin"></i> 상차지 도착
+            </button>
+          </div>
+        </div>
+
+        <div class="empty-msg" id="emptyMsgIng">
+          <i class="ph ph-truck" style="font-size: 40px; margin-bottom: 10px;"></i><br>
+          진행 중인 운행 내역이 없습니다.
+        </div>
+
+      </div>
+
+      <div id="tab-pane-done" class="tab-pane">
+        <div id="completedList">
+          <div class="history-card">
+            <span class="h-badge"><i class="ph ph-check"></i> 정산 대기</span>
+            <span class="h-date">2026.02.01</span>
+            <div class="route-text" style="font-size:15px;">서울 강서 <i class="ph ph-arrow-right"></i> 경기 일산</div>
+            <div class="info-text">1톤 카고 · 60,000원</div>
+          </div>
+          
+          <div class="history-card">
+            <span class="h-badge"><i class="ph ph-check"></i> 정산 완료</span>
+            <span class="h-date">2026.01.28</span>
+            <div class="route-text" style="font-size:15px;">대구 북구 <i class="ph ph-arrow-right"></i> 경북 구미</div>
+            <div class="info-text">5톤 윙바디 · 120,000원</div>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+
+    <div id="receiptModal" class="modal-overlay">
+      <div class="modal-sheet">
+        <div style="font-size: 18px; font-weight: 700; color: var(--text-main);">인수증 등록</div>
+        <div class="upload-area" onclick="alert('카메라 실행')">
+          <i class="ph ph-camera" style="font-size: 32px; margin-bottom: 8px;"></i>
+          <span>서명이 보이게 촬영해주세요</span>
+        </div>
+        <button class="btn-submit" onclick="finishDriving()">등록 및 운행 종료</button>
+      </div>
+    </div>
+
+    <nav class="bottom-nav">
+      <div class="nav-item"><i class="ph ph-house"></i><span>홈</span></div>
+      <div class="nav-item"><i class="ph ph-list-dashes"></i><span>오더</span></div>
+      <div class="nav-item active"><i class="ph ph-steering-wheel"></i><span>운행</span></div>
+      <div class="nav-item"><i class="ph ph-wallet"></i><span>정산</span></div>
+      <div class="nav-item"><i class="ph ph-list"></i><span>더보기</span></div>
+    </nav>
+
+  </div>
+
+  <script>
+    // 1. 탭 전환 기능
+    function switchTab(tabName) {
+      const ingPane = document.getElementById('tab-pane-ing');
+      const donePane = document.getElementById('tab-pane-done');
+      const ingBtn = document.getElementById('tab-btn-ing');
+      const doneBtn = document.getElementById('tab-btn-done');
+
+      if (tabName === 'ing') {
+        ingPane.classList.add('show');
+        donePane.classList.remove('show');
+        ingBtn.classList.add('active');
+        doneBtn.classList.remove('active');
+      } else {
+        ingPane.classList.remove('show');
+        donePane.classList.add('show');
+        ingBtn.classList.remove('active');
+        doneBtn.classList.add('active');
+      }
+    }
+
+    // 2. 배차 신청 취소
+    function cancelOrder() {
+      if(confirm("정말 취소하시겠습니까?")) {
+        document.getElementById('pendingCard').remove();
+        document.getElementById('pendingSection').style.display = 'none'; // 섹션 제목도 숨김
+        updateTabCounts();
+      }
+    }
+
+    // 3. 운행 상태 변경 (버튼 로직)
+    function changeStatus(btn) {
+      const step = parseInt(btn.getAttribute('data-step'));
+      const badge = document.getElementById('statusBadge');
+      const targetLoc = document.getElementById('targetLoc');
+
+      if (step === 1) { // 상차지 도착 -> 상차 완료
+        btn.innerHTML = '<i class="ph ph-package"></i> 상차 완료 (출발)';
+        btn.className = 'btn-status step-2'; 
+        btn.setAttribute('data-step', '2');
+        badge.innerHTML = '<i class="ph ph-clock"></i> 상차 작업 중';
+      } 
+      else if (step === 2) { // 상차 완료 -> 하차지 도착
+        btn.innerHTML = '<i class="ph ph-map-pin"></i> 하차지 도착';
+        btn.className = 'btn-status step-3';
+        btn.setAttribute('data-step', '3');
+        badge.innerHTML = '<i class="ph ph-truck"></i> 하차 이동 중';
+        targetLoc.innerText = "하차지: 부산 강서구 신항남로";
+        alert("상차 완료! 하차지로 안내를 시작합니다.");
+      }
+      else if (step === 3) { // 하차지 도착 -> 하차 완료
+        btn.innerHTML = '<i class="ph ph-check-circle"></i> 하차 완료';
+        btn.className = 'btn-status step-4';
+        btn.setAttribute('data-step', '4');
+        badge.innerHTML = '<i class="ph ph-clock"></i> 하차 작업 중';
+      }
+      else if (step === 4) { // 하차 완료 -> 모달 오픈
+        document.getElementById('receiptModal').classList.add('open');
+      }
+    }
+
+    // 4. 운행 종료 및 완료 탭 이동
+    function finishDriving() {
+      // 모달 닫기
+      document.getElementById('receiptModal').classList.remove('open');
+
+      // 진행 중 카드 숨기기
+      const activeCard = document.getElementById('activeCard');
+      activeCard.style.display = 'none';
+      document.getElementById('emptyMsgIng').classList.add('show');
+
+      // 완료 리스트에 추가 (동적 생성)
+      const completedList = document.getElementById('completedList');
+      const today = new Date().toLocaleDateString();
+      
+      const newCardHTML = `
+        <div class="history-card" style="border: 1px solid #10B981; background:#F0FDF4;">
+          <span class="h-badge"><i class="ph ph-check"></i> 방금 완료</span>
+          <span class="h-date">${today}</span>
+          <div class="route-text" style="font-size:15px;">경기 평택 <i class="ph ph-arrow-right"></i> 부산 강서</div>
+          <div class="info-text">11톤 윙바디 · 450,000원</div>
+        </div>
+      `;
+      completedList.insertAdjacentHTML('afterbegin', newCardHTML);
+
+      // 탭 카운트 갱신
+      updateTabCounts();
+
+      // 완료 탭으로 이동
+      switchTab('done');
+      alert("운행이 완료되었습니다!");
+    }
+
+    function updateTabCounts() {
+      // 실제로는 데이터 개수를 세어야 하지만, 여기선 시뮬레이션
+      const hasPending = document.getElementById('pendingCard') ? 1 : 0;
+      const hasActive = document.getElementById('activeCard').style.display !== 'none' ? 1 : 0;
+      const doneCount = document.querySelectorAll('.history-card').length;
+
+      document.getElementById('tab-btn-ing').innerText = `진행 중 (${hasPending + hasActive})`;
+      document.getElementById('tab-btn-done').innerText = `완료 (${doneCount})`;
+    }
+  </script>
+
+</body>
+</html> 

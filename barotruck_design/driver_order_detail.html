@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>바로트럭 - 오더 상세</title>
+  
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+  <style>
+    /* =========================================
+       1. 디자인 토큰 (통일)
+       ========================================= */
+    :root {
+      --primary: #4E46E5;       
+      --primary-light: #EEF2FF; 
+      
+      --bg-app: #F8FAFC;        
+      --bg-surface: #FFFFFF;    
+      
+      --text-main: #0F172A;     
+      --text-sub: #64748B;      
+      --border: #E2E8F0;        
+
+      --radius-md: 16px;        
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Pretendard', sans-serif; -webkit-tap-highlight-color: transparent; }
+    
+    body { background-color: #eee; display: flex; justify-content: center; min-height: 100vh; }
+
+    .app-container {
+      width: 100%; max-width: 420px;
+      background-color: var(--bg-app);
+      position: relative; min-height: 100vh;
+      padding-bottom: 100px;
+      box-shadow: 0 0 30px rgba(0,0,0,0.1);
+    }
+
+    /* 헤더 (투명 배경 -> 스크롤 시 흰색 처리는 JS영역이나 여기선 흰색 고정) */
+    header {
+      padding: 16px 24px; display: flex; justify-content: space-between; align-items: center;
+      background: var(--bg-surface); border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; z-index: 50;
+    }
+    .page-title { font-size: 18px; font-weight: 700; color: var(--text-main); }
+    .icon-btn { font-size: 24px; cursor: pointer; color: var(--text-main); }
+
+    /* 1. 지도 영역 (Placeholder) */
+    .map-area {
+      width: 100%; height: 200px;
+      background: #E2E8F0;
+      display: flex; align-items: center; justify-content: center;
+      color: var(--text-sub); flex-direction: column; gap: 8px;
+    }
+
+    /* 2. 핵심 요약 카드 (운임 & 거리) */
+    .summary-card {
+      background: var(--bg-surface);
+      padding: 24px;
+      border-bottom: 1px solid var(--border);
+    }
+    
+    .price-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .price-label { font-size: 14px; color: var(--text-sub); font-weight: 600; }
+    .price-val { font-size: 28px; font-weight: 800; color: var(--primary); }
+    
+    .pay-tag {
+      font-size: 12px; padding: 4px 8px; border-radius: 6px;
+      background: #EEF2FF; color: var(--primary); font-weight: 700; vertical-align: middle; margin-left: 6px;
+    }
+
+    .tags-row { display: flex; gap: 8px; flex-wrap: wrap; }
+    .info-tag {
+      padding: 6px 12px; border-radius: 20px; border: 1px solid var(--border);
+      font-size: 13px; color: var(--text-sub); font-weight: 500; display: flex; align-items: center; gap: 4px;
+    }
+
+    /* 3. 운송 경로 (타임라인) */
+    .section { padding: 24px; background: var(--bg-surface); margin-top: 12px; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+    .section-title { font-size: 16px; font-weight: 700; margin-bottom: 20px; color: var(--text-main); }
+
+    .timeline { position: relative; padding-left: 10px; }
+    .tl-line {
+      position: absolute; left: 11px; top: 10px; bottom: 30px;
+      width: 2px; border-left: 2px dashed #CBD5E1; z-index: 0;
+    }
+    
+    .tl-item { display: flex; gap: 20px; margin-bottom: 30px; position: relative; z-index: 1; }
+    .tl-item:last-child { margin-bottom: 0; }
+    
+    .tl-dot {
+      width: 24px; height: 24px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 10px; font-weight: 700; color: white; flex-shrink: 0;
+      box-shadow: 0 0 0 4px white; /* 선 가림용 */
+    }
+    .tl-dot.start { background: var(--primary); }
+    .tl-dot.end { background: var(--text-main); }
+
+    .tl-content { flex: 1; }
+    .tl-time { font-size: 14px; font-weight: 600; color: var(--primary); margin-bottom: 4px; }
+    .tl-addr { font-size: 18px; font-weight: 700; color: var(--text-main); margin-bottom: 4px; line-height: 1.3; }
+    .tl-detail { font-size: 14px; color: var(--text-sub); }
+
+    /* 4. 화물 정보 상세 (그리드) */
+    .info-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+    }
+    .info-box {
+      padding: 16px; background: #F8FAFC; border-radius: 12px;
+    }
+    .ib-label { font-size: 12px; color: var(--text-sub); margin-bottom: 6px; }
+    .ib-val { font-size: 15px; font-weight: 700; color: var(--text-main); }
+
+    /* 5. 화주 정보 */
+    .shipper-row { display: flex; align-items: center; gap: 12px; }
+    .avatar {
+      width: 48px; height: 48px; border-radius: 50%; background: #E2E8F0;
+      display: flex; align-items: center; justify-content: center; font-size: 24px; color: var(--text-sub);
+    }
+    
+    /* 하단 고정 버튼 */
+    .bottom-fixed {
+      position: fixed; bottom: 0; left: 0; width: 100%;
+      background: white; border-top: 1px solid var(--border);
+      padding: 16px 20px; z-index: 100; display: flex; justify-content: center; gap: 10px;
+    }
+    
+    .btn {
+      height: 56px; border-radius: 12px;
+      font-size: 17px; font-weight: 700; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .btn-call {
+      width: 56px; background: white; border: 1px solid var(--border); color: var(--text-main);
+    }
+    .btn-submit {
+      flex: 1; background: var(--primary); color: white; border: none;
+      box-shadow: 0 4px 15px rgba(78, 70, 229, 0.3);
+    }
+
+  </style>
+</head>
+<body>
+
+  <div class="app-container">
+    
+    <header>
+      <i class="ph ph-arrow-left icon-btn" onclick="history.back()"></i>
+      <div class="page-title">오더 상세</div>
+      <i class="ph ph-share-network icon-btn"></i>
+    </header>
+
+    <div class="map-area">
+      <i class="ph ph-map-trifold" style="font-size: 40px; opacity: 0.5;"></i>
+      <span>지도 미리보기</span>
+    </div>
+
+    <div class="summary-card">
+      <div class="price-row">
+        <span class="price-label">운송료</span>
+        <div>
+          <span class="pay-tag">인수증</span>
+          <span class="price-val">450,000원</span>
+        </div>
+      </div>
+      
+      <div class="tags-row">
+        <div class="info-tag"><i class="ph ph-truck"></i> 11톤 윙바디</div>
+        <div class="info-tag"><i class="ph ph-arrows-left-right"></i> 320km</div>
+        <div class="info-tag"><i class="ph ph-cube"></i> 독차</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">운송 경로</div>
+      
+      <div class="timeline">
+        <div class="tl-line"></div>
+        
+        <div class="tl-item">
+          <div class="tl-dot start">출</div>
+          <div class="tl-content">
+            <div class="tl-time">오늘 14:00 상차</div>
+            <div class="tl-addr">경기 평택시 포승읍</div>
+            <div class="tl-detail">상세 주소는 배차 후 공개</div>
+          </div>
+        </div>
+
+        <div class="tl-item">
+          <div class="tl-dot end">도</div>
+          <div class="tl-content">
+            <div class="tl-time">내일 09:00 하차</div>
+            <div class="tl-addr">부산 강서구 신항남로</div>
+            <div class="tl-detail">상세 주소는 배차 후 공개</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">화물 정보</div>
+      
+      <div class="info-grid">
+        <div class="info-box">
+          <div class="ib-label">품목</div>
+          <div class="ib-val">파레트 14개</div>
+        </div>
+        <div class="info-box">
+          <div class="ib-label">중량</div>
+          <div class="ib-val">5톤</div>
+        </div>
+        <div class="info-box">
+          <div class="ib-label">상차 방법</div>
+          <div class="ib-val">지게차</div>
+        </div>
+        <div class="info-box">
+          <div class="ib-label">하차 방법</div>
+          <div class="ib-val">지게차</div>
+        </div>
+      </div>
+
+      <div style="margin-top: 16px; padding: 16px; background: #FFF7ED; border-radius: 12px; border: 1px solid #FFEDD5;">
+        <div style="font-size: 13px; font-weight: 700; color: #C2410C; margin-bottom: 4px;">화주 요청사항</div>
+        <div style="font-size: 13px; color: #9A3412;">
+          비오니까 꼭 윙바디만 배차 부탁드립니다. 도착 전에 담당자에게 전화 주세요.
+        </div>
+      </div>
+    </div>
+
+    <div class="section" style="margin-bottom: 20px;">
+      <div class="section-title">화주 정보</div>
+      <div class="shipper-row">
+        <div class="avatar"><i class="ph ph-user"></i></div>
+        <div>
+          <div style="font-weight: 700; font-size: 15px;">(주)대한물류</div>
+          <div style="font-size: 13px; color: var(--text-sub);">최근 3개월 배차 142건</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="bottom-fixed">
+      <button class="btn btn-call" onclick="alert('화주에게 전화 연결')">
+        <i class="ph ph-phone" style="font-size: 24px;"></i>
+      </button>
+      <button class="btn btn-submit" onclick="alert('배차가 완료되었습니다! 안전운전하세요.')">
+        배차 받기
+      </button>
+    </div>
+
+  </div>
+
+</body>
+</html>

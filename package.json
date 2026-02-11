@@ -1,0 +1,11 @@
+{
+  "dependencies": {
+    "@react-navigation/bottom-tabs": "^7.12.0",
+    "@react-navigation/native": "^7.1.28",
+    "@react-navigation/stack": "^7.7.1",
+    "axios": "^1.13.5",
+    "react-native-linear-gradient": "^2.8.3",
+    "react-native-safe-area-context": "^5.6.2",
+    "react-native-vector-icons": "^10.3.0"
+  }
+}
