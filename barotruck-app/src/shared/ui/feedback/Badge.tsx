@@ -64,9 +64,9 @@ export const Badge = memo(function Badge({
       case "direct":
         return { bg: "#4E46E5", fg: "#F3F4F6", border: "#647fa4" };
       case "roundTrip":
-        return { bg: "#EEF2FF", fg: "#4338CA", border: "transparent" };
+        return { bg: "#EEF2FF", fg: "#4338CA", border: "#EEF2FF" };
       case "oneWay":
-        return { bg: "#F0F9FF", fg: "#0369A1", border: "transparent" };
+        return { bg: "#F0F9FF", fg: "#0369A1", border: "#F0F9FF" };
       case "payPrepaid":
         return { bg: "transparent", fg: "#15803D", border: "#15803D" };
       case "payDeferred":
@@ -97,7 +97,7 @@ export const Badge = memo(function Badge({
 
 const s = StyleSheet.create({
   badge: {
-    paddingHorizontal: 8,
+    paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 6,
     borderWidth: 1,
@@ -106,7 +106,7 @@ const s = StyleSheet.create({
     alignItems: "center",
   },
   text: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: "700",
   },
 });
