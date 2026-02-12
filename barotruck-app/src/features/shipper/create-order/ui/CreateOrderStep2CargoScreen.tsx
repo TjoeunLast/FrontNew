@@ -4,16 +4,23 @@ import React from "react";
 import { Alert, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { OrderApi } from "@/shared/api/orderService";
-import type { OrderRequest } from "@/shared/models/order";
 import {
   clearCreateOrderDraft,
   getCreateOrderDraft,
 } from "@/features/shipper/create-order/model/createOrderDraft";
+import { PRESET_REQUEST_TAGS } from "@/features/shipper/create-order/ui/createOrderStep1.constants";
+import { addLocalShipperOrder } from "@/features/shipper/home/model/localShipperOrders";
+import { OrderApi } from "@/shared/api/orderService";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
+import type { OrderRequest } from "@/shared/models/order";
 import { Button } from "@/shared/ui/base/Button";
 import { Card } from "@/shared/ui/base/Card";
-import { Chip } from "@/shared/ui/form/Chip";
+import { Chip as FormChip } from "@/shared/ui/form/Chip";
+
+import { Chip as RequestChip } from "./createOrderStep1.components";
+import { s as step1Styles } from "./createOrderStep1.styles";
+
+const FORCE_MOCK_CREATE_ORDER = true;
 
 function won(n: number) {
   const v = Math.max(0, Math.round(n));
@@ -28,8 +35,12 @@ function toKoreanDateTextFromISO(iso: string) {
   return `${y}.${m}.${day}`;
 }
 
-function toScheduleText(iso: string) {
+function toScheduleText(iso: string, hhmm?: string) {
   const d = new Date(iso);
+  const timeMatch = (hhmm ?? "").match(/^([01]\d|2[0-3]):([0-5]\d)$/);
+  if (timeMatch) {
+    d.setHours(Number(timeMatch[1]), Number(timeMatch[2]), 0, 0);
+  }
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
@@ -51,6 +62,10 @@ function parseTonnage(label: string, value: string) {
   const match = label.match(/[0-9]+(\.[0-9]+)?/);
   if (match) return Number.parseFloat(match[0]);
   return 0;
+}
+
+function toLocalOrderTimeLabel() {
+  return "방금 전";
 }
 
 export function ShipperCreateOrderStep2CargoScreen() {
@@ -80,24 +95,62 @@ export function ShipperCreateOrderStep2CargoScreen() {
   const submitFinal = async () => {
     setLoading(true);
     try {
+      const localOrder: Parameters<typeof addLocalShipperOrder>[0] = {
+        id: `local-${Date.now()}`,
+        status: draft.dispatch === "instant" ? "CONFIRMED" : "MATCHING",
+        dispatchMode: draft.dispatch,
+        pickupTypeLabel: draft.loadDay,
+        dropoffTypeLabel: draft.arriveType,
+        from: draft.startSelected,
+        to: draft.endAddr,
+        pickupTimeHHmm: draft.startTimeHHmm,
+        dropoffTimeHHmm: draft.endTimeHHmm,
+        distanceKm: Math.round(draft.distanceKm),
+        cargoSummary: `${draft.ton.label} ${draft.carType.label}`.trim(),
+        loadMethod,
+        workTool,
+        priceWon: draft.appliedFare,
+        updatedAtLabel: toLocalOrderTimeLabel(),
+      };
+
+      if (FORCE_MOCK_CREATE_ORDER) {
+        addLocalShipperOrder(localOrder);
+        clearCreateOrderDraft();
+        Alert.alert(
+          "등록 완료",
+          "목업 모드에서 화물 등록이 완료되었습니다.",
+          [{ text: "확인", onPress: () => router.replace("/(shipper)/(tabs)") }]
+        );
+        return;
+      }
+
       const request: OrderRequest = {
         startAddr: draft.startSelected,
-        startPlace: draft.startSelected,
+        startPlace: draft.startAddrDetail || draft.startSelected,
         startType: draft.loadDay,
-        startSchedule: toScheduleText(draft.loadDateISO),
+        startSchedule: toScheduleText(draft.loadDateISO, draft.startTimeHHmm),
         puProvince: parseProvince(draft.startSelected),
         endAddr: draft.endAddr,
-        endPlace: draft.endAddr,
+        endPlace: draft.endAddrDetail || draft.endAddr,
         endType: draft.arriveType,
-        endSchedule: toScheduleText(draft.loadDateISO),
+        endSchedule: toScheduleText(draft.loadDateISO, draft.endTimeHHmm),
         doProvince: parseProvince(draft.endAddr),
-        cargoContent: draft.cargoDetail || draft.requestText || draft.requestTags.join(", "),
+        cargoContent: [
+          draft.requestTags.length ? `요청태그:${draft.requestTags.join(",")}` : "",
+          draft.requestText ? `직접입력:${draft.requestText}` : "",
+          memo.trim() ? `추가메모:${memo.trim()}` : "",
+          draft.cargoDetail ? `화물:${draft.cargoDetail}` : "",
+          draft.startContact ? `상차지 연락처:${draft.startContact}` : "",
+          draft.endContact ? `하차지 연락처:${draft.endContact}` : "",
+        ]
+          .filter(Boolean)
+          .join(" | "),
         loadMethod,
         workType: workTool,
         tonnage: parseTonnage(draft.ton.label, draft.ton.value),
         reqCarType: draft.carType.label,
         reqTonnage: draft.ton.label,
-        driveMode: draft.dispatch,
+        driveMode: draft.tripType,
         loadWeight: Number.parseFloat(draft.weightTon) || undefined,
         basePrice: draft.appliedFare,
         payMethod: draft.pay,
@@ -142,7 +195,7 @@ export function ShipperCreateOrderStep2CargoScreen() {
         >
           <Ionicons name="chevron-back" size={22} color={c.text.primary} />
         </Pressable>
-        <Text style={{ fontSize: 16, fontWeight: "900", color: c.text.primary }}>화물 상세</Text>
+        <Text style={{ fontSize: 16, fontWeight: "900", color: c.text.primary }}>화물 등록</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -152,9 +205,21 @@ export function ShipperCreateOrderStep2CargoScreen() {
 
           <Text style={{ color: c.text.secondary, fontWeight: "800" }}>상차</Text>
           <Text style={{ color: c.text.primary, fontWeight: "900", marginBottom: 8 }}>{draft.startSelected}</Text>
+          <Text style={{ color: c.text.secondary, fontWeight: "800" }}>상차지 상세 주소</Text>
+          <Text style={{ color: c.text.primary, fontWeight: "900", marginBottom: 8 }}>{draft.startAddrDetail}</Text>
+          <Text style={{ color: c.text.secondary, fontWeight: "800" }}>상차지 연락처</Text>
+          <Text style={{ color: c.text.primary, fontWeight: "900", marginBottom: 8 }}>{draft.startContact}</Text>
+          <Text style={{ color: c.text.secondary, fontWeight: "800" }}>상차 시간</Text>
+          <Text style={{ color: c.text.primary, fontWeight: "900", marginBottom: 8 }}>{draft.startTimeHHmm}</Text>
 
           <Text style={{ color: c.text.secondary, fontWeight: "800" }}>하차</Text>
           <Text style={{ color: c.text.primary, fontWeight: "900", marginBottom: 8 }}>{draft.endAddr}</Text>
+          <Text style={{ color: c.text.secondary, fontWeight: "800" }}>상세 주소</Text>
+          <Text style={{ color: c.text.primary, fontWeight: "900", marginBottom: 8 }}>{draft.endAddrDetail}</Text>
+          <Text style={{ color: c.text.secondary, fontWeight: "800" }}>연락처</Text>
+          <Text style={{ color: c.text.primary, fontWeight: "900", marginBottom: 8 }}>{draft.endContact}</Text>
+          <Text style={{ color: c.text.secondary, fontWeight: "800" }}>하차 시간</Text>
+          <Text style={{ color: c.text.primary, fontWeight: "900", marginBottom: 8 }}>{draft.endTimeHHmm}</Text>
 
           <View style={{ height: 1, backgroundColor: c.border.default, marginVertical: 12 }} />
 
@@ -163,6 +228,9 @@ export function ShipperCreateOrderStep2CargoScreen() {
           </Text>
           <Text style={{ color: c.text.secondary, fontWeight: "800", marginTop: 6 }}>
             차량: {draft.ton.label} · {draft.carType.label}
+          </Text>
+          <Text style={{ color: c.text.secondary, fontWeight: "800", marginTop: 6 }}>
+            운행 형태: {draft.tripType === "roundTrip" ? "왕복" : "편도"}
           </Text>
 
           <View style={{ height: 1, backgroundColor: c.border.default, marginVertical: 12 }} />
@@ -179,7 +247,7 @@ export function ShipperCreateOrderStep2CargoScreen() {
           <Text style={{ fontSize: 13, fontWeight: "800", color: c.text.primary, marginBottom: 8 }}>적재 방식</Text>
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
             {(["독차", "혼적"] as const).map((x) => (
-              <Chip key={x} label={x} selected={loadMethod === x} onPress={() => setLoadMethod(x)} />
+              <FormChip key={x} label={x} selected={loadMethod === x} onPress={() => setLoadMethod(x)} />
             ))}
           </View>
 
@@ -187,8 +255,8 @@ export function ShipperCreateOrderStep2CargoScreen() {
 
           <Text style={{ fontSize: 13, fontWeight: "800", color: c.text.primary, marginBottom: 8 }}>상하차 도구</Text>
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-            {["지게차", "수작업", "크레인", "호이스트"].map((x) => (
-              <Chip key={x} label={x} selected={workTool === x} onPress={() => setWorkTool(x)} />
+            {["지게차", "수작업", "크레인"].map((x) => (
+              <FormChip key={x} label={x} selected={workTool === x} onPress={() => setWorkTool(x)} />
             ))}
           </View>
         </Card>
@@ -196,10 +264,17 @@ export function ShipperCreateOrderStep2CargoScreen() {
         <Card padding={16} style={{ marginBottom: 18 }}>
           <Text style={{ fontSize: 14, fontWeight: "900", color: c.text.primary, marginBottom: 12 }}>요청사항</Text>
 
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-            {draft.requestTags.map((tag) => (
-              <Chip key={tag} label={`#${tag}`} selected onPress={() => {}} />
+          <View style={step1Styles.tagWrap}>
+            {PRESET_REQUEST_TAGS.map((tag) => (
+              <RequestChip
+                key={tag}
+                label={`#${tag}`}
+                selected={draft.requestTags.includes(tag)}
+                onPress={() => {}}
+              />
             ))}
+
+            <RequestChip label="직접 입력" selected={Boolean(draft.requestText.trim())} onPress={() => {}} />
           </View>
 
           {draft.requestText.trim() ? (
@@ -283,3 +358,4 @@ export function ShipperCreateOrderStep2CargoScreen() {
     </View>
   );
 }
+

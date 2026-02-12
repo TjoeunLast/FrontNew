@@ -136,7 +136,7 @@ export const s = StyleSheet.create({
 
   photoRow: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginTop: 10 },
   photoBox: {
-    width: "48.3%",
+    width: "48%",
     height: 86,
     borderRadius: 14,
     borderWidth: 1,
@@ -181,7 +181,7 @@ export const s = StyleSheet.create({
   hint: { marginTop: 8, fontSize: 12, fontWeight: "800" },
 
   payGrid: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginTop: 10 },
-  payTile: { width: "48.3%", borderRadius: 16, borderWidth: 1, padding: 14 },
+  payTile: { width: "48%", borderRadius: 16, borderWidth: 1, padding: 14 },
   payTitle: { fontSize: 14, fontWeight: "900", marginBottom: 6 },
   payDesc: { fontSize: 12, fontWeight: "700" },
 

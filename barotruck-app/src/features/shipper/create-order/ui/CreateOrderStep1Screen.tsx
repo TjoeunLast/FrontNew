@@ -11,11 +11,11 @@ import { Button } from "@/shared/ui/base/Button";
 import { Card } from "@/shared/ui/base/Card";
 
 import {
-  AI_FARE,
   CAR_TYPE_OPTIONS,
   DEFAULT_PHOTOS,
   DEFAULT_SELECTED_REQUEST_TAGS,
-  DISTANCE_KM,
+  getEstimatedDistanceKm,
+  getRecommendedFareByDistance,
   PRESET_REQUEST_TAGS,
   RECENT_ADDRESS_POOL,
   RECENT_START_OPTIONS,
@@ -40,6 +40,8 @@ import {
   type Option,
   type PayType,
   PAYMENT_OPTIONS,
+  TRIP_OPTIONS,
+  type TripType,
 } from "./createOrderStep1.types";
 import { addDays, isSameDay, parseWonInput, toKoreanDateText, won } from "./createOrderStep1.utils";
 
@@ -49,13 +51,20 @@ export function ShipperCreateOrderStep1Screen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  const [startSelected, setStartSelected] = useState(RECENT_START_OPTIONS[0].label);
-  const [startDropdownOpen, setStartDropdownOpen] = useState(false);
+  const [startSelected, setStartSelected] = useState("");
+  const [startAddrDetail, setStartAddrDetail] = useState("");
+  const [startContact, setStartContact] = useState("");
   const [startSearch, setStartSearch] = useState("");
   const [loadDay, setLoadDay] = useState<LoadDayType>("당상(오늘)");
   const [loadDate, setLoadDate] = useState(new Date());
   const [loadDatePickerOpen, setLoadDatePickerOpen] = useState(false);
+  const [startTimeHHmm, setStartTimeHHmm] = useState("09:00");
+  const [startTimePickerOpen, setStartTimePickerOpen] = useState(false);
   const [endAddr, setEndAddr] = useState("");
+  const [endAddrDetail, setEndAddrDetail] = useState("");
+  const [endContact, setEndContact] = useState("");
+  const [endTimeHHmm, setEndTimeHHmm] = useState("18:00");
+  const [endTimePickerOpen, setEndTimePickerOpen] = useState(false);
   const [arriveType, setArriveType] = useState<ArriveType>("당착");
 
   const [carType, setCarType] = useState<Option>(CAR_TYPE_OPTIONS[1]);
@@ -69,11 +78,24 @@ export function ShipperCreateOrderStep1Screen() {
 
   const [photos, setPhotos] = useState(DEFAULT_PHOTOS);
   const [dispatch, setDispatch] = useState<DispatchType>("instant");
+  const [tripType, setTripType] = useState<TripType>("oneWay");
   const [pay, setPay] = useState<PayType>("receipt30");
   const [fareInput, setFareInput] = useState("");
-  const [appliedFare, setAppliedFare] = useState(0);
+  const [appliedBaseFare, setAppliedBaseFare] = useState(0);
   const [carDropdownOpen, setCarDropdownOpen] = useState(false);
   const [tonDropdownOpen, setTonDropdownOpen] = useState(false);
+  const distanceKm = useMemo(
+    () => getEstimatedDistanceKm(startSelected || startSearch, endAddr),
+    [startSelected, startSearch, endAddr]
+  );
+  const aiFare = useMemo(() => getRecommendedFareByDistance(distanceKm), [distanceKm]);
+
+  const adjustFareByTripType = (baseFare: number) => {
+    if (tripType === "roundTrip") return Math.round(baseFare * 1.8);
+    return baseFare;
+  };
+
+  const appliedFare = useMemo(() => adjustFareByTripType(appliedBaseFare), [appliedBaseFare, tripType]);
 
   const fee = useMemo(() => {
     if (pay === "card") return Math.round(appliedFare * 0.1);
@@ -82,16 +104,17 @@ export function ShipperCreateOrderStep1Screen() {
 
   const totalPay = useMemo(() => appliedFare + fee, [appliedFare, fee]);
 
-  const filteredStartOptions = useMemo(() => {
+  const startAddrSuggestions = useMemo(() => {
     const q = startSearch.trim();
-    if (!q) return RECENT_START_OPTIONS;
-    return RECENT_START_OPTIONS.filter((item) => item.label.includes(q));
+    const pool = RECENT_START_OPTIONS.map((item) => item.label);
+    if (!q) return pool.slice(0, 2);
+    return pool.filter((addr) => addr.includes(q) && addr !== q).slice(0, 2);
   }, [startSearch]);
 
   const endAddrSuggestions = useMemo(() => {
     const q = endAddr.trim();
     if (!q) return [];
-    return RECENT_ADDRESS_POOL.filter((addr) => addr.includes(q)).slice(0, 5);
+    return RECENT_ADDRESS_POOL.filter((addr) => addr.includes(q) && addr !== q).slice(0, 2);
   }, [endAddr]);
 
   const toggleRequestTag = (tag: string) => {
@@ -112,17 +135,57 @@ export function ShipperCreateOrderStep1Screen() {
       Alert.alert("확인", "희망 운임을 입력해주세요.");
       return;
     }
-    setAppliedFare(v);
+    setAppliedBaseFare(v);
   };
 
   const applyAiFare = () => {
-    setFareInput(String(AI_FARE));
-    setAppliedFare(AI_FARE);
+    setFareInput(String(aiFare));
+    setAppliedBaseFare(aiFare);
+  };
+
+  const isValidHHmm = (v: string) => /^([01]\d|2[0-3]):([0-5]\d)$/.test(v.trim());
+  const formatHHmm = (d: Date) => `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  const hhmmToDate = (hhmm: string) => {
+    const d = new Date();
+    const m = hhmm.match(/^([01]\d|2[0-3]):([0-5]\d)$/);
+    if (m) {
+      d.setHours(Number(m[1]), Number(m[2]), 0, 0);
+    }
+    return d;
   };
 
   const submit = () => {
+    const resolvedStartAddr = (startSelected || startSearch).trim();
+    if (!resolvedStartAddr) {
+      Alert.alert("필수", "상차지 주소를 입력해주세요.");
+      return;
+    }
+    if (!startAddrDetail.trim()) {
+      Alert.alert("필수", "상차지 상세 주소를 입력해주세요.");
+      return;
+    }
+    if (!startContact.trim()) {
+      Alert.alert("필수", "상차지 연락처를 입력해주세요.");
+      return;
+    }
+    if (!isValidHHmm(startTimeHHmm)) {
+      Alert.alert("필수", "상차 시간을 HH:MM 형식으로 입력해주세요.");
+      return;
+    }
     if (!endAddr.trim()) {
       Alert.alert("필수", "하차지 주소를 입력해주세요.");
+      return;
+    }
+    if (!endAddrDetail.trim()) {
+      Alert.alert("필수", "하차지 상세 주소를 입력해주세요.");
+      return;
+    }
+    if (!endContact.trim()) {
+      Alert.alert("필수", "하차지 연락처를 입력해주세요.");
+      return;
+    }
+    if (!isValidHHmm(endTimeHHmm)) {
+      Alert.alert("필수", "하차 시간을 HH:MM 형식으로 입력해주세요.");
       return;
     }
     if (appliedFare <= 0) {
@@ -131,10 +194,16 @@ export function ShipperCreateOrderStep1Screen() {
     }
 
     setCreateOrderDraft({
-      startSelected,
+      startSelected: resolvedStartAddr,
+      startAddrDetail: startAddrDetail.trim(),
+      startContact: startContact.trim(),
       loadDay,
       loadDateISO: loadDate.toISOString(),
+      startTimeHHmm: startTimeHHmm.trim(),
       endAddr: endAddr.trim(),
+      endAddrDetail: endAddrDetail.trim(),
+      endContact: endContact.trim(),
+      endTimeHHmm: endTimeHHmm.trim(),
       arriveType,
       carType,
       ton,
@@ -144,8 +213,9 @@ export function ShipperCreateOrderStep1Screen() {
       requestText: customRequestText.trim(),
       photos,
       dispatch,
+      tripType,
       pay,
-      distanceKm: DISTANCE_KM,
+      distanceKm,
       appliedFare,
     });
 
@@ -184,6 +254,18 @@ export function ShipperCreateOrderStep1Screen() {
     setLoadDate(picked);
   };
 
+  const onChangeStartTime = (event: DateTimePickerEvent, picked?: Date) => {
+    if (Platform.OS === "android") setStartTimePickerOpen(false);
+    if (event.type === "dismissed" || !picked) return;
+    setStartTimeHHmm(formatHHmm(picked));
+  };
+
+  const onChangeEndTime = (event: DateTimePickerEvent, picked?: Date) => {
+    if (Platform.OS === "android") setEndTimePickerOpen(false);
+    if (event.type === "dismissed" || !picked) return;
+    setEndTimeHHmm(formatHHmm(picked));
+  };
+
   return (
     <View style={[s.page, { backgroundColor: c.bg.canvas }]}>
       <CreateOrderTopBar onBack={() => router.back()} />
@@ -202,24 +284,96 @@ export function ShipperCreateOrderStep1Screen() {
             <View style={s.timelineBody}>
               <Text style={[s.fieldLabel, { color: c.text.primary }]}>상차지 정보</Text>
 
-              <InlineDropdownField
-                label=""
-                valueLabel={startSelected}
-                placeholder="상차지 선택"
-                open={startDropdownOpen}
-                options={filteredStartOptions}
-                selectedValue={RECENT_START_OPTIONS.find((x) => x.label === startSelected)?.value}
-                onToggle={() => setStartDropdownOpen((v) => !v)}
-                onSelect={(op) => {
-                  setStartSelected(op.label);
-                  setStartDropdownOpen(false);
-                  setStartSearch("");
-                }}
-                searchable
-                searchValue={startSearch}
-                onSearchChange={setStartSearch}
-                emptyText="일치하는 최근 상차지가 없습니다."
-              />
+              <View style={[s.searchField, { backgroundColor: c.bg.surface, borderColor: c.border.default }]}>
+                <TextInput
+                  value={startSearch}
+                  onChangeText={(v) => {
+                    setStartSearch(v);
+                    setStartSelected(v.trim());
+                  }}
+                  placeholder="상차지 주소를 검색해주세요"
+                  placeholderTextColor={c.text.secondary}
+                  style={[s.searchInput, { color: c.text.primary }]}
+                />
+                <Ionicons name="search" size={18} color={c.text.secondary} />
+              </View>
+
+              {startAddrSuggestions.length ? (
+                <View
+                  style={[
+                    s.addressSuggestWrap,
+                    { borderColor: c.border.default, backgroundColor: c.bg.surface, marginTop: 8 },
+                  ]}
+                >
+                  {startAddrSuggestions.map((addr) => (
+                    <Pressable
+                      key={addr}
+                      onPress={() => {
+                        setStartSelected(addr);
+                        setStartSearch(addr);
+                      }}
+                      style={[s.addressSuggestItem, { borderColor: c.border.default }]}
+                    >
+                      <Ionicons name="time-outline" size={14} color={c.text.secondary} />
+                      <Text style={[s.addressSuggestText, { color: c.text.primary }]} numberOfLines={1}>
+                        {addr}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              ) : null}
+
+              {(startSelected || startSearch).trim() ? (
+                <>
+                  <View style={{ marginTop: 10 }}>
+                    <Text style={[s.fieldLabel, { color: c.text.primary }]}>상세 주소</Text>
+                    <View style={[s.inputWrap, { backgroundColor: c.bg.surface, borderColor: c.border.default }]}>
+                      <TextInput
+                        value={startAddrDetail}
+                        onChangeText={setStartAddrDetail}
+                        placeholder="예: A동 2층 203호"
+                        placeholderTextColor={c.text.secondary}
+                        style={[s.input, { color: c.text.primary }]}
+                      />
+                    </View>
+                  </View>
+
+                  <View style={{ marginTop: 10 }}>
+                    <Text style={[s.fieldLabel, { color: c.text.primary }]}>연락처</Text>
+                    <View style={[s.inputWrap, { backgroundColor: c.bg.surface, borderColor: c.border.default }]}>
+                      <TextInput
+                        value={startContact}
+                        onChangeText={setStartContact}
+                        placeholder="예: 010-1234-5678"
+                        keyboardType="phone-pad"
+                        placeholderTextColor={c.text.secondary}
+                        style={[s.input, { color: c.text.primary }]}
+                      />
+                    </View>
+                  </View>
+
+                  <View style={{ marginTop: 10 }}>
+                    <Text style={[s.fieldLabel, { color: c.text.primary }]}>상차 시간</Text>
+                    <Pressable
+                      onPress={() => setStartTimePickerOpen((v) => !v)}
+                      style={[s.inputWrap, { backgroundColor: c.bg.surface, borderColor: c.border.default, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }]}
+                    >
+                      <Text style={[s.input, { color: c.text.primary }]}>{startTimeHHmm}</Text>
+                      <Ionicons name="time-outline" size={16} color={c.text.secondary} />
+                    </Pressable>
+                    {startTimePickerOpen ? (
+                      <View style={{ marginTop: 8 }}>
+                        <DateTimePicker
+                          value={hhmmToDate(startTimeHHmm)}
+                          mode="time"
+                          display={Platform.OS === "ios" ? "spinner" : "default"}
+                          onChange={onChangeStartTime}
+                        />
+                      </View>
+                    ) : null}
+                  </View>
+                </>
+              ) : null}
 
               <View style={s.chipRow}>
                 {LOAD_DAY_OPTIONS.map((v) => (
@@ -227,19 +381,18 @@ export function ShipperCreateOrderStep1Screen() {
                 ))}
               </View>
 
-              <Pressable
-                onPress={() => {
-                  setLoadDay("직접 지정");
-                  setLoadDatePickerOpen((v) => !v);
-                }}
-                style={[s.dateRow, { borderColor: c.border.default, backgroundColor: c.bg.surface }]}
-              >
-                <View style={s.dateLabelRow}>
-                  <Ionicons name="calendar-outline" size={16} color={c.text.secondary} />
-                  <Text style={[s.dateValueText, { color: c.text.primary }]}>상차일: {toKoreanDateText(loadDate)}</Text>
-                </View>
-                <Text style={[s.dateValueText, { color: c.brand.primary }]}>날짜 선택</Text>
-              </Pressable>
+              {loadDay === "직접 지정" ? (
+                <Pressable
+                  onPress={() => setLoadDatePickerOpen((v) => !v)}
+                  style={[s.dateRow, { borderColor: c.border.default, backgroundColor: c.bg.surface }]}
+                >
+                  <View style={s.dateLabelRow}>
+                    <Ionicons name="calendar-outline" size={16} color={c.text.secondary} />
+                    <Text style={[s.dateValueText, { color: c.text.primary }]}>상차일: {toKoreanDateText(loadDate)}</Text>
+                  </View>
+                  <Text style={[s.dateValueText, { color: c.brand.primary }]}>날짜 선택</Text>
+                </Pressable>
+              ) : null}
 
               {loadDatePickerOpen ? (
                 <View style={{ marginTop: 8 }}>
@@ -294,6 +447,58 @@ export function ShipperCreateOrderStep1Screen() {
                     </Pressable>
                   ))}
                 </View>
+              ) : null}
+
+              {endAddr.trim() ? (
+                <>
+                  <View style={{ marginTop: 10 }}>
+                    <Text style={[s.fieldLabel, { color: c.text.primary }]}>상세 주소</Text>
+                    <View style={[s.inputWrap, { backgroundColor: c.bg.surface, borderColor: c.border.default }]}>
+                      <TextInput
+                        value={endAddrDetail}
+                        onChangeText={setEndAddrDetail}
+                        placeholder="예: A동 3층 305호"
+                        placeholderTextColor={c.text.secondary}
+                        style={[s.input, { color: c.text.primary }]}
+                      />
+                    </View>
+                  </View>
+
+                  <View style={{ marginTop: 10 }}>
+                    <Text style={[s.fieldLabel, { color: c.text.primary }]}>연락처</Text>
+                    <View style={[s.inputWrap, { backgroundColor: c.bg.surface, borderColor: c.border.default }]}>
+                      <TextInput
+                        value={endContact}
+                        onChangeText={setEndContact}
+                        placeholder="예: 010-1234-5678"
+                        keyboardType="phone-pad"
+                        placeholderTextColor={c.text.secondary}
+                        style={[s.input, { color: c.text.primary }]}
+                      />
+                    </View>
+                  </View>
+
+                  <View style={{ marginTop: 10 }}>
+                    <Text style={[s.fieldLabel, { color: c.text.primary }]}>하차 시간</Text>
+                    <Pressable
+                      onPress={() => setEndTimePickerOpen((v) => !v)}
+                      style={[s.inputWrap, { backgroundColor: c.bg.surface, borderColor: c.border.default, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }]}
+                    >
+                      <Text style={[s.input, { color: c.text.primary }]}>{endTimeHHmm}</Text>
+                      <Ionicons name="time-outline" size={16} color={c.text.secondary} />
+                    </Pressable>
+                    {endTimePickerOpen ? (
+                      <View style={{ marginTop: 8 }}>
+                        <DateTimePicker
+                          value={hhmmToDate(endTimeHHmm)}
+                          mode="time"
+                          display={Platform.OS === "ios" ? "spinner" : "default"}
+                          onChange={onChangeEndTime}
+                        />
+                      </View>
+                    ) : null}
+                  </View>
+                </>
               ) : null}
 
               <View style={s.chipRow}>
@@ -392,7 +597,7 @@ export function ShipperCreateOrderStep1Screen() {
             })}
 
             <Chip
-              label={customRequestOpen ? "직접 입력 닫기" : "직접 입력"}
+              label="직접 입력"
               selected={customRequestOpen}
               onPress={() => setCustomRequestOpen((v) => !v)}
             />
@@ -469,9 +674,23 @@ export function ShipperCreateOrderStep1Screen() {
           </View>
 
           <View style={[s.aiBox, { backgroundColor: c.brand.primarySoft, borderColor: c.border.default }]}>
+            <View style={{ marginBottom: 10 }}>
+              <Text style={[s.fieldLabel, { color: c.text.primary }]}>운행 형태</Text>
+              <View style={s.chipRow}>
+                {TRIP_OPTIONS.map((item) => (
+                  <Chip
+                    key={item.value}
+                    label={item.label}
+                    selected={tripType === item.value}
+                    onPress={() => setTripType(item.value)}
+                  />
+                ))}
+              </View>
+            </View>
+
             <View style={{ flex: 1 }}>
-              <Text style={[s.aiLabel, { color: c.brand.primary }]}>AI 추천 운임 (거리 {DISTANCE_KM}km)</Text>
-              <Text style={[s.aiPrice, { color: c.brand.primary }]}>{won(AI_FARE)}</Text>
+              <Text style={[s.aiLabel, { color: c.brand.primary }]}>AI 추천 운임 (거리 {distanceKm}km)</Text>
+              <Text style={[s.aiPrice, { color: c.brand.primary }]}>{won(aiFare)}</Text>
             </View>
             <Button
               title="적용하기"
@@ -505,6 +724,7 @@ export function ShipperCreateOrderStep1Screen() {
 
             <Text style={[s.hint, { color: c.text.secondary }]}>
               적용된 운임: <Text style={{ color: c.brand.primary, fontWeight: "900" }}>{won(appliedFare)}</Text>
+              {tripType === "roundTrip" ? " (왕복 1.8배 적용)" : ""}
             </Text>
           </View>
 

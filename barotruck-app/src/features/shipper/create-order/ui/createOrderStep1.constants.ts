@@ -39,28 +39,62 @@ export const RECENT_ADDRESS_POOL: string[] = [
 ];
 
 export const PRESET_REQUEST_TAGS: string[] = [
-  "지게차 상하차",
-  "수작업 없음",
   "도착 전 연락",
-  "비오면 안됨",
   "취급주의",
   "세워서 적재",
   "파손주의",
   "시간 엄수",
-  "냉장/냉동",
-  "상하차 대기 없음",
   "주차 공간 협소",
   "야간 상차/하차",
 ];
 
 export const DEFAULT_SELECTED_REQUEST_TAGS: string[] = [
-  "지게차 상하차",
-  "수작업 없음",
-  "도착 전 연락",
-  "비오면 안됨",
 ];
 
 export const DEFAULT_PHOTOS = [{ id: "p1", name: "IMG_01" }];
 
 export const DISTANCE_KM = 340;
-export const AI_FARE = 320000;
+
+function normalizeDistrictKey(addr: string) {
+  const parts = addr.trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return "";
+  return parts.slice(0, 2).join(" ");
+}
+
+function hashSeed(text: string) {
+  let h = 0;
+  for (let i = 0; i < text.length; i += 1) {
+    h = (h * 31 + text.charCodeAt(i)) >>> 0;
+  }
+  return h;
+}
+
+function between(min: number, max: number, seed: number) {
+  const span = Math.max(1, max - min + 1);
+  return min + (seed % span);
+}
+
+export function getEstimatedDistanceKm(startAddr: string, endAddr: string) {
+  const from = normalizeDistrictKey(startAddr);
+  const to = normalizeDistrictKey(endAddr);
+  if (!from || !to) return DISTANCE_KM;
+  if (from === to) return 12;
+
+  const fromCity = from.split(" ")[0];
+  const toCity = to.split(" ")[0];
+  const seed = hashSeed(`${from}|${to}`);
+
+  if (fromCity === toCity) return between(18, 55, seed);
+  return between(70, 380, seed);
+}
+
+function roundToThousand(v: number) {
+  return Math.max(0, Math.round(v / 1000) * 1000);
+}
+
+export function getRecommendedFareByDistance(distanceKm: number) {
+  // 거리 기반 기본 운임(목업): 기본요금 + km당 단가
+  const baseFare = 45000;
+  const perKmFare = 850;
+  return roundToThousand(baseFare + Math.max(0, distanceKm) * perKmFare);
+}
