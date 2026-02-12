@@ -12,13 +12,21 @@ export default function DriverTabsLayout() {
         tabBarInactiveTintColor: "#94A3B8",
         headerShown: false,
         tabBarStyle: {
-          height: 80,
-          paddingBottom: 10,
+          height: 100,
+          paddingBottom: 20,
+          paddingTop: 10,
           backgroundColor: "#FFFFFF",
+          borderTopWidth: 0,
+          elevation: 10, // 안드로이드 그림자
+          shadowColor: "#000", // ios 그림자
+          shadowOffset: { width: 0, height: -4 },
+          shadowOpacity: 0.06,
+          shadowRadius: 4,
         },
         tabBarLabelStyle: {
           fontSize: 10,
           fontWeight: "500",
+          marginTop: 4,
         },
       }}
     >
@@ -83,12 +91,6 @@ export default function DriverTabsLayout() {
               size={24}
             />
           ),
-        }}
-      />
-      <Tabs.Screen
-        name="order-detail"
-        options={{
-          href: null, // 이 설정을 넣어야 하단 바 메뉴에서 사라집니다
         }}
       />
     </Tabs>
