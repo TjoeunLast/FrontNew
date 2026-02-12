@@ -81,6 +81,18 @@ export default function DrivingScreen() {
     }
   };
 
+  const getStatusLabel = (status: OrderStatus) => {
+    switch (status) {
+      case 'PENDING': return "승인 대기";
+      case 'ACCEPTED': return "배차 완료";
+      case 'LOADING': return "상차 중";
+      case 'IN_TRANSIT': return "운행 중";
+      case 'UNLOADING': return "하차 중";
+      case 'COMPLETED': return "운행 완료";
+      default: return status;
+    }
+  };
+
   const renderCard = (order: OrderResponse) => (
     <View key={order.orderId} style={[s.card, { backgroundColor: c.bg.surface }]}>
       <View style={s.topRow}>
@@ -95,8 +107,8 @@ export default function DrivingScreen() {
       </Text>
 
       <View style={s.infoSection}>
-        <Text style={{ color: c.text.secondary }}>
-          {order.reqTonnage} {order.reqCarType} · {order.basePrice.toLocaleString()}원
+        <Text style={{ color: c.text.secondary, fontWeight: '700' }}>
+          운행 현황: {getStatusLabel(order.status)}
         </Text>
       </View>
 

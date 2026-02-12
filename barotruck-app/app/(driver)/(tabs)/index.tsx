@@ -1,10 +1,10 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import { Bell, MessageCircle } from 'lucide-react-native';
 
 // React Native 기본 컴포넌트 임포트
 import { View, Text, StyleSheet, ScrollView } from "react-native";
 // 프로젝트 공통 UI 및 API 서비스, 타입 임포트
-import { OrderCard } from '@/shared/ui/business'; // 오더 정보를 보여주는 공통 카드 컴포넌트
+import { SHOrderCard } from '@/shared/ui/business'; // 오더 정보를 보여주는 공통 카드 컴포넌트
 import { useAppTheme } from '@/shared/hooks/useAppTheme'; // 커스텀 테마 훅 (라이트/다크 모드 대응)
 import { OrderService } from '@/shared/api/orderService'; // 백엔드 통신을 담당하는 서비스 객체
 import { OrderResponse } from '@/shared/models/order'; // 오더 데이터의 타입 정의
@@ -58,7 +58,7 @@ export default function DriverHomeScreen() {
         <View style={styles.orderList}>
           <Text style={[styles.sectionTitle, { color: c.text.primary }]}>맞춤 추천 오더</Text>
           {orders.map((order) => (
-            <OrderCard
+            <SHOrderCard
               key={order.orderId}
               {...order}
             />
@@ -148,3 +148,4 @@ const styles = StyleSheet.create({
     gap: 16
   }
 });
+

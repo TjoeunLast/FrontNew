@@ -23,7 +23,7 @@ function formatWon(v: number) {
 function toUiStatus(status: string) {
   if (status === "COMPLETED") return { label: "운행완료", tone: "complete" as const };
   if (status === "REQUESTED" || status === "PENDING") return { label: "배차대기", tone: "warning" as const };
-  if (status === "ACCEPTED") return { label: "배차확정", tone: "success" as const };
+  if (status === "ACCEPTED") return { label: "배차확정", tone: "warning" as const };
   return { label: "운행중", tone: "info" as const };
 }
 

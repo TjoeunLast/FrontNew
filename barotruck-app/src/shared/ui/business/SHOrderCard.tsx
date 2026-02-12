@@ -5,14 +5,14 @@ import React, { useState } from "react";
 import { Alert, StyleSheet, Text, View } from "react-native";
 import { Card } from "../base/Card";
 import { Badge } from "../feedback/Badge";
-import { OrderDetailModal } from "./OrderDetailModal";
+import { SHOrderDetailModal } from "./SHOrderDetailModal";
 
-export type OrderCardProps = OrderResponse & {
+export type SHOrderCardProps = OrderResponse & {
   isDirect?: boolean;
   isInstant?: boolean;
 };
 
-export default function OrderCard(props: OrderCardProps) {
+export default function SHOrderCard(props: SHOrderCardProps) {
   const {
     isDirect,
     isInstant,
@@ -210,7 +210,7 @@ export default function OrderCard(props: OrderCardProps) {
         </View>
       </Card>
 
-      <OrderDetailModal
+      <SHOrderDetailModal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
         isDispatched={isDispatched}

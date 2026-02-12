@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity } from "react-native";
 import { ListFilter, Search, RotateCcw } from 'lucide-react-native';
 // 프로젝트 공통 컴포넌트 및 서비스 임포트
-import { OrderCard } from '@/shared/ui/business';
+import { SHOrderCard } from '@/shared/ui/business';
 import { useAppTheme } from '@/shared/hooks/useAppTheme';
 import { OrderService } from '@/shared/api/orderService';
 import { OrderResponse } from '@/shared/models/order';
@@ -55,7 +55,7 @@ export default function AvailableOrderListScreen() {
         {orders.length > 0 ? (
           <View style={styles.orderList}>
             {orders.map((order) => (
-              <OrderCard
+              <SHOrderCard
                 key={order.orderId}
                 {...order}
               />

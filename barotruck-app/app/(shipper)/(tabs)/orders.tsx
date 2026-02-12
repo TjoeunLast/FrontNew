@@ -1,5 +1,5 @@
 ﻿import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
 import React from "react";
 import { Alert, Modal, Pressable, ScrollView, Text, View } from "react-native";
@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { DispatchStatusBadge, type DispatchStatusKey } from "@/features/common/orders/ui/DispatchStatusBadge";
 import { OrderApi } from "@/shared/api/orderService";
 import { getLocalShipperOrders } from "@/features/shipper/home/model/localShipperOrders";
+import { MOCK_SHIPPER_ORDERS } from "@/features/shipper/home/model/mockShipperOrders";
 import type { OrderResponse } from "@/shared/models/order";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 
@@ -41,6 +42,7 @@ type DispatchCardItem = {
   driverName?: string;
   driverVehicle?: string;
   receiptLabel?: string;
+  drivingStageLabel?: "상차 완료" | "배달 중" | "하차 직전";
 };
 
 function won(v: number) {
@@ -178,6 +180,8 @@ function toUiCard(order: OrderResponse): DispatchCardItem | null {
       pickupLabel: scheduleLabel(order.startSchedule),
       driverName: order.user?.nickname || "김기사",
       driverVehicle: cargoLabel,
+      drivingStageLabel:
+        order.status === "LOADING" ? "상차 완료" : order.status === "UNLOADING" ? "하차 직전" : "배달 중",
     };
   }
 
@@ -245,6 +249,7 @@ function mapLocalToDispatchCards(): DispatchCardItem[] {
         priceWon: item.priceWon,
         driverName: "배차된 기사",
         driverVehicle: item.cargoSummary,
+        drivingStageLabel: "배달 중",
       };
     }
 
@@ -288,252 +293,92 @@ function mapLocalToDispatchCards(): DispatchCardItem[] {
   });
 }
 
-const mockCards: DispatchCardItem[] = [
-  {
-    id: "w1",
-    tab: "WAITING",
-    statusLabel: "신청 3명",
-    statusTone: "yellow",
-    timeLabel: "10분 전",
-    from: "서울 강남",
-    to: "부산 해운대",
-    distanceKm: 340,
-    pickupTimeHHmm: "09:00",
-    dropoffTimeHHmm: "15:00",
-    cargoLabel: "11톤 윙바디",
-    loadMethodShort: "독",
-    workToolShort: "지",
-    priceWon: 350000,
-    applicants: 3,
-  },
-  {
-    id: "w3",
-    tab: "WAITING",
-    statusLabel: "신청 2명",
-    statusTone: "yellow",
-    timeLabel: "22분 전",
-    from: "서울 구로",
-    to: "경기 화성",
-    distanceKm: 62,
-    pickupTimeHHmm: "10:00",
-    dropoffTimeHHmm: "13:30",
-    cargoLabel: "3.5톤 카고",
-    loadMethodShort: "혼",
-    workToolShort: "수",
-    priceWon: 180000,
-    applicants: 2,
-  },
-  {
-    id: "w2",
-    tab: "WAITING",
-    statusLabel: "대기중",
-    statusTone: "gray",
-    timeLabel: "50분 전",
-    from: "경기 파주",
-    to: "인천항",
-    distanceKm: 80,
-    pickupTimeHHmm: "11:30",
-    dropoffTimeHHmm: "16:00",
-    cargoLabel: "5톤 카고",
-    loadMethodShort: "독",
-    workToolShort: "크",
-    priceWon: 150000,
-    applicants: 0,
-  },
-  {
-    id: "p1",
-    tab: "WAITING",
-    statusLabel: "배차완료",
-    statusTone: "blue",
-    timeLabel: "오늘 14:00 상차",
-    from: "인천 남동",
-    to: "대전 유성",
-    distanceKm: 120,
-    pickupTimeHHmm: "14:00",
-    dropoffTimeHHmm: "17:00",
-    cargoLabel: "5톤 카고",
-    loadMethodShort: "독",
-    workToolShort: "지",
-    priceWon: 210000,
-    driverName: "김기사",
-    driverVehicle: "5톤 카고",
-    pickupLabel: "오늘 14:00 상차",
-  },
-  {
-    id: "d1",
-    tab: "DONE",
-    statusLabel: "운행완료",
-    statusTone: "gray",
-    timeLabel: "어제 완료",
-    from: "서울 영등포",
-    to: "경기 수원",
-    distanceKm: 45,
-    pickupTimeHHmm: "09:00",
-    dropoffTimeHHmm: "11:00",
-    cargoLabel: "1톤 용달",
-    loadMethodShort: "혼",
-    workToolShort: "호",
-    priceWon: 80000,
-    receiptLabel: "인수증 확인",
-  },
-  {
-    id: "d2",
-    tab: "DONE",
-    statusLabel: "운행완료",
-    statusTone: "gray",
-    timeLabel: "2일 전 완료",
-    from: "경기 평택",
-    to: "충북 청주",
-    distanceKm: 98,
-    pickupTimeHHmm: "08:30",
-    dropoffTimeHHmm: "13:30",
-    cargoLabel: "5톤 윙바디",
-    loadMethodShort: "독",
-    workToolShort: "지",
-    priceWon: 190000,
-    receiptLabel: "인수증 확인",
-  },
-  {
-    id: "d3",
-    tab: "DONE",
-    statusLabel: "운행완료",
-    statusTone: "gray",
-    timeLabel: "3일 전 완료",
-    from: "대구 달서구",
-    to: "경북 구미시",
-    distanceKm: 34,
-    pickupTimeHHmm: "10:00",
-    dropoffTimeHHmm: "12:00",
-    cargoLabel: "2.5톤 카고",
-    loadMethodShort: "혼",
-    workToolShort: "수",
-    priceWon: 90000,
-    receiptLabel: "인수증 확인",
-  },
-  {
-    id: "w4",
-    tab: "WAITING",
-    statusLabel: "신청 1명",
-    statusTone: "yellow",
-    timeLabel: "5분 전",
-    from: "광주 광산구",
-    to: "전북 전주시",
-    distanceKm: 92,
-    pickupTimeHHmm: "09:30",
-    dropoffTimeHHmm: "14:00",
-    cargoLabel: "5톤 카고",
-    loadMethodShort: "독",
-    workToolShort: "지",
-    priceWon: 175000,
-    applicants: 1,
-  },
-  {
-    id: "w5",
-    tab: "WAITING",
-    statusLabel: "대기중",
-    statusTone: "gray",
-    timeLabel: "12분 전",
-    from: "서울 금천구",
-    to: "인천 연수구",
-    distanceKm: 38,
-    pickupTimeHHmm: "13:00",
-    dropoffTimeHHmm: "15:00",
-    cargoLabel: "2.5톤 카고",
-    loadMethodShort: "혼",
-    workToolShort: "크",
-    priceWon: 98000,
-    applicants: 0,
-  },
-  {
-    id: "p2",
-    tab: "PROGRESS",
-    statusLabel: "운행중",
-    statusTone: "blue",
-    timeLabel: "오늘 16:30 상차",
-    from: "울산 남구",
-    to: "경남 창원시",
-    distanceKm: 54,
-    pickupTimeHHmm: "16:30",
-    dropoffTimeHHmm: "18:00",
-    cargoLabel: "3.5톤 윙바디",
-    loadMethodShort: "혼",
-    workToolShort: "수",
-    priceWon: 120000,
-    driverName: "이기사",
-    driverVehicle: "3.5톤 윙바디",
-    pickupLabel: "오늘 16:30 상차",
-  },
-  {
-    id: "p3",
-    tab: "PROGRESS",
-    statusLabel: "운행중",
-    statusTone: "blue",
-    timeLabel: "오늘 11:00 상차",
-    from: "경기 고양시",
-    to: "강원 원주시",
-    distanceKm: 114,
-    pickupTimeHHmm: "11:00",
-    dropoffTimeHHmm: "15:00",
-    cargoLabel: "11톤 윙바디",
-    loadMethodShort: "독",
-    workToolShort: "지",
-    priceWon: 265000,
-    driverName: "최기사",
-    driverVehicle: "11톤 윙바디",
-    pickupLabel: "오늘 11:00 상차",
-  },
-  {
-    id: "d4",
-    tab: "DONE",
-    statusLabel: "운행완료",
-    statusTone: "gray",
-    timeLabel: "4일 전 완료",
-    from: "충남 아산시",
-    to: "대전 유성구",
-    distanceKm: 41,
-    pickupTimeHHmm: "08:00",
-    dropoffTimeHHmm: "10:00",
-    cargoLabel: "1톤 용달",
-    loadMethodShort: "독",
-    workToolShort: "호",
-    priceWon: 78000,
-    receiptLabel: "인수증 확인",
-  },
-  {
-    id: "d5",
-    tab: "DONE",
-    statusLabel: "운행완료",
-    statusTone: "gray",
-    timeLabel: "5일 전 완료",
-    from: "부산 사상구",
-    to: "경남 김해시",
-    distanceKm: 19,
-    pickupTimeHHmm: "09:00",
-    dropoffTimeHHmm: "10:30",
-    cargoLabel: "1톤 탑차",
-    loadMethodShort: "혼",
-    workToolShort: "수",
-    priceWon: 52000,
-    receiptLabel: "인수증 확인",
-  },
-  {
-    id: "d6",
-    tab: "DONE",
-    statusLabel: "운행완료",
-    statusTone: "gray",
-    timeLabel: "1주 전 완료",
-    from: "경북 포항시",
-    to: "대구 북구",
-    distanceKm: 89,
-    pickupTimeHHmm: "07:30",
-    dropoffTimeHHmm: "12:00",
-    cargoLabel: "5톤 냉장",
-    loadMethodShort: "독",
-    workToolShort: "크",
-    priceWon: 168000,
-    receiptLabel: "인수증 확인",
-  },
-];
+function mapSharedMockToDispatchCards(): DispatchCardItem[] {
+  return MOCK_SHIPPER_ORDERS.map((item) => {
+    if (item.status === "DISPATCHED") {
+      return {
+        id: item.id,
+        tab: "WAITING",
+        statusLabel: "배차완료",
+        statusTone: "blue",
+        timeLabel: item.updatedAtLabel,
+        from: item.from,
+        to: item.to,
+        distanceKm: item.distanceKm,
+        pickupTimeHHmm: item.pickupTimeHHmm || "09:00",
+        dropoffTimeHHmm: item.dropoffTimeHHmm || "15:00",
+        cargoLabel: item.cargoSummary,
+        loadMethodShort: item.loadMethodShort || "-",
+        workToolShort: item.workToolShort || "-",
+        priceWon: item.priceWon,
+        driverName: "선착순 배차",
+        driverVehicle: item.cargoSummary,
+        pickupLabel: item.updatedAtLabel,
+      };
+    }
+
+    if (item.status === "DRIVING") {
+      return {
+        id: item.id,
+        tab: "PROGRESS",
+        statusLabel: "운행중",
+        statusTone: "blue",
+        timeLabel: item.updatedAtLabel,
+        from: item.from,
+        to: item.to,
+        distanceKm: item.distanceKm,
+        pickupTimeHHmm: item.pickupTimeHHmm || "09:00",
+        dropoffTimeHHmm: item.dropoffTimeHHmm || "15:00",
+        cargoLabel: item.cargoSummary,
+        loadMethodShort: item.loadMethodShort || "-",
+        workToolShort: item.workToolShort || "-",
+        priceWon: item.priceWon,
+        driverName: "배차된 기사",
+        driverVehicle: item.cargoSummary,
+        pickupLabel: item.updatedAtLabel,
+        drivingStageLabel: "배달 중",
+      };
+    }
+
+    if (item.status === "DONE") {
+      return {
+        id: item.id,
+        tab: "DONE",
+        statusLabel: "운행완료",
+        statusTone: "gray",
+        timeLabel: item.updatedAtLabel,
+        from: item.from,
+        to: item.to,
+        distanceKm: item.distanceKm,
+        pickupTimeHHmm: item.pickupTimeHHmm || "09:00",
+        dropoffTimeHHmm: item.dropoffTimeHHmm || "15:00",
+        cargoLabel: item.cargoSummary,
+        loadMethodShort: item.loadMethodShort || "-",
+        workToolShort: item.workToolShort || "-",
+        priceWon: item.priceWon,
+        receiptLabel: "인수증 확인",
+      };
+    }
+
+    return {
+      id: item.id,
+      tab: "WAITING",
+      statusLabel: "대기중",
+      statusTone: "gray",
+      timeLabel: item.updatedAtLabel,
+      from: item.from,
+      to: item.to,
+      distanceKm: item.distanceKm,
+      pickupTimeHHmm: item.pickupTimeHHmm || "09:00",
+      dropoffTimeHHmm: item.dropoffTimeHHmm || "15:00",
+      cargoLabel: item.cargoSummary,
+      loadMethodShort: item.loadMethodShort || "-",
+      workToolShort: item.workToolShort || "-",
+      priceWon: item.priceWon,
+      applicants: 0,
+    };
+  });
+}
 
 const waitingApplicants: ApplicantItem[] = [
   { id: "a1", name: "박베테랑", rating: 4.9, detail: "11톤 윙바디 · 무사고 10년", highlighted: true },
@@ -542,6 +387,7 @@ const waitingApplicants: ApplicantItem[] = [
 ];
 
 const FORCE_MOCK_DISPATCH_DATA = true;
+const SHARED_MOCK_DISPATCH_CARDS = mapSharedMockToDispatchCards();
 
 function badgeStatusOf(item: DispatchCardItem): DispatchStatusKey {
   if (item.tab === "WAITING") {
@@ -555,15 +401,23 @@ export default function ShipperOrdersScreen() {
   const { colors: c } = useAppTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { tab: tabParam } = useLocalSearchParams<{ tab?: string | string[] }>();
 
   const [tab, setTab] = React.useState<DispatchTab>("WAITING");
-  const [cards, setCards] = React.useState<DispatchCardItem[]>(mockCards);
+  const [cards, setCards] = React.useState<DispatchCardItem[]>(SHARED_MOCK_DISPATCH_CARDS);
   const [openApplicantModal, setOpenApplicantModal] = React.useState(false);
+
+  React.useEffect(() => {
+    const resolved = Array.isArray(tabParam) ? tabParam[0] : tabParam;
+    if (resolved === "WAITING" || resolved === "PROGRESS" || resolved === "DONE") {
+      setTab(resolved);
+    }
+  }, [tabParam]);
 
   useFocusEffect(
     React.useCallback(() => {
       if (FORCE_MOCK_DISPATCH_DATA) {
-        setCards([...mapLocalToDispatchCards(), ...mockCards]);
+        setCards([...mapLocalToDispatchCards(), ...SHARED_MOCK_DISPATCH_CARDS]);
         return () => {};
       }
 
@@ -573,10 +427,10 @@ export default function ShipperOrdersScreen() {
           const rows = await OrderApi.getAvailableOrders();
           if (!active) return;
           const mapped = rows.map(toUiCard).filter((row): row is DispatchCardItem => row !== null);
-          setCards([...mapLocalToDispatchCards(), ...(mapped.length ? mapped : mockCards)]);
+          setCards([...mapLocalToDispatchCards(), ...(mapped.length ? mapped : SHARED_MOCK_DISPATCH_CARDS)]);
         } catch {
           if (!active) return;
-          setCards([...mapLocalToDispatchCards(), ...mockCards]);
+          setCards([...mapLocalToDispatchCards(), ...SHARED_MOCK_DISPATCH_CARDS]);
         }
       })();
 
@@ -714,33 +568,52 @@ export default function ShipperOrdersScreen() {
               </View>
 
               {item.tab === "PROGRESS" ? (
-                <View
-                  style={{
-                    marginBottom: 12,
-                    borderRadius: 12,
-                    backgroundColor: c.bg.muted,
-                    paddingHorizontal: 12,
-                    paddingVertical: 14,
-                    flexDirection: "row",
-                    alignItems: "center",
-                  }}
-                >
+                <>
                   <View
                     style={{
-                      width: 30,
-                      height: 30,
-                      borderRadius: 15,
-                      backgroundColor: "#CBD5E1",
+                      marginBottom: 10,
+                      borderRadius: 10,
+                      backgroundColor: c.bg.muted,
+                      paddingHorizontal: 12,
+                      paddingVertical: 10,
+                      flexDirection: "row",
                       alignItems: "center",
-                      justifyContent: "center",
-                      marginRight: 10,
+                      justifyContent: "space-between",
                     }}
                   >
-                    <Ionicons name="person-outline" size={16} color={c.text.primary} />
+                    <Text style={{ color: c.text.secondary, fontWeight: "700", fontSize: 12 }}>운송 현황</Text>
+                    <Text style={{ color: c.text.primary, fontWeight: "900", fontSize: 13 }}>
+                      {item.drivingStageLabel || "배달 중"}
+                    </Text>
                   </View>
-                  <Text style={{ color: c.text.primary, fontWeight: "900", fontSize: 16 }}>{item.driverName}</Text>
-                  <Text style={{ color: c.text.secondary, fontWeight: "700", fontSize: 15, marginLeft: 6 }}>{item.driverVehicle}</Text>
-                </View>
+                  <View
+                    style={{
+                      marginBottom: 12,
+                      borderRadius: 12,
+                      backgroundColor: c.bg.muted,
+                      paddingHorizontal: 12,
+                      paddingVertical: 14,
+                      flexDirection: "row",
+                      alignItems: "center",
+                    }}
+                  >
+                    <View
+                      style={{
+                        width: 30,
+                        height: 30,
+                        borderRadius: 15,
+                        backgroundColor: "#CBD5E1",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        marginRight: 10,
+                      }}
+                    >
+                      <Ionicons name="person-outline" size={16} color={c.text.primary} />
+                    </View>
+                    <Text style={{ color: c.text.primary, fontWeight: "900", fontSize: 16 }}>{item.driverName}</Text>
+                    <Text style={{ color: c.text.secondary, fontWeight: "700", fontSize: 15, marginLeft: 6 }}>{item.driverVehicle}</Text>
+                  </View>
+                </>
               ) : (
                 <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
                   <Text style={{ color: c.text.secondary, fontWeight: "700", fontSize: 13 }}>
