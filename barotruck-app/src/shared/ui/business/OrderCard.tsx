@@ -25,22 +25,22 @@ export default function OrderCard(props: OrderCardProps) {
     startPlace,
     startType,
     startSchedule,
-    // 상차지 전체 주소 (예: 서울특별시 강남구 테헤란로 123)
-    // 상차지 특정 명칭 (예: OO물류센터 A동 3번 도크) - 기사가 위치를 정확히 찾는 데 활용
-    // 상차 방식 (예: 당상-당일 상차, 익상-다음날 상차, 야간상차)
-    // 상차 예정 시간 (예: "2024-05-20 14:00" 또는 "오전 중")
-    // 상차지 광역 자치단체명 (예: 서울, 경기, 부산) - 지역별 오더 필터링용
+  // 상차지 전체 주소 (예: 서울특별시 강남구 테헤란로 123)
+  // 상차지 특정 명칭 (예: OO물류센터 A동 3번 도크) - 기사가 위치를 정확히 찾는 데 활용
+  // 상차 방식 (예: 당상-당일 상차, 익상-다음날 상차, 야간상차)
+  // 상차 예정 시간 (예: "2024-05-20 14:00" 또는 "오전 중")
+  // 상차지 광역 자치단체명 (예: 서울, 경기, 부산) - 지역별 오더 필터링용
 
     endAddr,
     endPlace,
     endType,
     endSchedule,
-    // --- [하차지 정보: 물건을 내리는 곳] ---
-    // 하차지 전체 주소 (예: 경기도 용인시 처인구 ...)
-    // 하차지 특정 명칭 (예: XX빌딩 후문 하역장)
-    // 하차 방식 (예: 당착-당일 도착, 내착-내일 도착)
-    // 하차 예정 시간
-    // 하차지 광역 자치단체명 (예: 경기, 강원, 전남)
+      // --- [하차지 정보: 물건을 내리는 곳] ---
+  // 하차지 전체 주소 (예: 경기도 용인시 처인구 ...)
+  // 하차지 특정 명칭 (예: XX빌딩 후문 하역장)
+  // 하차 방식 (예: 당착-당일 도착, 내착-내일 도착)
+  // 하차 예정 시간
+  // 하차지 광역 자치단체명 (예: 경기, 강원, 전남)
 
     cargoContent,
     loadMethod,
@@ -63,7 +63,7 @@ export default function OrderCard(props: OrderCardProps) {
     laborFee,
     packagingPrice,
     payMethod,
-    // --- [금액 및 결제 정보] ---
+     // --- [금액 및 결제 정보] ---
     // 기본 운송료 (거리 및 톤수 기준 표준 운임)
     // 결제 방식 (예: 신용카드, 계좌이체, 인수증/후불, 선불)
     // 수작업비 (기사님이 직접 상하차를 도울 경우 발생하는 수고비)
@@ -87,18 +87,15 @@ export default function OrderCard(props: OrderCardProps) {
     try {
       setLoading(true);
       // 1. 서버에 배차 수락 요청 (PATCH /api/v1/orders/{orderId}/accept)
-      await OrderService.acceptOrder(orderId);
-
+      await OrderService.acceptOrder(orderId); 
+      
       // 2. 성공 시 UI 상태 변경
       setIsDispatched(true);
       Alert.alert("신청 완료", "배차 신청이 성공적으로 접수되었습니다.");
     } catch (error) {
       // 3. 실패 시 에러 처리
       console.error(error);
-      Alert.alert(
-        "알림",
-        "배차 신청 중 오류가 발생했습니다. 다시 시도해주세요.",
-      );
+      Alert.alert("알림", "배차 신청 중 오류가 발생했습니다. 다시 시도해주세요.");
     } finally {
       setLoading(false);
     }

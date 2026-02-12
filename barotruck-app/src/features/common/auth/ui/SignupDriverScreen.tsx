@@ -1,4 +1,4 @@
-// src/features/common/auth/ui/SignupDriverScreen.tsx
+﻿// src/features/common/auth/ui/SignupDriverScreen.tsx
 import React, { useMemo, useState, useCallback } from "react";
 import {
   Alert,
@@ -24,6 +24,7 @@ import { withAlpha } from "@/shared/utils/color";
 import { AuthService } from "@/shared/api/authService";
 import { UserService } from "@/shared/api/userService";
 import { RegisterRequest } from "@/shared/models/auth";
+import { saveCurrentUserSnapshot } from "@/shared/utils/currentUserStorage";
 
 function showMsg(title: string, msg: string) {
   if (Platform.OS === "web") globalThis.alert(`${title}\n\n${msg}`);
@@ -372,6 +373,11 @@ export default function SignupDriverScreen() {
         },
       };
       const response = await AuthService.register(payload);
+      await saveCurrentUserSnapshot({
+        email,
+        nickname: nickname.trim(),
+        role: "DRIVER",
+      });
 
       router.replace("/(driver)/(tabs)");
     } catch (e: any) {

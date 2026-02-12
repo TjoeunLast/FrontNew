@@ -40,9 +40,14 @@ export const Badge = memo(function Badge({
 }: BadgeProps) {
   const t = useAppTheme();
   const c = t.colors;
+  const resolvedTone = useMemo<BadgeTone>(() => {
+    if (label.trim() === "배차 완료") return "success";
+    if (label.trim() === "완료") return "complete";
+    return tone;
+  }, [label, tone]);
 
   const tset = useMemo(() => {
-    switch (tone) {
+    switch (resolvedTone) {
       case "success":
         return { bg: "#DCFCE7", fg: "#166534", border: "#BBF7D0" };
       case "warning":
@@ -75,7 +80,7 @@ export const Badge = memo(function Badge({
       default:
         return { bg: c.bg.muted, fg: c.text.secondary, border: c.bg.muted };
     }
-  }, [tone, c]);
+  }, [resolvedTone, c]);
 
   return (
     <View

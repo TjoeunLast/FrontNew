@@ -66,6 +66,8 @@ export interface OrderRequest {
   packagingPrice?: number; // 포장비용 (물건 보호를 위한 래핑, 파레트 제공 등 실비)
   insuranceFee?: number; // 적재물 보험료 (고가 화물일 경우 추가되는 보험 비용)
 
+  instant : boolean; // 즉시 배차 요청 여부 (true면 빠른 배차 우선 처리)
+
   distance: number;
   duration: number;
   // --- [시스템 계산 지표: 지도 API 연동 결과] ---
@@ -104,18 +106,20 @@ export interface OrderResponse {
   remark?: string;
 
   // 요금
-  basePrice: number;
-  laborFee?: number;
-  packagingPrice?: number;
-  insuranceFee?: number;
-  payMethod: string;
+    basePrice: number;
+    laborFee?: number;
+    packagingPrice?: number;
+    insuranceFee?: number;
+    payMethod: string;
 
-  // 시스템 지표
-  distance: number;
-  duration: number;
+    instant : boolean; // 즉시 배차 요청 여부 (true면 빠른 배차 우선 처리)
 
-  user?: UserSummary;
-  cancellation?: CancellationSummary;
+    // 시스템 지표
+    distance: number;
+    duration: number;
+
+    user?: UserSummary;
+    cancellation?: CancellationSummary;
 }
 
 export interface UserSummary {
@@ -145,4 +149,24 @@ export interface DriverDashboardResponse {
   drivingCount: number;
   pendingSettlementCount: number;
   recommendedOrders: OrderResponse[];
+}
+
+export interface AssignedDriverInfoResponse {
+  // --- 유저(기사) 기본 정보 ---
+  userId: number;
+  email: string;
+  nickname: string;
+  phone: string;
+  profileImage?: ImageInfo;
+  ratingAvg: number; // 기사 평균 별점
+  
+  // --- 차주 전용 상세 정보 (Driver 엔티티 대응) ---
+  driverId: number;
+  carNum: string;    // 차량 번호 (예: 80아 1234)
+  carType: string;   // 차종 (예: CARGO, WING)
+  tonnage: string;   // 차량 톤수 (예: 1t, 5t)
+  career: number;    // 경력 (년 단위)
+  bankName?: string; // 정산용 은행명
+  accountNum?: string; // 정산용 계좌번호
+  type?: string;     // 개별/용달/법인 구분
 }
