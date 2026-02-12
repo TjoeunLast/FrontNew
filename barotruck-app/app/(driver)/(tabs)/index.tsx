@@ -69,6 +69,7 @@ export default function DriverHomeScreen() {
       // 시스템 지표
       distance: 340,
       duration: 18000, // 약 5시간 (초 단위 예시)
+      remark: "요청사항",
 
       // 유저 정보 (필요시)
       user: {
@@ -106,6 +107,7 @@ export default function DriverHomeScreen() {
       laborFee: 30000, // 수작업비 발생
       packagingPrice: 10000,
       payMethod: "현금/선불",
+      remark: "요청사항",
 
       distance: 85,
       duration: 5400, // 1.5시간
@@ -264,13 +266,13 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     paddingHorizontal: 20,
-    paddingTop: 60,
+    paddingTop: 70,
     paddingBottom: 20,
   },
   logoText: {
     fontSize: 22,
     fontWeight: "900",
-    color: "#4E46E5", // 브랜드 컬러에 맞춰 수정
+    color: "#4E46E5",
   },
   headerIcons: {
     flexDirection: "row",
@@ -380,7 +382,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   orderList: {
-    gap: 16,
+    // gap: 16,
   },
   dashboardContainer: {
     marginBottom: 24,

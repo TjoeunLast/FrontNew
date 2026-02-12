@@ -49,6 +49,7 @@ export default function OrderCard(props: OrderCardProps) {
     reqCarType,
     reqTonnage,
     driveMode,
+    // remark,
     // --- [화물 및 작업 세부 정보] ---
     // 화물 내용물 (예: 정밀 기계, 파레트 짐, 농산물 등)
     // 적재 방식 (예: 독차-차 한 대 전체 사용, 혼적-다른 짐과 같이 적재)
@@ -129,11 +130,10 @@ export default function OrderCard(props: OrderCardProps) {
 
   const router = useRouter();
 
-  // [수정] 카드 클릭 시 페이지 이동 로직
+  // 카드 클릭 시 페이지 이동 로직
   const handlePress = () => {
-    // 'OrderDetail'이라는 이름으로 등록된 스택 화면으로 이동하며 데이터 전달
     router.push({
-      pathname: "/(driver)/(tabs)/order-detail",
+      pathname: "/(driver)/order-detail",
       params: { orderData: JSON.stringify(props) },
     });
   };
@@ -247,7 +247,12 @@ export default function OrderCard(props: OrderCardProps) {
                 justifyContent: "flex-end",
               }}
             >
-              <Text style={[s.priceText, { color: highlightColor }]}>
+              <Text
+                style={[
+                  s.priceText,
+                  { color: isInstant ? "#EF4444" : c.brand.primary },
+                ]}
+              >
                 {totalPrice.toLocaleString()}원
               </Text>
               {laborFee && laborFee > 0 && (
@@ -313,7 +318,7 @@ const s = StyleSheet.create({
     borderRadius: 8,
     marginBottom: 6,
   },
-  distText: { fontSize: 12, fontWeight: "700", color: "#64748B" },
+  distText: { fontSize: 12, fontWeight: "700", color: "#475569" },
   line: { width: "100%", height: 1, position: "relative" },
   arrowHead: {
     position: "absolute",

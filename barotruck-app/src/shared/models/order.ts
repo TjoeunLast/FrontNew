@@ -101,6 +101,7 @@ export interface OrderResponse {
   reqTonnage: string;
   driveMode?: string;
   loadWeight?: number;
+  remark?: string;
 
   // 요금
   basePrice: number;
