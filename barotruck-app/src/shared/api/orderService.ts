@@ -1,6 +1,6 @@
 import axios from 'axios'; // npm install axios 필요
 import apiClient from './apiClient'; // 위에서 만든 클라이언트 임포트
-import { OrderResponse, OrderRequest, DriverDashboardResponse, OrderStatus } from '../models/order'; //
+import { OrderResponse, OrderRequest, DriverDashboardResponse, OrderStatus, AssignedDriverInfoResponse } from '../models/order'; //
 
 const API_BASE = '/api/v1/orders';
 
@@ -48,6 +48,25 @@ export const OrderApi = {
   //   const res = await apiClient.get(`${API_BASE}/dashboard`);
   //   return res.data;
   // }
+
+
+  /** [추가] 7. 화주: 특정 오더에 배차 신청한 차주 리스트 조회 */
+  getApplicants: async (orderId: number): Promise<AssignedDriverInfoResponse[]> => {
+    // GET /api/v1/orders/{orderId}/applicants
+    const res = await apiClient.get(`${API_BASE}/${orderId}/applicants`);
+    return res.data;
+  },
+
+  /** [추가] 8. 화주: 차주 최종 선택 (배차 확정) */
+  selectDriver: async (orderId: number, driverNo: number): Promise<string> => {
+    // POST /api/v1/orders/{orderId}/select-driver?driverNo=...
+    const res = await apiClient.post(`${API_BASE}/${orderId}/select-driver`, null, {
+      params: { driverNo }
+    });
+    return res.data;
+  },
+
+
 };
 
 
