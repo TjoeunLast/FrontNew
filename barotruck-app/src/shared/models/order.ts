@@ -3,7 +3,15 @@ import { ImageInfo } from "./ImageInfo";
 // @/shared/models/order.
 
 /** 오더 상태 (Order.java의 status 필드 대응) */
-export type OrderStatus = 'REQUESTED' | 'ACCEPTED' | 'LOADING' | 'IN_TRANSIT' | 'UNLOADING' | 'COMPLETED' | 'CANCELLED' | 'PENDING';
+export type OrderStatus =
+  | "REQUESTED" // 배차 대기
+  | "ACCEPTED" // 배차 확정
+  | "LOADING" // 상차 중
+  | "IN_TRANSIT" // 운송 중
+  | "UNLOADING" // 하차 중
+  | "COMPLETED" // 운송 완료
+  | "CANCELLED" // 취소
+  | "PENDING"; // 접수 대기
 
 /** * 오더 생성 요청 (OrderRequest.java 대응)
  */
@@ -38,7 +46,7 @@ export interface OrderRequest {
   reqCarType: string;
   reqTonnage: string;
   driveMode?: string;
-  loadWeight? : number;
+  loadWeight?: number;
   // --- [화물 및 작업 세부 정보] ---
   // 화물 내용물 (예: 정밀 기계, 파레트 짐, 농산물 등)
   // 적재 방식 (예: 독차-차 한 대 전체 사용, 혼적-다른 짐과 같이 적재)
@@ -54,17 +62,17 @@ export interface OrderRequest {
   // 결제 방식 (예: 신용카드, 계좌이체, 인수증/후불, 선불)
   basePrice: number;
   payMethod: string;
-  laborFee?: number;         // 수작업비 (기사님이 직접 상하차를 도울 경우 발생하는 수고비)
-  packagingPrice?: number;   // 포장비용 (물건 보호를 위한 래핑, 파레트 제공 등 실비)
-  insuranceFee?: number;     // 적재물 보험료 (고가 화물일 경우 추가되는 보험 비용)
+  laborFee?: number; // 수작업비 (기사님이 직접 상하차를 도울 경우 발생하는 수고비)
+  packagingPrice?: number; // 포장비용 (물건 보호를 위한 래핑, 파레트 제공 등 실비)
+  insuranceFee?: number; // 적재물 보험료 (고가 화물일 경우 추가되는 보험 비용)
 
-  instant : boolean; // 즉시 배차 요청 여부 (true면 빠른 배차 우선 처리)
+  instant: boolean; // 즉시 배차 요청 여부 (true면 빠른 배차 우선 처리)
 
   distance: number;
   duration: number;
   // --- [시스템 계산 지표: 지도 API 연동 결과] ---
-    // 예상 주행 거리 (단위: 미터 또는 킬로미터)
-     // 예상 소요 시간 (단위: 초 또는 분)
+  // 예상 주행 거리 (단위: 미터 또는 킬로미터)
+  // 예상 소요 시간 (단위: 초 또는 분)
 }
 
 /** * 오더 상세 응답 (OrderResponse.java 대응)
@@ -85,7 +93,7 @@ export interface OrderResponse {
   endPlace: string;
   endType: string;
   endSchedule?: string;
-  
+
   cargoContent: string;
   loadMethod?: string;
   workType?: string;
@@ -93,23 +101,24 @@ export interface OrderResponse {
   reqCarType: string;
   reqTonnage: string;
   driveMode?: string;
-  loadWeight? : number; 
+  loadWeight?: number;
 
   // 요금
-    basePrice: number;
-    laborFee?: number;
-    packagingPrice?: number;
-    insuranceFee?: number;
-    payMethod: string;
+  basePrice: number;
+  laborFee?: number;
+  packagingPrice?: number;
+  insuranceFee?: number;
+  payMethod: string;
 
-    instant : boolean; // 즉시 배차 요청 여부 (true면 빠른 배차 우선 처리)
+  instant: boolean; // 즉시 배차 요청 여부 (true면 빠른 배차 우선 처리)
 
-    // 시스템 지표
-    distance: number;
-    duration: number;
+  // 시스템 지표
+  distance: number;
+  duration: number;
+  remark?: string; // 요청사항
 
-    user?: UserSummary;
-    cancellation?: CancellationSummary;
+  user?: UserSummary;
+  cancellation?: CancellationSummary;
 }
 
 export interface UserSummary {
@@ -130,7 +139,6 @@ export interface CancellationSummary {
   cancelledBy?: string;
 }
 
-
 /** 대시보드 데이터 모델 (차주 홈 화면용) */
 export interface DriverDashboardResponse {
   monthlyExpectedIncome: number;
@@ -150,14 +158,14 @@ export interface AssignedDriverInfoResponse {
   phone: string;
   profileImage?: ImageInfo;
   ratingAvg: number; // 기사 평균 별점
-  
+
   // --- 차주 전용 상세 정보 (Driver 엔티티 대응) ---
   driverId: number;
-  carNum: string;    // 차량 번호 (예: 80아 1234)
-  carType: string;   // 차종 (예: CARGO, WING)
-  tonnage: string;   // 차량 톤수 (예: 1t, 5t)
-  career: number;    // 경력 (년 단위)
+  carNum: string; // 차량 번호 (예: 80아 1234)
+  carType: string; // 차종 (예: CARGO, WING)
+  tonnage: string; // 차량 톤수 (예: 1t, 5t)
+  career: number; // 경력 (년 단위)
   bankName?: string; // 정산용 은행명
   accountNum?: string; // 정산용 계좌번호
-  type?: string;     // 개별/용달/법인 구분
+  type?: string; // 개별/용달/법인 구분
 }
