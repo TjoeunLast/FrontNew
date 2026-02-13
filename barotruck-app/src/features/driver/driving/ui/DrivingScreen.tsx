@@ -1,19 +1,40 @@
 import React from "react";
-import { View, Text, StyleSheet } from "react-native";
-import { useLocalSearchParams } from "expo-router";
+import { View, Text, Pressable } from "react-native";
+import { useAppTheme } from "@/shared/hooks/useAppTheme";
+import { useRouter, useLocalSearchParams } from "expo-router";
 
 export default function DrivingScreen() {
+  const { colors: c } = useAppTheme();
   const { orderId } = useLocalSearchParams();
+  const router = useRouter();
 
   return (
-    <View style={s.container}>
-      <Text style={s.text}>🚗 운행 중 화면</Text>
-      <Text>현재 운행 중인 오더 ID: {orderId}</Text>
+    <View
+      style={{
+        flex: 1,
+        backgroundColor: c.bg.canvas,
+        justifyContent: "center",
+        alignItems: "center",
+      }}
+    >
+      <Text style={{ fontSize: 20, fontWeight: "800", color: c.text.primary }}>
+        운행 상세 페이지
+      </Text>
+      <Text style={{ color: c.text.secondary, marginTop: 10 }}>
+        현재 선택된 오더 ID: {orderId}
+      </Text>
+
+      <Pressable
+        onPress={() => router.back()}
+        style={{
+          marginTop: 30,
+          padding: 15,
+          backgroundColor: c.brand.primary,
+          borderRadius: 10,
+        }}
+      >
+        <Text style={{ color: "#FFF" }}>목록으로 돌아가기</Text>
+      </Pressable>
     </View>
   );
 }
-
-const s = StyleSheet.create({
-  container: { flex: 1, justifyContent: "center", alignItems: "center" },
-  text: { fontSize: 20, fontWeight: "bold", marginBottom: 10 },
-});
