@@ -25,22 +25,22 @@ export default function OrderCard(props: OrderCardProps) {
     startPlace,
     startType,
     startSchedule,
-    // 상차지 전체 주소 (예: 서울특별시 강남구 테헤란로 123)
-    // 상차지 특정 명칭 (예: OO물류센터 A동 3번 도크) - 기사가 위치를 정확히 찾는 데 활용
-    // 상차 방식 (예: 당상-당일 상차, 익상-다음날 상차, 야간상차)
-    // 상차 예정 시간 (예: "2024-05-20 14:00" 또는 "오전 중")
-    // 상차지 광역 자치단체명 (예: 서울, 경기, 부산) - 지역별 오더 필터링용
+  // 상차지 전체 주소 (예: 서울특별시 강남구 테헤란로 123)
+  // 상차지 특정 명칭 (예: OO물류센터 A동 3번 도크) - 기사가 위치를 정확히 찾는 데 활용
+  // 상차 방식 (예: 당상-당일 상차, 익상-다음날 상차, 야간상차)
+  // 상차 예정 시간 (예: "2024-05-20 14:00" 또는 "오전 중")
+  // 상차지 광역 자치단체명 (예: 서울, 경기, 부산) - 지역별 오더 필터링용
 
     endAddr,
     endPlace,
     endType,
     endSchedule,
-    // --- [하차지 정보: 물건을 내리는 곳] ---
-    // 하차지 전체 주소 (예: 경기도 용인시 처인구 ...)
-    // 하차지 특정 명칭 (예: XX빌딩 후문 하역장)
-    // 하차 방식 (예: 당착-당일 도착, 내착-내일 도착)
-    // 하차 예정 시간
-    // 하차지 광역 자치단체명 (예: 경기, 강원, 전남)
+      // --- [하차지 정보: 물건을 내리는 곳] ---
+  // 하차지 전체 주소 (예: 경기도 용인시 처인구 ...)
+  // 하차지 특정 명칭 (예: XX빌딩 후문 하역장)
+  // 하차 방식 (예: 당착-당일 도착, 내착-내일 도착)
+  // 하차 예정 시간
+  // 하차지 광역 자치단체명 (예: 경기, 강원, 전남)
 
     cargoContent,
     loadMethod,
@@ -49,20 +49,20 @@ export default function OrderCard(props: OrderCardProps) {
     reqCarType,
     reqTonnage,
     driveMode,
-    // --- [화물 및 작업 세부 정보] ---
-    // 화물 내용물 (예: 정밀 기계, 파레트 짐, 농산물 등)
-    // 적재 방식 (예: 독차-차 한 대 전체 사용, 혼적-다른 짐과 같이 적재)
-    // 상하차 작업 도구 (예: 지게차, 수작업, 크레인 등)
-    // 화물 무게 단위 (예: 2.5 - 톤 단위)
-    // 요청 차량 종류 (예: 카고, 윙바디, 냉동탑차, 라보 등)
-    // 요청 차량 톤수 (예: 1톤, 5톤, 11톤 등)
-    // 운행 모드 (예: 편도, 왕복, 경유 있음)
+  // --- [화물 및 작업 세부 정보] ---
+  // 화물 내용물 (예: 정밀 기계, 파레트 짐, 농산물 등)
+  // 적재 방식 (예: 독차-차 한 대 전체 사용, 혼적-다른 짐과 같이 적재)
+  // 상하차 작업 도구 (예: 지게차, 수작업, 크레인 등)
+  // 화물 무게 단위 (예: 2.5 - 톤 단위)
+  // 요청 차량 종류 (예: 카고, 윙바디, 냉동탑차, 라보 등)
+  // 요청 차량 톤수 (예: 1톤, 5톤, 11톤 등)
+  // 운행 모드 (예: 편도, 왕복, 경유 있음)
 
     basePrice,
     laborFee,
     packagingPrice,
     payMethod,
-    // --- [금액 및 결제 정보] ---
+     // --- [금액 및 결제 정보] ---
     // 기본 운송료 (거리 및 톤수 기준 표준 운임)
     // 결제 방식 (예: 신용카드, 계좌이체, 인수증/후불, 선불)
     // 수작업비 (기사님이 직접 상하차를 도울 경우 발생하는 수고비)
@@ -76,25 +76,22 @@ export default function OrderCard(props: OrderCardProps) {
   const [loading, setLoading] = useState(false); // [추가] 로딩 상태 관리
   const highlightColor = isInstant ? "#DC2626" : c.brand.primary;
   const [totalPrice, setTotalPrice] = useState(
-    basePrice + (laborFee || 0) + (packagingPrice || 0),
+    basePrice + (laborFee || 0) + (packagingPrice || 0) 
   );
   // [수정] 실제 API 연동 로직
   const handleDispatch = async () => {
     try {
       setLoading(true);
       // 1. 서버에 배차 수락 요청 (PATCH /api/v1/orders/{orderId}/accept)
-      await OrderService.acceptOrder(orderId);
-
+      await OrderService.acceptOrder(orderId); 
+      
       // 2. 성공 시 UI 상태 변경
       setIsDispatched(true);
       Alert.alert("신청 완료", "배차 신청이 성공적으로 접수되었습니다.");
     } catch (error) {
       // 3. 실패 시 에러 처리
       console.error(error);
-      Alert.alert(
-        "알림",
-        "배차 신청 중 오류가 발생했습니다. 다시 시도해주세요.",
-      );
+      Alert.alert("알림", "배차 신청 중 오류가 발생했습니다. 다시 시도해주세요.");
     } finally {
       setLoading(false);
     }
@@ -164,7 +161,7 @@ export default function OrderCard(props: OrderCardProps) {
           </View>
           <View style={s.arrowArea}>
             <View style={[s.distBadge, { backgroundColor: "#F1F5F9" }]}>
-              <Text style={s.distText}>{distance + "km" || "-"}</Text>
+              <Text style={s.distText}>{distance+"km" || "-"}</Text>
             </View>
             <View style={[s.line, { backgroundColor: "#E2E8F0" }]}>
               <View style={[s.arrowHead, { borderColor: "#E2E8F0" }]} />
@@ -188,9 +185,9 @@ export default function OrderCard(props: OrderCardProps) {
               {startSchedule}
             </Text>
 
-            {/* [수정] carInfo -> reqTonnage + reqCarType 조합 */}
+              {/* [수정] carInfo -> reqTonnage + reqCarType 조합 */}
             <Text style={[s.carText, { color: c.text.secondary }]}>
-              {reqTonnage} {reqCarType}
+             {reqTonnage} {reqCarType}
             </Text>
           </View>
 
@@ -200,7 +197,7 @@ export default function OrderCard(props: OrderCardProps) {
               {totalPrice.toLocaleString()}원
               {/* 수작업비(laborFee)가 0보다 크면 '수' 표시 */}
               {laborFee && laborFee > 0 && (
-                <Text style={{ fontSize: 14, color: "#EF4444" }}> (수)</Text>
+                <Text style={{ fontSize: 14, color: '#EF4444' }}> (수)</Text>
               )}
             </Text>
 
