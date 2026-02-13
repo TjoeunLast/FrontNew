@@ -41,6 +41,7 @@ export const MOCK_SHIPPER_ORDERS: ShipperMockOrder[] = [
     workToolShort: "수",
     priceWon: 180000,
     updatedAtLabel: "오늘 10:00 상차",
+    dropoffTimeHHmm: "14:20",
   },
   {
     id: "m3",
@@ -54,6 +55,7 @@ export const MOCK_SHIPPER_ORDERS: ShipperMockOrder[] = [
     workToolShort: "크",
     priceWon: 210000,
     updatedAtLabel: "오늘 14:00 상차",
+    dropoffTimeHHmm: "12:15",
   },
   {
     id: "m4",
@@ -66,6 +68,7 @@ export const MOCK_SHIPPER_ORDERS: ShipperMockOrder[] = [
     workToolShort: "호",
     priceWon: 80000,
     updatedAtLabel: "오늘 09:00 상차",
+    dropoffTimeHHmm: "11:40",
   },
   {
     id: "m5",
@@ -78,6 +81,7 @@ export const MOCK_SHIPPER_ORDERS: ShipperMockOrder[] = [
     workToolShort: "지",
     priceWon: 190000,
     updatedAtLabel: "오늘 08:30 상차",
+    dropoffTimeHHmm: "15:10",
   },
   {
     id: "m6",
@@ -114,6 +118,7 @@ export const MOCK_SHIPPER_ORDERS: ShipperMockOrder[] = [
     workToolShort: "수",
     priceWon: 120000,
     updatedAtLabel: "오늘 16:30 상차",
+    dropoffTimeHHmm: "13:35",
   },
   {
     id: "m9",
@@ -126,6 +131,7 @@ export const MOCK_SHIPPER_ORDERS: ShipperMockOrder[] = [
     workToolShort: "호",
     priceWon: 78000,
     updatedAtLabel: "오늘 08:00 상차",
+    dropoffTimeHHmm: "11:10",
   },
   {
     id: "m10",
@@ -151,6 +157,7 @@ export const MOCK_SHIPPER_ORDERS: ShipperMockOrder[] = [
     workToolShort: "지",
     priceWon: 265000,
     updatedAtLabel: "오늘 11:00 상차",
+    dropoffTimeHHmm: "12:55",
   },
   {
     id: "m12",
@@ -175,5 +182,6 @@ export const MOCK_SHIPPER_ORDERS: ShipperMockOrder[] = [
     workToolShort: "크",
     priceWon: 168000,
     updatedAtLabel: "오늘 07:30 상차",
+    dropoffTimeHHmm: "10:45",
   },
 ];

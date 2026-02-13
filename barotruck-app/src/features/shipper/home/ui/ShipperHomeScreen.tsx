@@ -1,4 +1,4 @@
-﻿import { Ionicons } from "@expo/vector-icons";
+﻿import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import { useRouter } from "expo-router";
 import React, { useMemo, useState } from "react";
@@ -6,13 +6,13 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { getLocalShipperOrders } from "@/features/shipper/home/model/localShipperOrders";
-import { MOCK_SHIPPER_ORDERS, type ShipperMockOrder } from "@/features/shipper/home/model/mockShipperOrders";
+import { OrderApi } from "@/shared/api/orderService";
 import { UserService } from "@/shared/api/userService";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import type { OrderResponse, OrderStatus } from "@/shared/models/order";
 import { Button } from "@/shared/ui/base/Button";
-import { Card } from "@/shared/ui/base/Card";
 import { IconButton } from "@/shared/ui/base/IconButton";
+import { RecommendedOrderCard } from "@/shared/ui/business/RecommendedOrderCard";
 
 // --- Types & Helpers (Existing Logic) ---
 
@@ -20,14 +20,28 @@ type SummaryItem = {
   key: "matching" | "driving" | "done";
   label: string;
   value: number;
-  icon: keyof typeof Ionicons.glyphMap;
 };
 
-type LiveOrderItem = ShipperMockOrder & {
+type LiveOrderItem = {
+  id: string;
+  status: "MATCHING" | "DISPATCHED" | "DRIVING" | "DONE";
+  applicantsCount?: number;
+  isInstantDispatch?: boolean;
+  pickupTypeLabel?: string;
+  dropoffTypeLabel?: string;
+  from: string;
+  to: string;
+  distanceKm: number;
+  cargoSummary: string;
+  loadMethodShort?: string;
+  workToolShort?: string;
+  priceWon: number;
+  updatedAtLabel: string;
+  updatedAtMs?: number;
+  pickupTimeHHmm?: string;
+  dropoffTimeHHmm?: string;
   drivingStageLabel?: "상차 완료" | "배달 중" | "하차 직전";
 };
-
-const FORCE_MOCK_HOME_DATA = true;
 
 function toLoadMethodShort(v?: string) {
   if (!v) return "-";
@@ -67,6 +81,30 @@ function toTimestampMs(iso?: string) {
   if (!iso) return 0;
   const t = new Date(iso).getTime();
   return Number.isNaN(t) ? 0 : t;
+}
+
+function isWithinNextHour(hhmm?: string) {
+  if (!hhmm) return false;
+  const m = hhmm.match(/^([01]\d|2[0-3]):([0-5]\d)$/);
+  if (!m) return false;
+  const now = new Date();
+  const target = new Date(now);
+  target.setHours(Number(m[1]), Number(m[2]), 0, 0);
+  let diffMin = Math.floor((target.getTime() - now.getTime()) / 60000);
+  if (diffMin < 0) diffMin += 24 * 60;
+  return diffMin >= 0 && diffMin <= 60;
+}
+
+function minutesUntilHHmm(hhmm?: string) {
+  if (!hhmm) return Number.POSITIVE_INFINITY;
+  const m = hhmm.match(/^([01]\d|2[0-3]):([0-5]\d)$/);
+  if (!m) return Number.POSITIVE_INFINITY;
+  const now = new Date();
+  const target = new Date(now);
+  target.setHours(Number(m[1]), Number(m[2]), 0, 0);
+  let diffMin = Math.floor((target.getTime() - now.getTime()) / 60000);
+  if (diffMin < 0) diffMin += 24 * 60;
+  return diffMin;
 }
 
 function parseLabelToMs(label: string) {
@@ -121,6 +159,7 @@ function mapOrderToLiveItem(o: OrderResponse): LiveOrderItem {
   return {
     id: String(o.orderId),
     status: mapStatus(o.status),
+    applicantsCount: Math.max(0, Math.floor(Number((o as any).applicantCount ?? 0) || 0)),
     isInstantDispatch: o.driveMode === "instant",
     pickupTypeLabel: o.startType || "당상",
     dropoffTypeLabel: o.endType || "당착",
@@ -146,6 +185,7 @@ function mapLocalToLiveItem(): LiveOrderItem[] {
     return {
       id: item.id,
       status,
+      applicantsCount: 0,
       isInstantDispatch: item.dispatchMode === "instant",
       pickupTypeLabel: item.pickupTypeLabel,
       dropoffTypeLabel: item.dropoffTypeLabel,
@@ -165,68 +205,6 @@ function mapLocalToLiveItem(): LiveOrderItem[] {
   });
 }
 
-// --- Components ---
-
-// 2번 사진 스타일의 미니 카드 컴포넌트
-const HomeRecentOrderCard = ({ item, onPress }: { item: LiveOrderItem; onPress: () => void }) => {
-  const t = useAppTheme();
-  const c = t.colors;
-
-  const badgeBg = "#E8F0FE";
-  const badgeText = "#2563EB";
-  const drivingStage =
-    item.drivingStageLabel || (item.status === "DRIVING" ? "배달 중" : item.status === "DISPATCHED" ? "상차 완료" : "대기");
-
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [
-        s.orderCard,
-        {
-          backgroundColor: c.bg.surface,
-          borderColor: c.border.default,
-          opacity: pressed ? 0.9 : 1,
-        },
-      ]}
-    >
-      {/* Header: Badge & Time */}
-      <View style={s.cardHeader}>
-        <View style={[s.badge, { backgroundColor: badgeBg }]}>
-          <Text style={[s.badgeText, { color: badgeText }]}>운송</Text>
-        </View>
-        <Text style={[s.timeText, { color: c.text.secondary }]}>도착 예정 {item.dropoffTimeHHmm || "--:--"}</Text>
-      </View>
-
-      <View style={s.progressRow}>
-        <Text style={[s.progressLabel, { color: c.text.secondary }]}>운송 현황</Text>
-        <Text style={[s.progressValue, { color: c.text.primary }]}>{drivingStage}</Text>
-      </View>
-
-      {/* Route Info */}
-      <View style={s.routeRow}>
-        <View style={s.routeItem}>
-          <Text style={[s.routeMetaLabel, { color: c.text.secondary }]}>상차지</Text>
-          <Text style={[s.routeLabel, { color: c.text.primary }]}>{item.from}</Text>
-        </View>
-        
-        {/* 화살표 및 거리 */}
-        <View style={s.routeArrowWrap}>
-          <View style={[s.distBadge, { backgroundColor: c.bg.canvas }]}>
-             <Text style={[s.distText, { color: c.text.secondary }]}>{item.distanceKm}km</Text>
-          </View>
-          <Ionicons name="arrow-forward" size={16} color={c.text.secondary} style={{marginTop: 4}} />
-        </View>
-
-        <View style={[s.routeItem, { alignItems: "flex-end" }]}>
-          <Text style={[s.routeMetaLabel, { color: c.text.secondary }]}>하차지</Text>
-          <Text style={[s.routeLabel, { color: c.text.primary }]}>{item.to}</Text>
-        </View>
-      </View>
-
-    </Pressable>
-  );
-};
-
 // --- Main Screen ---
 
 export function ShipperHomeScreen() {
@@ -241,10 +219,6 @@ export function ShipperHomeScreen() {
   // Data Fetching Logic (Same as original)
   useFocusEffect(
     React.useCallback(() => {
-      if (FORCE_MOCK_HOME_DATA) {
-        setDisplayName("화주");
-        return;
-      }
       void (async () => {
         try {
           const me = await UserService.getMyInfo();
@@ -256,38 +230,64 @@ export function ShipperHomeScreen() {
 
   useFocusEffect(
     React.useCallback(() => {
-      if (FORCE_MOCK_HOME_DATA) {
-        setLiveOrders([...mapLocalToLiveItem(), ...MOCK_SHIPPER_ORDERS]);
-        return;
-      }
-      // ... API logic
+      let active = true;
+      void (async () => {
+        try {
+          const [available, recommended] = await Promise.all([
+            OrderApi.getMyShipperOrders().catch(() => [] as OrderResponse[]),
+            Promise.resolve([] as OrderResponse[]),
+          ]);
+
+          const mergedById = new Map<string, OrderResponse>();
+          [...available, ...recommended].forEach((row) => {
+            mergedById.set(String(row.orderId), row);
+          });
+
+          const mapped = sortLiveOrdersByLatest(
+            Array.from(mergedById.values()).map((row) => mapOrderToLiveItem(row))
+          );
+
+          if (active) setLiveOrders(sortLiveOrdersByLatest([...mapLocalToLiveItem(), ...mapped]));
+        } catch {
+          if (active) setLiveOrders(sortLiveOrdersByLatest(mapLocalToLiveItem()));
+        }
+      })();
+
+      return () => {
+        active = false;
+      };
     }, [])
   );
-
-  const summary: SummaryItem[] = useMemo(() => {
-    const matching = liveOrders.filter((x) => x.status === "MATCHING").length;
-    const driving = liveOrders.filter((x) => x.status === "DISPATCHED" || x.status === "DRIVING").length;
-    const done = liveOrders.filter((x) => x.status === "DONE").length;
-    return [
-      { key: "matching", label: "배차대기", value: matching, icon: "notifications-outline" },
-      { key: "driving", label: "운송중", value: driving, icon: "navigate-outline" },
-      { key: "done", label: "완료", value: done, icon: "flag-outline" },
-    ];
-  }, [liveOrders]);
 
   const goCreateOrder = () => router.push("/(shipper)/create-order/step1-route" as any);
   const goNotificationsTab = () => router.push("/(shipper)/(tabs)/notifications" as any);
   const goDispatchTab = (targetTab: "WAITING" | "PROGRESS" | "DONE") => {
     router.push({ pathname: "/(shipper)/(tabs)/orders", params: { tab: targetTab } } as any);
   };
+  const summary: SummaryItem[] = useMemo(() => {
+    const matching = liveOrders.filter((x) => x.status === "MATCHING").length;
+    const driving = liveOrders.filter((x) => x.status === "DISPATCHED" || x.status === "DRIVING").length;
+    const done = liveOrders.filter((x) => x.status === "DONE").length;
+    return [
+      { key: "matching", label: "배차", value: matching },
+      { key: "driving", label: "운송중", value: driving },
+      { key: "done", label: "완료", value: done },
+    ];
+  }, [liveOrders]);
+  const hasApplicantRequest = useMemo(
+    () => liveOrders.some((x) => x.status === "MATCHING" && (x.applicantsCount ?? 0) > 0),
+    [liveOrders]
+  );
 
   const recentOrders = useMemo(() => {
-    return sortLiveOrdersByLatest(liveOrders)
-      .filter((o) => o.status === "DRIVING")
-      .slice(0, 2);
+    return [...liveOrders]
+      .sort((a, b) => {
+        const ta = a.updatedAtMs ?? parseLabelToMs(a.updatedAtLabel);
+        const tb = b.updatedAtMs ?? parseLabelToMs(b.updatedAtLabel);
+        return tb - ta;
+      })
+      .slice(0, 3);
   }, [liveOrders]);
-  const matchingCount = liveOrders.filter((o) => o.status === "MATCHING").length;
-  const confirmedCount = liveOrders.filter((o) => o.status === "DISPATCHED").length;
 
   return (
     <View style={[s.page, { backgroundColor: c.bg.canvas }]}>
@@ -296,66 +296,72 @@ export function ShipperHomeScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={s.topRow}>
-          <Text style={s.brandText}>BAROTRUCK</Text>
+          <Text style={s.brandText}>BARO</Text>
           <View style={s.topActions}>
             <IconButton onPress={() => {}} variant="ghost">
-              <Ionicons name="chatbubble-ellipses-outline" size={20} color={c.text.primary} />
+              <Ionicons name="chatbubble-outline" size={22} color={c.text.primary} />
             </IconButton>
             <IconButton onPress={goNotificationsTab} variant="ghost">
-              <Ionicons name="notifications-outline" size={20} color={c.text.primary} />
+              <Ionicons name="notifications-outline" size={22} color={c.text.primary} />
             </IconButton>
           </View>
         </View>
-        <View style={s.summaryRow}>
-          {summary.map((it) => {
-            const iconColor =
-              it.key === "matching" ? "#4F46E5" : it.key === "driving" ? "#0E7490" : "#64748B";
-            const iconBg =
-              it.key === "matching" ? "#EDE9FE" : it.key === "driving" ? "#E0F2FE" : "#F1F5F9";
 
-            return (
-              <Card
-                key={it.key}
-                padding={12}
-                onPress={() => {
-                   const nextTab = it.key === "matching" ? "WAITING" : it.key === "driving" ? "PROGRESS" : "DONE";
-                   goDispatchTab(nextTab);
-                }}
-                style={[
-                  s.summaryCard,
-                  {
-                    backgroundColor: c.bg.surface,
-                    borderColor: c.border.default,
-                    borderWidth: 1,
-                  },
-                ]}
-              >
-                <View style={s.summaryContent}>
+        <View style={s.dashboardContainer}>
+          <Text style={[s.dashboardTitle, { color: c.text.primary }]}>운송 현황</Text>
+          <View style={s.summaryRow}>
+            {summary.map((it) => {
+              const iconColor =
+                it.key === "matching" ? "#4F46E5" : it.key === "driving" ? "#0E7490" : "#64748B";
+              const iconBg =
+                it.key === "matching" ? "#EDE9FE" : it.key === "driving" ? "#E0F2FE" : "#F1F5F9";
+              const nextTab = it.key === "matching" ? "WAITING" : it.key === "driving" ? "PROGRESS" : "DONE";
+              return (
+                <Pressable
+                  key={it.key}
+                  onPress={() => goDispatchTab(nextTab)}
+                  style={({ pressed }) => [
+                    s.summaryCard,
+                    {
+                      backgroundColor: c.bg.surface,
+                      borderColor: c.border.default,
+                      opacity: pressed ? 0.92 : 1,
+                    },
+                  ]}
+                >
                   <View style={[s.summaryIconCircle, { backgroundColor: iconBg }]}>
-                    <Ionicons name={it.icon} size={20} color={iconColor} style={{ opacity: 0.95 }} />
+                    {it.key === "driving" ? (
+                      <MaterialCommunityIcons name="truck-delivery" size={20} color={iconColor} />
+                    ) : (
+                      <Ionicons
+                        name={it.key === "matching" ? "cube" : "checkmark-circle"}
+                        size={20}
+                        color={iconColor}
+                      />
+                    )}
+                    {it.key === "matching" && hasApplicantRequest ? <View style={s.redDot} /> : null}
                   </View>
                   <Text style={[s.summaryLabel, { color: c.text.secondary }]}>{it.label}</Text>
                   <View style={s.summaryValueRow}>
-                     <Text style={[s.summaryValue, { color: c.text.primary }]}>{it.value}</Text>
-                     <Text style={{fontSize:12, color: c.text.secondary, marginLeft: 2}}>건</Text>
+                    <Text style={[s.summaryValue, { color: c.text.primary }]}>{it.value}</Text>
+                    <Text style={{ fontSize: 12, color: c.text.secondary, marginLeft: 2 }}>건</Text>
                   </View>
-                </View>
-              </Card>
-            );
-          })}
+                </Pressable>
+              );
+            })}
+          </View>
         </View>
 
         <View style={s.ctaWrap}>
           <Button 
-            title={`${displayName}님 화물 등록하기`} 
+            title={`화물 등록하기`}
             onPress={goCreateOrder} 
             fullWidth
           />
         </View>
 
-        {/* Recent Orders List (Replaced the text list) */}
         <View style={s.sectionHeader}>
-           <Text style={[s.sectionTitle, { color: c.text.primary }]}>최근 배차 현황</Text>
+           <Text style={[s.sectionTitle, { color: c.text.primary }]}>운송 현황</Text>
            <Pressable onPress={() => goDispatchTab("WAITING")}>
              <Text style={{ color: c.text.secondary, fontSize: 13 }}>더보기</Text>
            </Pressable>
@@ -363,18 +369,35 @@ export function ShipperHomeScreen() {
 
         {recentOrders.length > 0 ? (
           <View style={{ gap: 12 }}>
-            {recentOrders.map((item) => (
-              <HomeRecentOrderCard 
-                key={item.id} 
-                item={item} 
-                onPress={() => goDispatchTab("PROGRESS")}
+            {recentOrders.map((item, index) => (
+              <RecommendedOrderCard
+                key={item.id}
+                statusKey={item.status}
+                from={item.from}
+                to={item.to}
+                distanceKm={item.distanceKm}
+                statusLabel={
+                  item.drivingStageLabel ||
+                  (item.status === "DRIVING" ? "배달 중" : item.status === "DISPATCHED" ? "상차 완료" : "대기")
+                }
+                etaHHmm={item.dropoffTimeHHmm}
+                isEtaUrgent={isWithinNextHour(item.dropoffTimeHHmm)}
+                onPress={() =>
+                  goDispatchTab(
+                    item.status === "DONE"
+                      ? "DONE"
+                      : item.status === "DRIVING" || item.status === "DISPATCHED"
+                        ? "PROGRESS"
+                        : "WAITING"
+                  )
+                }
               />
             ))}
           </View>
         ) : (
           <View style={[s.emptyState, { backgroundColor: c.bg.surface, borderColor: c.border.default }]}>
              <Ionicons name="clipboard-outline" size={32} color={c.text.secondary} />
-             <Text style={[s.emptyText, { color: c.text.secondary }]}>최근 배차 건이 없어요</Text>
+             <Text style={[s.emptyText, { color: c.text.secondary }]}>운송 현황이 없어요 화물을 등록해보세요</Text>
           </View>
         )}
 
@@ -387,68 +410,49 @@ const s = StyleSheet.create({
   page: { flex: 1 },
   container: { paddingHorizontal: 20, paddingTop: 18, paddingBottom: 40 },
 
-  topRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 20 },
-  brandText: { fontSize: 16, fontWeight: "900", color: "#4F46E5", letterSpacing: -0.2 },
+  topRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 14 },
+  brandText: { fontSize: 22, fontWeight: "900", color: "#4F46E5", letterSpacing: -0.4 },
   topActions: { flexDirection: "row", alignItems: "center", gap: 8 },
-  heroCard: {
-    borderRadius: 24,
-    backgroundColor: "#5B61F6",
-    paddingHorizontal: 18,
-    paddingVertical: 16,
-    marginBottom: 16,
-  },
-  heroTitle: { fontSize: 16, fontWeight: "900", color: "#FFFFFF", marginBottom: 6 },
-  heroSub: { fontSize: 12, fontWeight: "700", color: "#E0E7FF" },
 
-  summaryRow: { flexDirection: "row", gap: 10, marginBottom: 16 },
-  summaryCard: { 
-    flex: 1, 
-    borderRadius: 16, 
-    marginBottom: 0,
+  dashboardContainer: { marginBottom: 14 },
+  dashboardTitle: { fontSize: 18, fontWeight: "800", marginBottom: 10 },
+  summaryRow: { flexDirection: "row", gap: 10 },
+  summaryCard: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: 20,
+    paddingVertical: 14,
+    paddingHorizontal: 4,
     alignItems: "center",
   },
-  summaryContent: { alignItems: "center", justifyContent: "center", gap: 4 },
   summaryIconCircle: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 2,
+    marginBottom: 8,
+    position: "relative",
+  },
+  redDot: {
+    position: "absolute",
+    top: 2,
+    right: 2,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#EF4444",
+    borderWidth: 1.5,
+    borderColor: "#FFFFFF",
   },
   summaryLabel: { fontSize: 12, fontWeight: "700" },
-  summaryValueRow: { flexDirection: 'row', alignItems: 'baseline' },
-  summaryValue: { fontSize: 24, fontWeight: "900", lineHeight: 26 },
+  summaryValueRow: { flexDirection: "row", alignItems: "baseline", marginTop: 4 },
+  summaryValue: { fontSize: 20, fontWeight: "900", lineHeight: 24 },
 
   ctaWrap: { marginBottom: 18 },
 
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   sectionTitle: { fontSize: 15, fontWeight: "900", lineHeight: 19 },
-
-  // New Card Styles
-  orderCard: {
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: 16,
-    marginBottom: 4,
-  },
-  cardHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 14 },
-  progressRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 14 },
-  progressLabel: { fontSize: 11, fontWeight: "700" },
-  progressValue: { fontSize: 14, fontWeight: "900" },
-  badge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
-  badgeText: { fontSize: 12, fontWeight: "700" },
-  timeText: { fontSize: 12, fontWeight: "700" },
-
-  routeRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },
-  routeItem: { flex: 1 },
-  routeMetaLabel: { fontSize: 12, fontWeight: "600", marginBottom: 4 },
-  routeLabel: { fontSize: 17, fontWeight: "900", marginBottom: 2 },
-  routeSub: { fontSize: 11 },
-  
-  routeArrowWrap: { alignItems: 'center', justifyContent: 'center', width: 60 },
-  distBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginBottom: 2 },
-  distText: { fontSize: 10, fontWeight: "600" },
 
   emptyState: { 
       padding: 30, alignItems: 'center', justifyContent: 'center', 

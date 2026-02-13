@@ -4,6 +4,17 @@ import { OrderResponse, OrderRequest, DriverDashboardResponse, OrderStatus, Assi
 
 const API_BASE = '/api/v1/orders';
 
+function toOrderList(payload: any): OrderResponse[] {
+  if (Array.isArray(payload)) return payload;
+  if (payload && typeof payload === "object") {
+    const candidates = [payload.content, payload.items, payload.results, payload.data, payload.orders];
+    for (const c of candidates) {
+      if (Array.isArray(c)) return c;
+    }
+  }
+  return [];
+}
+
 export const OrderApi = {
   /** 1. 화주: 신규 오더 생성 */
   createOrder: async (data: OrderRequest): Promise<OrderResponse> => {
@@ -21,6 +32,31 @@ export const OrderApi = {
   getRecommendedOrders: async (): Promise<OrderResponse[]> => {
     const res = await apiClient.get(`${API_BASE}/recommended`);
     return res.data;
+  },
+
+  /** 화주: 내 주문 목록 조회 (백엔드 구현 경로 차이를 흡수하기 위해 후보 경로 순차 시도) */
+  getMyShipperOrders: async (): Promise<OrderResponse[]> => {
+    const candidates = [
+      "/api/v1/orders/my",
+      "/api/v1/orders/me",
+      "/api/v1/shippers/me/orders",
+      "/api/v1/shippers/orders",
+      "/api/v1/orders/shipper",
+      "/api/orders/my",
+      "/api/orders/me",
+    ];
+
+    for (const url of candidates) {
+      try {
+        const res = await apiClient.get(url);
+        const parsed = toOrderList(res.data);
+        if (parsed.length > 0) return parsed;
+      } catch {
+        // Try next endpoint.
+      }
+    }
+
+    return [];
   },
 
   /** 4. 차주: 오더 수락 (배차 신청) */

@@ -41,5 +41,6 @@ export const AuthService = {
   logout: async (): Promise<void> => {
     await SecureStore.deleteItemAsync('userToken');
     await SecureStore.deleteItemAsync('refreshToken');
+    await SecureStore.deleteItemAsync('baro_mock_auth_session');
   }
 };

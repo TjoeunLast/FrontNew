@@ -5,12 +5,13 @@ import React from "react";
 import { Alert, Modal, Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { DispatchStatusBadge, type DispatchStatusKey } from "@/features/common/orders/ui/DispatchStatusBadge";
+import { type DispatchStatusKey } from "@/features/common/orders/ui/DispatchStatusBadge";
 import { OrderApi } from "@/shared/api/orderService";
 import { getLocalShipperOrders } from "@/features/shipper/home/model/localShipperOrders";
 import { MOCK_SHIPPER_ORDERS } from "@/features/shipper/home/model/mockShipperOrders";
 import type { OrderResponse } from "@/shared/models/order";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
+import { RecommendedOrderCard } from "@/shared/ui/business/RecommendedOrderCard";
 
 type DispatchTab = "WAITING" | "PROGRESS" | "DONE";
 
@@ -42,7 +43,7 @@ type DispatchCardItem = {
   driverName?: string;
   driverVehicle?: string;
   receiptLabel?: string;
-  drivingStageLabel?: "상차 완료" | "배달 중" | "하차 직전";
+  drivingStageLabel?: "상차중" | "배달 중" | "하차중";
 };
 
 function won(v: number) {
@@ -82,6 +83,18 @@ function toHHmm(v?: string) {
   const m = v.match(/(\d{2}):(\d{2})/);
   if (m) return `${m[1]}:${m[2]}`;
   return undefined;
+}
+
+function isWithinNextHour(hhmm?: string) {
+  if (!hhmm) return false;
+  const m = hhmm.match(/^([01]\d|2[0-3]):([0-5]\d)$/);
+  if (!m) return false;
+  const now = new Date();
+  const target = new Date(now);
+  target.setHours(Number(m[1]), Number(m[2]), 0, 0);
+  let diffMin = Math.floor((target.getTime() - now.getTime()) / 60000);
+  if (diffMin < 0) diffMin += 24 * 60;
+  return diffMin >= 0 && diffMin <= 60;
 }
 
 function toPlaceLabel(addr: string) {
@@ -181,7 +194,7 @@ function toUiCard(order: OrderResponse): DispatchCardItem | null {
       driverName: order.user?.nickname || "김기사",
       driverVehicle: cargoLabel,
       drivingStageLabel:
-        order.status === "LOADING" ? "상차 완료" : order.status === "UNLOADING" ? "하차 직전" : "배달 중",
+        order.status === "LOADING" ? "상차중" : order.status === "UNLOADING" ? "하차중" : "배달 중",
     };
   }
 
@@ -209,7 +222,7 @@ function toUiCard(order: OrderResponse): DispatchCardItem | null {
 }
 
 function mapLocalToDispatchCards(): DispatchCardItem[] {
-  return getLocalShipperOrders().map((item) => {
+  return getLocalShipperOrders().map((item, index) => {
     if (item.status === "CONFIRMED") {
       return {
         id: item.id,
@@ -249,7 +262,7 @@ function mapLocalToDispatchCards(): DispatchCardItem[] {
         priceWon: item.priceWon,
         driverName: "배차된 기사",
         driverVehicle: item.cargoSummary,
-        drivingStageLabel: "배달 중",
+        drivingStageLabel: item.id.endsWith("u") ? "하차중" : item.id.endsWith("l") ? "상차중" : "배달 중",
       };
     }
 
@@ -294,7 +307,7 @@ function mapLocalToDispatchCards(): DispatchCardItem[] {
 }
 
 function mapSharedMockToDispatchCards(): DispatchCardItem[] {
-  return MOCK_SHIPPER_ORDERS.map((item) => {
+  return MOCK_SHIPPER_ORDERS.map((item, index) => {
     if (item.status === "DISPATCHED") {
       return {
         id: item.id,
@@ -336,7 +349,7 @@ function mapSharedMockToDispatchCards(): DispatchCardItem[] {
         driverName: "배차된 기사",
         driverVehicle: item.cargoSummary,
         pickupLabel: item.updatedAtLabel,
-        drivingStageLabel: "배달 중",
+        drivingStageLabel: item.id === "m8" ? "하차중" : item.id === "m11" ? "상차중" : "배달 중",
       };
     }
 
@@ -360,11 +373,12 @@ function mapSharedMockToDispatchCards(): DispatchCardItem[] {
       };
     }
 
+    const mockApplicants = index % 2 === 0 ? 3 : 2;
     return {
       id: item.id,
       tab: "WAITING",
-      statusLabel: "대기중",
-      statusTone: "gray",
+      statusLabel: mockApplicants > 0 ? `신청 ${mockApplicants}명` : "대기중",
+      statusTone: mockApplicants > 0 ? "yellow" : "gray",
       timeLabel: item.updatedAtLabel,
       from: item.from,
       to: item.to,
@@ -375,7 +389,7 @@ function mapSharedMockToDispatchCards(): DispatchCardItem[] {
       loadMethodShort: item.loadMethodShort || "-",
       workToolShort: item.workToolShort || "-",
       priceWon: item.priceWon,
-      applicants: 0,
+      applicants: mockApplicants,
     };
   });
 }
@@ -386,7 +400,7 @@ const waitingApplicants: ApplicantItem[] = [
   { id: "a3", name: "최성실", rating: 4.3, detail: "11톤 윙바디 · 거리 8km" },
 ];
 
-const FORCE_MOCK_DISPATCH_DATA = true;
+const FORCE_MOCK_DISPATCH_DATA = false;
 const SHARED_MOCK_DISPATCH_CARDS = mapSharedMockToDispatchCards();
 
 function badgeStatusOf(item: DispatchCardItem): DispatchStatusKey {
@@ -397,6 +411,14 @@ function badgeStatusOf(item: DispatchCardItem): DispatchStatusKey {
   return "DRIVING";
 }
 
+function toHomeStatusKey(item: DispatchCardItem): "MATCHING" | "DISPATCHED" | "DRIVING" | "DONE" {
+  const k = badgeStatusOf(item);
+  if (k === "WAITING") return "MATCHING";
+  if (k === "CONFIRMED") return "DISPATCHED";
+  if (k === "DRIVING") return "DRIVING";
+  return "DONE";
+}
+
 export default function ShipperOrdersScreen() {
   const { colors: c } = useAppTheme();
   const insets = useSafeAreaInsets();
@@ -404,8 +426,9 @@ export default function ShipperOrdersScreen() {
   const { tab: tabParam } = useLocalSearchParams<{ tab?: string | string[] }>();
 
   const [tab, setTab] = React.useState<DispatchTab>("WAITING");
-  const [cards, setCards] = React.useState<DispatchCardItem[]>(SHARED_MOCK_DISPATCH_CARDS);
+  const [cards, setCards] = React.useState<DispatchCardItem[]>([]);
   const [openApplicantModal, setOpenApplicantModal] = React.useState(false);
+  const [selectedWaitingCardId, setSelectedWaitingCardId] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     const resolved = Array.isArray(tabParam) ? tabParam[0] : tabParam;
@@ -424,13 +447,13 @@ export default function ShipperOrdersScreen() {
       let active = true;
       void (async () => {
         try {
-          const rows = await OrderApi.getAvailableOrders();
+          const rows = await OrderApi.getMyShipperOrders();
           if (!active) return;
           const mapped = rows.map(toUiCard).filter((row): row is DispatchCardItem => row !== null);
-          setCards([...mapLocalToDispatchCards(), ...(mapped.length ? mapped : SHARED_MOCK_DISPATCH_CARDS)]);
+          setCards([...mapLocalToDispatchCards(), ...mapped]);
         } catch {
           if (!active) return;
-          setCards([...mapLocalToDispatchCards(), ...SHARED_MOCK_DISPATCH_CARDS]);
+          setCards([...mapLocalToDispatchCards()]);
         }
       })();
 
@@ -442,6 +465,41 @@ export default function ShipperOrdersScreen() {
 
   const filtered = cards.filter((item) => item.tab === tab);
   const hasWaitingApplicants = cards.some((item) => item.tab === "WAITING" && (item.applicants ?? 0) > 0);
+  const selectedWaitingCard =
+    selectedWaitingCardId == null ? null : cards.find((item) => item.id === selectedWaitingCardId && item.tab === "WAITING");
+
+  const openApplicantPicker = React.useCallback((cardId: string) => {
+    setSelectedWaitingCardId(cardId);
+    setOpenApplicantModal(true);
+  }, []);
+
+  const closeApplicantModal = React.useCallback(() => {
+    setOpenApplicantModal(false);
+    setSelectedWaitingCardId(null);
+  }, []);
+
+  const handleConfirmDriver = React.useCallback(
+    (driver: ApplicantItem) => {
+      if (!selectedWaitingCardId) return;
+      setCards((prev) =>
+        prev.map((item) => {
+          if (item.id !== selectedWaitingCardId) return item;
+          return {
+            ...item,
+            statusLabel: "배차완료",
+            statusTone: "blue",
+            applicants: 0,
+            pickupLabel: "방금 배차 확정",
+            driverName: driver.name,
+            driverVehicle: item.cargoLabel,
+          };
+        })
+      );
+      closeApplicantModal();
+      Alert.alert("배차 확정", `${driver.name} 기사님으로 배차를 확정했습니다.`);
+    },
+    [closeApplicantModal, selectedWaitingCardId]
+  );
 
   return (
     <View style={{ flex: 1, backgroundColor: c.bg.canvas }}>
@@ -521,192 +579,36 @@ export default function ShipperOrdersScreen() {
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 + insets.bottom }} showsVerticalScrollIndicator={false}>
         {filtered.map((item) => {
           const hasApplicants = (item.applicants ?? 0) > 0;
+          const isUnloadingProgress = item.tab === "PROGRESS" && item.drivingStageLabel === "하차중";
+          const isEtaUrgent = isUnloadingProgress || isWithinNextHour(item.dropoffTimeHHmm);
+          const isWaitingWithApplicants = item.tab === "WAITING" && hasApplicants;
+          const statusLabel =
+            item.drivingStageLabel
+            || (item.tab === "PROGRESS" ? "배달 중" : item.tab === "DONE" ? "완료" : item.statusLabel === "배차완료" ? "상차 완료" : "대기");
+          const isDone = item.tab === "DONE";
 
           return (
-            <Pressable
+            <RecommendedOrderCard
               key={item.id}
+              statusKey={toHomeStatusKey(item)}
+              from={item.from}
+              to={item.to}
+              distanceKm={item.distanceKm}
+              statusLabel={statusLabel}
+              etaHHmm={item.dropoffTimeHHmm}
+              isEtaUrgent={isEtaUrgent}
+              isHighlighted={isWaitingWithApplicants}
+              actionLabel={isWaitingWithApplicants ? "기사 선택하기" : isDone ? "기사 평점 남기기" : undefined}
+              actionVariant={isDone ? "outline" : "primary"}
+              onPressAction={
+                isWaitingWithApplicants
+                  ? () => openApplicantPicker(item.id)
+                  : isDone
+                    ? () => Alert.alert("준비 중", "기사 평점 모달을 연결해주세요.")
+                    : undefined
+              }
               onPress={() => router.push(`/(common)/orders/${item.id}` as any)}
-              style={{
-                borderWidth: item.statusLabel === "배차완료" ? 1.5 : 1,
-                borderColor: item.statusLabel === "배차완료" ? "#F59E0B" : c.border.default,
-                borderRadius: 18,
-                backgroundColor: item.tab === "DONE" ? "#F8FAFC" : c.bg.surface,
-                shadowOpacity: item.tab === "DONE" ? 0 : undefined,
-                elevation: item.tab === "DONE" ? 0 : undefined,
-                padding: 14,
-                marginBottom: 14,
-              }}
-            >
-              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                <DispatchStatusBadge status={badgeStatusOf(item)} />
-                <Text style={{ color: c.text.secondary, fontWeight: "700", fontSize: 13 }}>
-                  {item.tab === "PROGRESS" ? item.pickupLabel || item.timeLabel : item.timeLabel}
-                </Text>
-              </View>
-
-              <View style={{ marginTop: 14, marginBottom: 12, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ color: c.text.primary, fontWeight: "900", fontSize: 14 }}>{toPlaceLabel(item.from)}</Text>
-                  <Text style={{ color: c.text.secondary, fontWeight: "700", fontSize: 12, marginTop: 5 }}>
-                    {(item.pickupTimeHHmm || "09:00")} 상차
-                  </Text>
-                </View>
-                <View style={{ width: 84, alignItems: "center" }}>
-                  <View style={{ backgroundColor: "#EEF1F6", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 }}>
-                    <Text style={{ color: "#8A94A6", fontWeight: "800", fontSize: 13 }}>{item.distanceKm}km</Text>
-                  </View>
-                  <Text style={{ color: "#8A94A6", fontWeight: "800", marginTop: 2 }}>→</Text>
-                </View>
-                <View style={{ flex: 1, alignItems: "flex-end" }}>
-                  <Text style={{ color: c.text.primary, fontWeight: "900", fontSize: 14, textAlign: "right" }}>
-                    {toPlaceLabel(item.to)}
-                  </Text>
-                  <Text style={{ color: c.text.secondary, fontWeight: "700", fontSize: 12, marginTop: 5 }}>
-                    {(item.dropoffTimeHHmm || "15:00")} 하차
-                  </Text>
-                </View>
-              </View>
-
-              {item.tab === "PROGRESS" ? (
-                <>
-                  <View
-                    style={{
-                      marginBottom: 10,
-                      borderRadius: 10,
-                      backgroundColor: c.bg.muted,
-                      paddingHorizontal: 12,
-                      paddingVertical: 10,
-                      flexDirection: "row",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                    }}
-                  >
-                    <Text style={{ color: c.text.secondary, fontWeight: "700", fontSize: 12 }}>운송 현황</Text>
-                    <Text style={{ color: c.text.primary, fontWeight: "900", fontSize: 13 }}>
-                      {item.drivingStageLabel || "배달 중"}
-                    </Text>
-                  </View>
-                  <View
-                    style={{
-                      marginBottom: 12,
-                      borderRadius: 12,
-                      backgroundColor: c.bg.muted,
-                      paddingHorizontal: 12,
-                      paddingVertical: 14,
-                      flexDirection: "row",
-                      alignItems: "center",
-                    }}
-                  >
-                    <View
-                      style={{
-                        width: 30,
-                        height: 30,
-                        borderRadius: 15,
-                        backgroundColor: "#CBD5E1",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        marginRight: 10,
-                      }}
-                    >
-                      <Ionicons name="person-outline" size={16} color={c.text.primary} />
-                    </View>
-                    <Text style={{ color: c.text.primary, fontWeight: "900", fontSize: 16 }}>{item.driverName}</Text>
-                    <Text style={{ color: c.text.secondary, fontWeight: "700", fontSize: 15, marginLeft: 6 }}>{item.driverVehicle}</Text>
-                  </View>
-                </>
-              ) : (
-                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                  <Text style={{ color: c.text.secondary, fontWeight: "700", fontSize: 13 }}>
-                    {item.cargoLabel} · {item.loadMethodShort ?? "-"} · {item.workToolShort ?? "-"}
-                  </Text>
-                  <Text style={{ color: c.text.primary, fontWeight: "900", fontSize: 17 }}>{won(item.priceWon)}</Text>
-                </View>
-              )}
-
-              {item.tab === "WAITING" && hasApplicants ? (
-                <Pressable
-                  onPress={(e) => {
-                    e.stopPropagation();
-                    setOpenApplicantModal(true);
-                  }}
-                  style={{
-                    height: 50,
-                    borderRadius: 14,
-                    backgroundColor: c.brand.primary,
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <Text style={{ color: c.text.inverse, fontWeight: "900", fontSize: 16 }}>기사 선택하기</Text>
-                </Pressable>
-              ) : null}
-
-              {item.tab === "PROGRESS" ? (
-                <View style={{ flexDirection: "row" }}>
-                  <Pressable
-                    onPress={(e) => {
-                      e.stopPropagation();
-                      Alert.alert("준비 중", "위치 공유 기능을 연결해주세요.");
-                    }}
-                    style={{
-                      flex: 1,
-                      height: 44,
-                      borderRadius: 12,
-                      borderWidth: 1,
-                      borderColor: c.border.default,
-                      alignItems: "center",
-                      justifyContent: "center",
-                      flexDirection: "row",
-                      marginRight: 8,
-                    }}
-                  >
-                    <Ionicons name="location-outline" size={16} color={c.text.secondary} style={{ marginRight: 4 }} />
-                    <Text style={{ color: c.text.secondary, fontWeight: "800", fontSize: 14 }}>위치</Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={(e) => {
-                      e.stopPropagation();
-                      Alert.alert("준비 중", "전화 연결 기능을 연결해주세요.");
-                    }}
-                    style={{
-                      flex: 1,
-                      height: 44,
-                      borderRadius: 12,
-                      borderWidth: 1,
-                      borderColor: c.brand.primary,
-                      alignItems: "center",
-                      justifyContent: "center",
-                      flexDirection: "row",
-                      marginLeft: 8,
-                    }}
-                  >
-                    <Ionicons name="call-outline" size={16} color={c.brand.primary} style={{ marginRight: 4 }} />
-                    <Text style={{ color: c.brand.primary, fontWeight: "800", fontSize: 14 }}>전화</Text>
-                  </Pressable>
-                </View>
-              ) : null}
-
-              {item.tab === "DONE" ? (
-                <Pressable
-                  onPress={(e) => {
-                    e.stopPropagation();
-                    Alert.alert("준비 중", "인수증 상세 화면을 연결해주세요.");
-                  }}
-                  style={{
-                    height: 44,
-                    borderRadius: 12,
-                    borderWidth: 1,
-                    borderColor: c.border.default,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    flexDirection: "row",
-                  }}
-                >
-                  <Ionicons name="document-text-outline" size={16} color={c.text.secondary} style={{ marginRight: 4 }} />
-                  <Text style={{ color: c.text.secondary, fontWeight: "800", fontSize: 14 }}>{item.receiptLabel || "인수증 확인"}</Text>
-                </Pressable>
-              ) : null}
-            </Pressable>
+            />
           );
         })}
 
@@ -725,7 +627,7 @@ export default function ShipperOrdersScreen() {
         ) : null}
       </ScrollView>
 
-      <Modal visible={openApplicantModal} transparent animationType="fade" onRequestClose={() => setOpenApplicantModal(false)}>
+      <Modal visible={openApplicantModal} transparent animationType="fade" onRequestClose={closeApplicantModal}>
         <View style={{ flex: 1, backgroundColor: "rgba(15, 23, 42, 0.5)", justifyContent: "center", padding: 10 }}>
           <View style={{ borderRadius: 24, overflow: "hidden", backgroundColor: c.bg.surface }}>
             <View
@@ -739,8 +641,10 @@ export default function ShipperOrdersScreen() {
                 justifyContent: "space-between",
               }}
             >
-              <Text style={{ color: c.text.primary, fontSize: 24, fontWeight: "900" }}>배차 신청 (3명)</Text>
-              <Pressable onPress={() => setOpenApplicantModal(false)}>
+              <Text style={{ color: c.text.primary, fontSize: 24, fontWeight: "900" }}>
+                배차 신청 ({selectedWaitingCard?.applicants ?? waitingApplicants.length}명)
+              </Text>
+              <Pressable onPress={closeApplicantModal}>
                 <Ionicons name="close" size={28} color={c.text.primary} />
               </Pressable>
             </View>
@@ -806,7 +710,7 @@ export default function ShipperOrdersScreen() {
                       <Text style={{ color: c.text.secondary, fontWeight: "800", fontSize: 14 }}>채팅</Text>
                     </Pressable>
                     <Pressable
-                      onPress={() => Alert.alert("배차 확정", `${driver.name} 기사님으로 배차를 확정했습니다.`)}
+                      onPress={() => handleConfirmDriver(driver)}
                       style={{
                         width: 86,
                         height: 40,
