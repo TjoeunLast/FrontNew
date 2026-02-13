@@ -19,6 +19,7 @@ import { TextField } from "@/shared/ui/form/TextField";
 import { Button } from "@/shared/ui/base/Button";
 import { UserService } from "@/shared/api/userService";
 import { AuthService } from "@/shared/api/authService";
+import { saveCurrentUserSnapshot } from "@/shared/utils/currentUserStorage";
 
 const ROUTES = {
   signup: "/(auth)/signup" as const,
@@ -62,6 +63,11 @@ export default function LoginScreen() {
 
     // 2. 로그인한 유저의 정보(Role 등) 가져오기
     const me = await UserService.getMyInfo();
+    await saveCurrentUserSnapshot({
+      email: me.email,
+      nickname: me.nickname,
+      role: me.role,
+    });
     
     // 3. 역할(Role)에 따른 화면 전환
     if (me.role === "DRIVER") {

@@ -1,4 +1,4 @@
-// src/features/common/auth/ui/SignupShipperScreen.tsx
+﻿// src/features/common/auth/ui/SignupShipperScreen.tsx
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useMemo, useState } from "react";
@@ -22,6 +22,7 @@ import type { RegisterRequest } from "@/shared/models/auth";
 import { Button } from "@/shared/ui/base/Button";
 import { TextField } from "@/shared/ui/form/TextField";
 import { withAlpha } from "@/shared/utils/color";
+import { saveCurrentUserSnapshot } from "@/shared/utils/currentUserStorage";
 
 type ShipperType = "personal" | "business";
 
@@ -198,6 +199,12 @@ export default function SignupShipperScreen() {
 
       // 1. 회원가입 요청 (DB 저장)
       const reponse = await AuthService.register(payload);
+      await saveCurrentUserSnapshot({
+        email: params.email,
+        name: params.name,
+        nickname: nickname.trim(),
+        role: "SHIPPER",
+      });
 
       // 4. 메인 탭으로 이동
       router.replace("/(shipper)/(tabs)");

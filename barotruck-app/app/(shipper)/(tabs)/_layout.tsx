@@ -1,11 +1,13 @@
 import React from "react";
 import { Tabs } from "expo-router";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 
 export default function ShipperTabsLayout() {
   const t = useAppTheme();
   const c = t.colors;
+  const insets = useSafeAreaInsets();
 
   return (
     <Tabs
@@ -17,9 +19,9 @@ export default function ShipperTabsLayout() {
           backgroundColor: c.bg.surface,
           borderTopColor: c.border.default,
           borderTopWidth: 1,
-          height: 78,
+          height: 66 + insets.bottom,
           paddingTop: 10,
-          paddingBottom: 12,
+          paddingBottom: 8 + insets.bottom,
         },
         tabBarLabelStyle: {
           fontSize: 12,
@@ -47,6 +49,7 @@ export default function ShipperTabsLayout() {
         options={{
           title: "배차관리",
           tabBarIcon: ({ color, size }) => (
+            // ✅ 트럭은 Ionicons에 없어서 MaterialCommunityIcons 사용
             <MaterialCommunityIcons name="truck-outline" color={color} size={size} />
           ),
         }}
