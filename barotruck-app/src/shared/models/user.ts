@@ -5,7 +5,8 @@ export interface UserProfile {
   userId: number;
   email: string;
   nickname: string;
-  profileImageUrl: string;
+  name: string;
+  profileImageUrl?: string;
   phone: string;
   role: 'USER' | 'DRIVER' | 'SHIPPER' | 'ADMIN';
   ratingAvg: number;
