@@ -1,17 +1,115 @@
 import axios from 'axios'; // npm install axios 필요
 import apiClient from './apiClient'; // 위에서 만든 클라이언트 임포트
 import { OrderResponse, OrderRequest, DriverDashboardResponse, OrderStatus, AssignedDriverInfoResponse } from '../models/order'; //
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const API_BASE = '/api/v1/orders';
+const SHIPPER_ORDERS_ENDPOINT_CACHE_KEY = "baro_shipper_orders_endpoint_v1";
+
+type EndpointCandidate = {
+  url: string;
+  params?: Record<string, string | number | boolean>;
+};
+
+function normalizeStatus(raw: any): OrderStatus {
+  const v = String(raw ?? "").toUpperCase();
+  if (v === "REQUESTED" || v === "ACCEPTED" || v === "LOADING" || v === "IN_TRANSIT" || v === "UNLOADING" || v === "COMPLETED" || v === "CANCELLED" || v === "PENDING") {
+    return v as OrderStatus;
+  }
+  return "REQUESTED";
+}
+
+function normalizeOrderRow(node: any): OrderResponse | null {
+  if (!node || typeof node !== "object") return null;
+  const orderIdRaw = (node as any).orderId ?? (node as any).id ?? (node as any).orderNo;
+  if (orderIdRaw === undefined || orderIdRaw === null) return null;
+  const orderIdNum = Number(orderIdRaw);
+  if (!Number.isFinite(orderIdNum)) return null;
+
+  const createdAt = String((node as any).createdAt ?? (node as any).created_at ?? new Date().toISOString());
+  const updated = (node as any).updated ?? (node as any).updatedAt ?? (node as any).modifiedAt;
+  const startAddr = String((node as any).startAddr ?? (node as any).startAddress ?? (node as any).puAddress ?? "");
+  const startPlace = String((node as any).startPlace ?? (node as any).startName ?? startAddr);
+  const endAddr = String((node as any).endAddr ?? (node as any).endAddress ?? (node as any).doAddress ?? "");
+  const endPlace = String((node as any).endPlace ?? (node as any).endName ?? endAddr);
+
+  return {
+    orderId: orderIdNum,
+    status: normalizeStatus((node as any).status),
+    createdAt,
+    updated: updated ? String(updated) : undefined,
+    startAddr,
+    startPlace,
+    startType: String((node as any).startType ?? (node as any).pickupType ?? ""),
+    startSchedule: String((node as any).startSchedule ?? (node as any).pickupAt ?? createdAt),
+    endAddr,
+    endPlace,
+    endType: String((node as any).endType ?? (node as any).dropoffType ?? ""),
+    endSchedule: (node as any).endSchedule ? String((node as any).endSchedule) : undefined,
+    cargoContent: String((node as any).cargoContent ?? (node as any).cargo ?? ""),
+    loadMethod: (node as any).loadMethod ? String((node as any).loadMethod) : undefined,
+    workType: (node as any).workType ? String((node as any).workType) : undefined,
+    tonnage: Number((node as any).tonnage ?? 0),
+    reqCarType: String((node as any).reqCarType ?? (node as any).carType ?? ""),
+    reqTonnage: String((node as any).reqTonnage ?? (node as any).tonnageText ?? ""),
+    driveMode: (node as any).driveMode ? String((node as any).driveMode) : undefined,
+    loadWeight: (node as any).loadWeight !== undefined ? Number((node as any).loadWeight) : undefined,
+    basePrice: Number((node as any).basePrice ?? (node as any).price ?? 0),
+    laborFee: (node as any).laborFee !== undefined ? Number((node as any).laborFee) : undefined,
+    packagingPrice: (node as any).packagingPrice !== undefined ? Number((node as any).packagingPrice) : undefined,
+    insuranceFee: (node as any).insuranceFee !== undefined ? Number((node as any).insuranceFee) : undefined,
+    payMethod: String((node as any).payMethod ?? ""),
+    instant: Boolean((node as any).instant),
+    distance: Number((node as any).distance ?? 0),
+    duration: Number((node as any).duration ?? 0),
+    remark: (node as any).remark ? String((node as any).remark) : undefined,
+    user: (node as any).user,
+    cancellation: (node as any).cancellation,
+  };
+}
 
 function toOrderList(payload: any): OrderResponse[] {
-  if (Array.isArray(payload)) return payload;
-  if (payload && typeof payload === "object") {
-    const candidates = [payload.content, payload.items, payload.results, payload.data, payload.orders];
-    for (const c of candidates) {
-      if (Array.isArray(c)) return c;
+  const out: OrderResponse[] = [];
+  const seen = new Set<string>();
+
+  const absorb = (node: any) => {
+    if (!node) return;
+
+    if (Array.isArray(node)) {
+      node.forEach((item) => absorb(item));
+      return;
     }
+
+    const normalized = normalizeOrderRow(node);
+    if (normalized) {
+      const id = String(normalized.orderId);
+      if (!seen.has(id)) {
+        seen.add(id);
+        out.push(normalized);
+      }
+    }
+
+    if (typeof node === "object") {
+      absorb((node as any).content);
+      absorb((node as any).items);
+      absorb((node as any).results);
+      absorb((node as any).data);
+      absorb((node as any).orders);
+      absorb((node as any).list);
+      absorb((node as any).rows);
+    }
+  };
+
+  absorb(payload);
+
+  if (out.length > 0) {
+    return out;
   }
+
+  if (Array.isArray(payload)) {
+    return payload as OrderResponse[];
+  }
+
   return [];
 }
 
@@ -36,21 +134,47 @@ export const OrderApi = {
 
   /** 화주: 내 주문 목록 조회 (백엔드 구현 경로 차이를 흡수하기 위해 후보 경로 순차 시도) */
   getMyShipperOrders: async (): Promise<OrderResponse[]> => {
-    const candidates = [
+    const baseCandidates: EndpointCandidate[] = [
       "/api/v1/orders/my",
       "/api/v1/orders/me",
+      "/api/v1/orders/my-orders",
+      "/api/v1/orders/shipper/my",
       "/api/v1/shippers/me/orders",
+      "/api/v1/shippers/my/orders",
+      "/api/v1/shippers/orders/me",
       "/api/v1/shippers/orders",
       "/api/v1/orders/shipper",
       "/api/orders/my",
       "/api/orders/me",
+      "/api/v1/orders",
+      "/api/orders",
+    ].map((url) => ({ url }));
+    const paramCandidates: EndpointCandidate[] = [
+      { url: "/api/v1/orders", params: { mine: true } },
+      { url: "/api/v1/orders", params: { my: true } },
+      { url: "/api/v1/shippers/orders", params: { mine: true } },
+      { url: "/api/v1/shippers/orders", params: { my: true } },
+      { url: "/api/orders", params: { mine: true } },
     ];
 
-    for (const url of candidates) {
+    const cachedUrl = await AsyncStorage.getItem(SHIPPER_ORDERS_ENDPOINT_CACHE_KEY).catch(() => null);
+    const cached = cachedUrl ? [{ url: cachedUrl } as EndpointCandidate] : [];
+    const candidates = [...cached, ...baseCandidates, ...paramCandidates].filter(
+      (c, idx, arr) =>
+        idx ===
+        arr.findIndex((x) => x.url === c.url && JSON.stringify(x.params ?? {}) === JSON.stringify(c.params ?? {}))
+    );
+
+    for (const candidate of candidates) {
       try {
-        const res = await apiClient.get(url);
+        const res = await apiClient.get(candidate.url, {
+          params: candidate.params,
+        });
         const parsed = toOrderList(res.data);
-        if (parsed.length > 0) return parsed;
+        if (parsed.length > 0) {
+          await AsyncStorage.setItem(SHIPPER_ORDERS_ENDPOINT_CACHE_KEY, candidate.url).catch(() => {});
+          return parsed;
+        }
       } catch {
         // Try next endpoint.
       }

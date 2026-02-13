@@ -119,7 +119,7 @@ export function ShipperCreateOrderStep1Screen() {
 
   React.useEffect(() => {
     const q = startSearch.trim();
-    if (q.length < 2) {
+    if (q.length < 1) {
       setStartAddrSuggestions([]);
       return;
     }
@@ -132,7 +132,7 @@ export function ShipperCreateOrderStep1Screen() {
           if (!active) return;
           setStartAddrSuggestions(rows);
         },
-        2
+        1
       );
     }, 250);
 
@@ -144,7 +144,7 @@ export function ShipperCreateOrderStep1Screen() {
 
   React.useEffect(() => {
     const q = endAddr.trim();
-    if (q.length < 2) {
+    if (q.length < 1) {
       setEndAddrSuggestions([]);
       return;
     }
@@ -157,7 +157,7 @@ export function ShipperCreateOrderStep1Screen() {
           if (!active) return;
           setEndAddrSuggestions(rows);
         },
-        2
+        1
       );
     }, 250);
 

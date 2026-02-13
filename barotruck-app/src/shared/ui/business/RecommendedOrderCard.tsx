@@ -51,7 +51,7 @@ export function RecommendedOrderCard({
       : statusKey === "DISPATCHED"
         ? { label: "확정", bg: c.brand.primary }
         : statusKey === "DRIVING"
-          ? { label: "운행중", bg: c.status.danger }
+          ? { label: "운송중", bg: c.status.danger }
           : { label: "완료", bg: c.text.secondary };
   const getShortAddr = (addr: string) => {
     const parts = (addr || "").trim().split(/\s+/);

@@ -20,7 +20,9 @@ import { Chip as FormChip } from "@/shared/ui/form/Chip";
 import { Chip as RequestChip } from "./createOrderStep1.components";
 import { s as step1Styles } from "./createOrderStep1.styles";
 
-const FORCE_MOCK_CREATE_ORDER = false;
+const FORCE_MOCK_CREATE_ORDER =
+  ["1", "true", "yes", "on"].includes(String(process.env.EXPO_PUBLIC_USE_SHIPPER_MOCK ?? "").trim().toLowerCase()) ||
+  ["1", "true", "yes", "on"].includes(String(process.env.EXPO_PUBLIC_USE_MOCK ?? "").trim().toLowerCase());
 const EXCLUSIVE_LOAD_SURCHARGE_RATE = 0.1;
 const MIXED_LOAD_DISCOUNT_RATE = 0.1;
 const PACKAGING_FEE_WON = 30000;

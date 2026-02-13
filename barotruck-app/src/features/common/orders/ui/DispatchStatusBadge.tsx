@@ -9,7 +9,7 @@ export type DispatchStatusKey = "WAITING" | "CONFIRMED" | "DRIVING" | "COMPLETED
 function labelByKey(key: DispatchStatusKey) {
   if (key === "WAITING") return "대기";
   if (key === "CONFIRMED") return "확정";
-  if (key === "DRIVING") return "운행중";
+  if (key === "DRIVING") return "운송중";
   return "완료";
 }
 

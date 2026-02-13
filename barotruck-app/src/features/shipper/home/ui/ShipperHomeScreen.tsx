@@ -5,7 +5,8 @@ import React, { useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { getLocalShipperOrders } from "@/features/shipper/home/model/localShipperOrders";
+import { getLocalShipperOrders, hydrateLocalShipperOrders } from "@/features/shipper/home/model/localShipperOrders";
+import { MOCK_SHIPPER_ORDERS } from "@/features/shipper/mock";
 import { OrderApi } from "@/shared/api/orderService";
 import { UserService } from "@/shared/api/userService";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
@@ -205,6 +206,29 @@ function mapLocalToLiveItem(): LiveOrderItem[] {
   });
 }
 
+function mapSharedMockToLiveItem(): LiveOrderItem[] {
+  return MOCK_SHIPPER_ORDERS.map((item) => ({
+    id: item.id,
+    status: item.status,
+    applicantsCount: item.status === "MATCHING" ? 2 : 0,
+    isInstantDispatch: item.isInstantDispatch,
+    pickupTypeLabel: item.pickupTypeLabel,
+    dropoffTypeLabel: item.dropoffTypeLabel,
+    from: item.from,
+    to: item.to,
+    distanceKm: item.distanceKm,
+    cargoSummary: item.cargoSummary,
+    loadMethodShort: item.loadMethodShort,
+    workToolShort: item.workToolShort,
+    priceWon: item.priceWon,
+    updatedAtLabel: item.updatedAtLabel,
+    updatedAtMs: item.updatedAtMs ?? parseLabelToMs(item.updatedAtLabel),
+    pickupTimeHHmm: item.pickupTimeHHmm,
+    dropoffTimeHHmm: item.dropoffTimeHHmm,
+    drivingStageLabel: item.status === "DRIVING" ? "배달 중" : undefined,
+  }));
+}
+
 // --- Main Screen ---
 
 export function ShipperHomeScreen() {
@@ -215,10 +239,14 @@ export function ShipperHomeScreen() {
 
   const [displayName, setDisplayName] = useState("화주");
   const [liveOrders, setLiveOrders] = useState<LiveOrderItem[]>([]);
+  const FORCE_MOCK_HOME_DATA =
+    ["1", "true", "yes", "on"].includes(String(process.env.EXPO_PUBLIC_USE_SHIPPER_MOCK ?? "").trim().toLowerCase()) ||
+    ["1", "true", "yes", "on"].includes(String(process.env.EXPO_PUBLIC_USE_MOCK ?? "").trim().toLowerCase());
 
   // Data Fetching Logic (Same as original)
   useFocusEffect(
     React.useCallback(() => {
+      if (FORCE_MOCK_HOME_DATA) return () => {};
       void (async () => {
         try {
           const me = await UserService.getMyInfo();
@@ -233,6 +261,11 @@ export function ShipperHomeScreen() {
       let active = true;
       void (async () => {
         try {
+          await hydrateLocalShipperOrders();
+          if (FORCE_MOCK_HOME_DATA) {
+            if (active) setLiveOrders(sortLiveOrdersByLatest([...mapLocalToLiveItem(), ...mapSharedMockToLiveItem()]));
+            return;
+          }
           const [available, recommended] = await Promise.all([
             OrderApi.getMyShipperOrders().catch(() => [] as OrderResponse[]),
             Promise.resolve([] as OrderResponse[]),
@@ -280,13 +313,20 @@ export function ShipperHomeScreen() {
   );
 
   const recentOrders = useMemo(() => {
-    return [...liveOrders]
+    // 홈 최근 목록은 "등록 순서" 기준: 내가 방금 등록한 주문을 가장 먼저 보여준다.
+    const localRecent = mapLocalToLiveItem().slice(0, 3);
+    if (localRecent.length >= 3) return localRecent;
+
+    const localIds = new Set(localRecent.map((x) => x.id));
+    const fallback = [...liveOrders]
+      .filter((x) => !localIds.has(x.id))
       .sort((a, b) => {
         const ta = a.updatedAtMs ?? parseLabelToMs(a.updatedAtLabel);
         const tb = b.updatedAtMs ?? parseLabelToMs(b.updatedAtLabel);
         return tb - ta;
-      })
-      .slice(0, 3);
+      });
+
+    return [...localRecent, ...fallback].slice(0, 3);
   }, [liveOrders]);
 
   return (
@@ -360,16 +400,16 @@ export function ShipperHomeScreen() {
           />
         </View>
 
-        <View style={s.sectionHeader}>
-           <Text style={[s.sectionTitle, { color: c.text.primary }]}>운송 현황</Text>
+         <View style={s.sectionHeader}>
+           <Text style={[s.sectionTitle, { color: c.text.primary }]}>최신 운송현황</Text>
            <Pressable onPress={() => goDispatchTab("WAITING")}>
              <Text style={{ color: c.text.secondary, fontSize: 13 }}>더보기</Text>
            </Pressable>
-        </View>
+         </View>
 
         {recentOrders.length > 0 ? (
           <View style={{ gap: 12 }}>
-            {recentOrders.map((item, index) => (
+            {recentOrders.map((item) => (
               <RecommendedOrderCard
                 key={item.id}
                 statusKey={item.status}
@@ -377,8 +417,10 @@ export function ShipperHomeScreen() {
                 to={item.to}
                 distanceKm={item.distanceKm}
                 statusLabel={
-                  item.drivingStageLabel ||
-                  (item.status === "DRIVING" ? "배달 중" : item.status === "DISPATCHED" ? "상차 완료" : "대기")
+                  item.status === "DRIVING" && isWithinNextHour(item.dropoffTimeHHmm)
+                    ? "곧 도착"
+                    : (item.drivingStageLabel ||
+                      (item.status === "DRIVING" ? "배달 중" : item.status === "DISPATCHED" ? "상차 완료" : "대기"))
                 }
                 etaHHmm={item.dropoffTimeHHmm}
                 isEtaUrgent={isWithinNextHour(item.dropoffTimeHHmm)}
