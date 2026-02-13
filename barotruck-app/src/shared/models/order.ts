@@ -110,6 +110,8 @@ export interface OrderResponse {
   insuranceFee?: number;
   payMethod: string;
 
+  memo?: string;
+  tag?: string[];
   instant: boolean; // 즉시 배차 요청 여부 (true면 빠른 배차 우선 처리)
 
   // 시스템 지표
