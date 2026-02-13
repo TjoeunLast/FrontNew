@@ -67,7 +67,7 @@ export const Badge = memo(function Badge({
       case "urgent":
         return { bg: "#DC2626", fg: "#FFFFFF", border: "#DC2626" };
       case "direct":
-        return { bg: "#4E46E5", fg: "#F3F4F6", border: "#647fa4" };
+        return { bg: "#6D28D9", fg: "#FFFFFF", border: "#5B21B6" };
       case "roundTrip":
         return { bg: "#EEF2FF", fg: "#4338CA", border: "transparent" };
       case "oneWay":

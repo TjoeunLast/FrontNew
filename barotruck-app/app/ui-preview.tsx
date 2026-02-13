@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+﻿import React, { useMemo, useState } from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { Bell, Info, Package } from "lucide-react-native";
 import { Button, IconButton, Divider } from "@/shared/ui/base";
@@ -9,7 +9,7 @@ import {
   useToast,
 } from "@/shared/ui/feedback";
 import { Chip, SegmentedTabs, TextField } from "@/shared/ui/form";
-import { OrderCard } from "@/shared/ui/business";
+import { SHOrderCard } from "@/shared/ui/business";
 import { AppLayout, AppTopBar, BottomCTA } from "@/shared/ui/layout";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 
@@ -217,3 +217,4 @@ const s = StyleSheet.create({
   },
   ctaHelperText: { fontSize: 12, color: "#64748B" },
 });
+

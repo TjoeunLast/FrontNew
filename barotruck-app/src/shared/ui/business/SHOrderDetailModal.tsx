@@ -18,7 +18,7 @@ import { OrderService } from "@/shared/api/orderService"; // [추가] 서비스 
 import { Alert } from "react-native"; // [추가] 에러 알림용
 
 
-type OrderDetailModalProps = {
+type SHOrderDetailModalProps = {
   
   open: boolean;
   onClose: () => void;
@@ -46,14 +46,14 @@ const DetailRow = ({ label, value, color, isPrice }: any) => {
     </View>
   );
 };
-export const OrderDetailModal = ({
+export const SHOrderDetailModal = ({
   open,
   onClose,
   isDispatched,
   onDispatch,
   data,
   loading
-}: OrderDetailModalProps) => {
+}: SHOrderDetailModalProps) => {
   const { colors: c } = useAppTheme();
   // basePrice가 있으면 highlightColor 적용
   const highlightColor = data.isInstant ? "#DC2626" : c.brand.primary;
@@ -167,6 +167,7 @@ export const OrderDetailModal = ({
     </Modal>
   );
 };
+
 
 // --- 추가 컴포넌트 ---
 const InfoBox = ({ label, value }: any) => {
