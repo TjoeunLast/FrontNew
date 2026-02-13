@@ -31,7 +31,7 @@ export default function Index() {
               variant="primary"
               size="lg"
               fullWidth
-              onPress={() => router.push("/(driver)/(tabs)/my")}
+              onPress={() => router.push("/(driver)/(tabs)")}
             />
             <Button
               title="화주(고객) 홈 이동"
