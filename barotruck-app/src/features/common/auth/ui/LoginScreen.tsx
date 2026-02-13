@@ -57,17 +57,22 @@ export default function LoginScreen() {
 
   setSubmitting(true);
   try {
-
+    console.log("로그인 시도:", { email, pw });
     // 1. 실제 로그인 수행 (토큰 저장까지 자동 처리됨)
     await AuthService.login(email, pw);
 
+    console.log("로그인 성공, 사용자 정보 조회 중...");
     // 2. 로그인한 유저의 정보(Role 등) 가져오기
     const me = await UserService.getMyInfo();
+
+    console.log("사용자 정보 조회 성공:", me);
     await saveCurrentUserSnapshot({
       email: me.email,
       nickname: me.nickname,
       role: me.role,
     });
+
+    console.log("사용자 정보 저장 완료, 역할에 따른 화면 전환 시도...");
     
     // 3. 역할(Role)에 따른 화면 전환
     if (me.role === "DRIVER") {
@@ -77,10 +82,11 @@ export default function LoginScreen() {
     } else {
       throw new Error("정의되지 않은 사용자 권한입니다.");
     }
+    console.log("화면 전환 완료.");
 
   } catch (e: any) {
     // 서버 에러 메시지 처리
-    const errorMsg = e.response?.data?.message || "로그인 정보를 확인해주세요.";
+    const errorMsg = e.response?.data?.error || e.response?.data?.message || "로그인 정보를 확인해주세요.";  
     showError(errorMsg);
   } finally {
     setSubmitting(false);

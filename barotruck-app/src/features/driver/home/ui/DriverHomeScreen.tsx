@@ -39,13 +39,15 @@ export default function DriverHomeScreen() {
       <View style={styles.header}>
         <Text style={styles.logoText}>BARO</Text>
         <View style={styles.headerIcons}>
-          <Pressable onPress={() => console.log("채팅 이동")}>
+          {/* 3. 채팅 아이콘 클릭 시 이동 로직 추가 */}
+          <Pressable onPress={() => router.push("/(chat)")}>
             <Ionicons
               name="chatbubble-outline"
               size={24}
               color={c.text.primary}
             />
           </Pressable>
+          
           <Pressable onPress={() => console.log("알림 이동")}>
             <Ionicons
               name="notifications-outline"
