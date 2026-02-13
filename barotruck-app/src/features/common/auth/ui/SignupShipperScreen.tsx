@@ -235,6 +235,7 @@ export default function SignupShipperScreen() {
 
       showMsg("조회 성공", "사업자 정보 조회가 완료되었습니다.");
     } catch (e) {
+      console.log("❌ 사업자 조회 오류:", e);
       showMsg("오류", "사업자 조회 중 문제가 발생했습니다.");
     } finally {
       setCheckingBiz(false);
