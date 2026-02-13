@@ -14,7 +14,7 @@ console.log("현재 API 요청 주소:", `http://${debuggerHost}:8080`);
 const apiClient = axios.create({
   
   // 로컬 IP 주소 사용 권장 (예: http://192.168.x.x:8080)
-  baseURL: 'http://192.168.10.73:8080',
+  baseURL: `http://${debuggerHost}:8080`,
   
 });
 console.log("현재 설정된 서버 주소:", apiClient.defaults.baseURL);
