@@ -14,7 +14,7 @@ console.log("현재 API 요청 주소:", `http://${debuggerHost}:8080`);
 const apiClient = axios.create({
   
   // 로컬 IP 주소 사용 권장 (예: http://192.168.x.x:8080)
-  baseURL: 'http://192.168.10.73:8080',
+  baseURL: `http://${debuggerHost}:8080`,
   
 });
 console.log("현재 설정된 서버 주소:", apiClient.defaults.baseURL);
@@ -23,7 +23,7 @@ apiClient.interceptors.request.use(
   async (config) => {
     // 저장소에서 JWT 토큰 가져오기
     const token = await SecureStore.getItemAsync('userToken');
-    
+    console.log("🚀 요청 헤더 토큰 확인:", token ? "있음" : "없음"); // 이 로그가 찍히는지 확인
     if (token) {
       // 헤더에 Authorization 추가
       config.headers.Authorization = `Bearer ${token}`;
