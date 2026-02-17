@@ -80,7 +80,7 @@ export interface OrderRequest {
 export interface OrderResponse {
   orderId: number;
   status: OrderStatus;
-  createdAt: string; //
+  createdAt?: string; //
   updated?: string;
   // OrderSnapshot 대응 데이터
 
@@ -117,10 +117,10 @@ export interface OrderResponse {
   // 시스템 지표
   distance: number;
   duration: number;
-  remark?: string; // 요청사항
 
   user?: UserSummary;
   cancellation?: CancellationSummary;
+  applicantCount?: number;
 }
 
 export interface UserSummary {

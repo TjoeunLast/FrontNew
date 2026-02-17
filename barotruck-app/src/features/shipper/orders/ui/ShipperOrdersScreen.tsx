@@ -435,30 +435,56 @@ export default function ShipperOrdersScreen() {
 
   useFocusEffect(
     React.useCallback(() => {
+      // MOCK 데이터 모드일 때는 기존 로직 유지 (테스트용)
       if (FORCE_MOCK_DISPATCH_DATA) {
-        setCards([...mapLocalToDispatchCards(), ...SHARED_MOCK_DISPATCH_CARDS]);
+        setCards(SHARED_MOCK_DISPATCH_CARDS); // 로컬 제외하고 Mock만
         return () => {};
       }
 
       let active = true;
       void (async () => {
         try {
-          await hydrateLocalShipperOrders();
+          console.log("🔍 [1. API 요청 시작] /api/v1/orders/my-shipper");
+          // 서버에서 실데이터만 가져옴 (로컬 로직 삭제)
           const rows = await OrderApi.getMyShipperOrders();
+          
           if (!active) return;
-          const mapped = rows.map(toUiCard).filter((row): row is DispatchCardItem => row !== null);
-          setCards([...mapLocalToDispatchCards(), ...mapped]);
-        } catch {
-          if (!active) return;
-          setCards([...mapLocalToDispatchCards()]);
-        }
-      })();
+          // 서버에서 들어온 생데이터(Raw Data) 구조 파악용 로그
+          console.log("📦 [2. 서버 응답 성공] 데이터 개수:", rows.length);
+          if (rows.length > 0) {
+            console.log("📄 [3. 첫 번째 데이터 샘플]:", JSON.stringify(rows[0], null, 2));
+            
+            // 특정 필드들 집중 점검
+            console.log("📅 createdAt 타입:", typeof rows[0].createdAt, "| 값:", rows[0].createdAt);
+            console.log("🏷️ tag 타입:", Array.isArray(rows[0].tag) ? "Array" : typeof rows[0].tag, "| 값:", rows[0].tag);
+          }
 
-      return () => {
-        active = false;
-      };
-    }, [])
-  );
+
+          // 서버 데이터 매핑 및 유효성 검사
+          const serverMapped = rows
+            .map(toUiCard)
+            .filter((row): row is DispatchCardItem => row !== null);
+
+          // 오직 서버 데이터만 상태에 저장
+          setCards(serverMapped);
+        } catch (error: any) {
+        // 400 에러의 진짜 이유(서버가 보낸 메세지) 출력
+        console.error("🔥 [API 에러 발생]");
+        console.error("상태 코드:", error.response?.status);
+        console.error("에러 데이터(서버 메세지):", JSON.stringify(error.response?.data, null, 2));
+        
+        if (error.response?.status === 400) {
+          Alert.alert("데이터 오류", "서버 응답 형식이 올바르지 않습니다. 로그를 확인하세요.");
+        }
+        
+        if (!active) return;
+        setCards([]);
+      }
+    })();
+
+    return () => { active = false; };
+  }, [])
+);
 
   const filtered = cards.filter((item) => item.tab === tab);
   const hasWaitingApplicants = cards.some(

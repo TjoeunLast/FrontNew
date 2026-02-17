@@ -62,7 +62,6 @@ function normalizeOrderRow(node: any): OrderResponse | null {
     instant: Boolean((node as any).instant),
     distance: Number((node as any).distance ?? 0),
     duration: Number((node as any).duration ?? 0),
-    remark: (node as any).remark ? String((node as any).remark) : undefined,
     user: (node as any).user,
     cancellation: (node as any).cancellation,
   };
@@ -132,55 +131,18 @@ export const OrderApi = {
     return res.data;
   },
 
-  /** 화주: 내 주문 목록 조회 (백엔드 구현 경로 차이를 흡수하기 위해 후보 경로 순차 시도) */
+  /** * 화주 전용: 내가 등록한 모든 오더 목록 조회 (최신순)
+   * 백엔드 GET /api/v1/orders/my-shipper 호출
+   */
   getMyShipperOrders: async (): Promise<OrderResponse[]> => {
-    const baseCandidates: EndpointCandidate[] = [
-      "/api/v1/orders/my",
-      "/api/v1/orders/me",
-      "/api/v1/orders/my-orders",
-      "/api/v1/orders/shipper/my",
-      "/api/v1/shippers/me/orders",
-      "/api/v1/shippers/my/orders",
-      "/api/v1/shippers/orders/me",
-      "/api/v1/shippers/orders",
-      "/api/v1/orders/shipper",
-      "/api/orders/my",
-      "/api/orders/me",
-      "/api/v1/orders",
-      "/api/orders",
-    ].map((url) => ({ url }));
-    const paramCandidates: EndpointCandidate[] = [
-      { url: "/api/v1/orders", params: { mine: true } },
-      { url: "/api/v1/orders", params: { my: true } },
-      { url: "/api/v1/shippers/orders", params: { mine: true } },
-      { url: "/api/v1/shippers/orders", params: { my: true } },
-      { url: "/api/orders", params: { mine: true } },
-    ];
-
-    const cachedUrl = await AsyncStorage.getItem(SHIPPER_ORDERS_ENDPOINT_CACHE_KEY).catch(() => null);
-    const cached = cachedUrl ? [{ url: cachedUrl } as EndpointCandidate] : [];
-    const candidates = [...cached, ...baseCandidates, ...paramCandidates].filter(
-      (c, idx, arr) =>
-        idx ===
-        arr.findIndex((x) => x.url === c.url && JSON.stringify(x.params ?? {}) === JSON.stringify(c.params ?? {}))
-    );
-
-    for (const candidate of candidates) {
-      try {
-        const res = await apiClient.get(candidate.url, {
-          params: candidate.params,
-        });
-        const parsed = toOrderList(res.data);
-        if (parsed.length > 0) {
-          await AsyncStorage.setItem(SHIPPER_ORDERS_ENDPOINT_CACHE_KEY, candidate.url).catch(() => {});
-          return parsed;
-        }
-      } catch {
-        // Try next endpoint.
-      }
+    try {
+      const res = await apiClient.get(`${API_BASE}/my-shipper`);
+      // 데이터가 페이징(Page<T>) 형태로 올 경우를 대비해 toOrderList로 필터링
+      return toOrderList(res.data);
+    } catch (error) {
+      console.error("화주 오더 목록 조회 실패:", error);
+      return [];
     }
-
-    return [];
   },
 
   /** 4. 차주: 오더 수락 (배차 신청) */

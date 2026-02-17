@@ -180,54 +180,7 @@ function mapOrderToLiveItem(o: OrderResponse): LiveOrderItem {
   };
 }
 
-function mapLocalToLiveItem(): LiveOrderItem[] {
-  return getLocalShipperOrders().map((item) => {
-    const status: LiveOrderItem["status"] = item.status === "CONFIRMED" ? "DISPATCHED" : item.status;
-    return {
-      id: item.id,
-      status,
-      applicantsCount: 0,
-      isInstantDispatch: item.dispatchMode === "instant",
-      pickupTypeLabel: item.pickupTypeLabel,
-      dropoffTypeLabel: item.dropoffTypeLabel,
-      from: item.from,
-      to: item.to,
-      distanceKm: item.distanceKm,
-      cargoSummary: item.cargoSummary,
-      loadMethodShort: toLoadMethodShort(item.loadMethod),
-      workToolShort: toWorkToolShort(item.workTool),
-      priceWon: item.priceWon,
-      updatedAtLabel: item.updatedAtLabel,
-      updatedAtMs: parseLabelToMs(item.updatedAtLabel),
-      pickupTimeHHmm: item.pickupTimeHHmm,
-      dropoffTimeHHmm: item.dropoffTimeHHmm,
-      drivingStageLabel: status === "DRIVING" ? "배달 중" : undefined,
-    };
-  });
-}
 
-function mapSharedMockToLiveItem(): LiveOrderItem[] {
-  return MOCK_SHIPPER_ORDERS.map((item) => ({
-    id: item.id,
-    status: item.status,
-    applicantsCount: item.status === "MATCHING" ? 2 : 0,
-    isInstantDispatch: item.isInstantDispatch,
-    pickupTypeLabel: item.pickupTypeLabel,
-    dropoffTypeLabel: item.dropoffTypeLabel,
-    from: item.from,
-    to: item.to,
-    distanceKm: item.distanceKm,
-    cargoSummary: item.cargoSummary,
-    loadMethodShort: item.loadMethodShort,
-    workToolShort: item.workToolShort,
-    priceWon: item.priceWon,
-    updatedAtLabel: item.updatedAtLabel,
-    updatedAtMs: item.updatedAtMs ?? parseLabelToMs(item.updatedAtLabel),
-    pickupTimeHHmm: item.pickupTimeHHmm,
-    dropoffTimeHHmm: item.dropoffTimeHHmm,
-    drivingStageLabel: item.status === "DRIVING" ? "배달 중" : undefined,
-  }));
-}
 
 // --- Main Screen ---
 
@@ -239,50 +192,43 @@ export function ShipperHomeScreen() {
 
   const [displayName, setDisplayName] = useState("화주");
   const [liveOrders, setLiveOrders] = useState<LiveOrderItem[]>([]);
-  const FORCE_MOCK_HOME_DATA =
-    ["1", "true", "yes", "on"].includes(String(process.env.EXPO_PUBLIC_USE_SHIPPER_MOCK ?? "").trim().toLowerCase()) ||
-    ["1", "true", "yes", "on"].includes(String(process.env.EXPO_PUBLIC_USE_MOCK ?? "").trim().toLowerCase());
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Data Fetching Logic (Same as original)
+  // 1. 사용자 닉네임 조회
   useFocusEffect(
     React.useCallback(() => {
-      if (FORCE_MOCK_HOME_DATA) return () => {};
       void (async () => {
         try {
           const me = await UserService.getMyInfo();
           setDisplayName(me.nickname || "화주");
-        } catch {}
+        } catch (error) {
+          console.error("사용자 정보 로드 실패:", error);
+        }
       })();
     }, [])
   );
 
+  // 2. 서버에서 실시간 화주 오더 목록 로드 (로컬/Mock 제거 버전)
   useFocusEffect(
     React.useCallback(() => {
       let active = true;
+      setIsLoading(true);
+
       void (async () => {
         try {
-          await hydrateLocalShipperOrders();
-          if (FORCE_MOCK_HOME_DATA) {
-            if (active) setLiveOrders(sortLiveOrdersByLatest([...mapLocalToLiveItem(), ...mapSharedMockToLiveItem()]));
-            return;
+          // 백엔드 API 호출: GET /api/v1/orders/my-shipper
+          const data = await OrderApi.getMyShipperOrders();
+
+          if (active) {
+            // 서버 데이터를 UI용 모델로 변환하여 상태 저장
+            const mapped = data.map((row) => mapOrderToLiveItem(row));
+            setLiveOrders(mapped);
           }
-          const [available, recommended] = await Promise.all([
-            OrderApi.getMyShipperOrders().catch(() => [] as OrderResponse[]),
-            Promise.resolve([] as OrderResponse[]),
-          ]);
-
-          const mergedById = new Map<string, OrderResponse>();
-          [...available, ...recommended].forEach((row) => {
-            mergedById.set(String(row.orderId), row);
-          });
-
-          const mapped = sortLiveOrdersByLatest(
-            Array.from(mergedById.values()).map((row) => mapOrderToLiveItem(row))
-          );
-
-          if (active) setLiveOrders(sortLiveOrdersByLatest([...mapLocalToLiveItem(), ...mapped]));
-        } catch {
-          if (active) setLiveOrders(sortLiveOrdersByLatest(mapLocalToLiveItem()));
+        } catch (error) {
+          console.error("화주 오더 목록 로드 실패:", error);
+          if (active) setLiveOrders([]); 
+        } finally {
+          if (active) setIsLoading(false);
         }
       })();
 
@@ -292,11 +238,14 @@ export function ShipperHomeScreen() {
     }, [])
   );
 
+  // 페이지 이동 함수들
   const goCreateOrder = () => router.push("/(shipper)/create-order/step1-route" as any);
   const goNotificationsTab = () => router.push("/(shipper)/(tabs)/notifications" as any);
   const goDispatchTab = (targetTab: "WAITING" | "PROGRESS" | "DONE") => {
     router.push({ pathname: "/(shipper)/(tabs)/orders", params: { tab: targetTab } } as any);
   };
+
+  // 상단 운송 현황 요약 데이터 계산
   const summary: SummaryItem[] = useMemo(() => {
     const matching = liveOrders.filter((x) => x.status === "MATCHING").length;
     const driving = liveOrders.filter((x) => x.status === "DISPATCHED" || x.status === "DRIVING").length;
@@ -307,26 +256,16 @@ export function ShipperHomeScreen() {
       { key: "done", label: "완료", value: done },
     ];
   }, [liveOrders]);
+
+  // 배차 대기 중인 오더에 기사 신청이 있는지 확인 (빨간 점 표시용)
   const hasApplicantRequest = useMemo(
     () => liveOrders.some((x) => x.status === "MATCHING" && (x.applicantsCount ?? 0) > 0),
     [liveOrders]
   );
 
+  // 최근 등록 오더 (최대 3개)
   const recentOrders = useMemo(() => {
-    // 홈 최근 목록은 "등록 순서" 기준: 내가 방금 등록한 주문을 가장 먼저 보여준다.
-    const localRecent = mapLocalToLiveItem().slice(0, 3);
-    if (localRecent.length >= 3) return localRecent;
-
-    const localIds = new Set(localRecent.map((x) => x.id));
-    const fallback = [...liveOrders]
-      .filter((x) => !localIds.has(x.id))
-      .sort((a, b) => {
-        const ta = a.updatedAtMs ?? parseLabelToMs(a.updatedAtLabel);
-        const tb = b.updatedAtMs ?? parseLabelToMs(b.updatedAtLabel);
-        return tb - ta;
-      });
-
-    return [...localRecent, ...fallback].slice(0, 3);
+    return liveOrders.slice(0, 3);
   }, [liveOrders]);
 
   return (
