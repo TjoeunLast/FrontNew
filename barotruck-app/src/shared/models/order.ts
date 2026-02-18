@@ -5,6 +5,7 @@ import { ImageInfo } from "./ImageInfo";
 /** 오더 상태 (Order.java의 status 필드 대응) */
 export type OrderStatus =
   | "REQUESTED" // 배차 대기
+  | "APPLIED" // 승인 대기
   | "ACCEPTED" // 배차 확정
   | "LOADING" // 상차 중
   | "IN_TRANSIT" // 운송 중

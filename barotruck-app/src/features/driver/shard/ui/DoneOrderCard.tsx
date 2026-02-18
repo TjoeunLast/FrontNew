@@ -12,11 +12,12 @@ interface DoneOrderCardProps {
 export const DoneOrderCard = ({ order, onDetail }: DoneOrderCardProps) => {
   const { colors: c } = useAppTheme();
 
-  // 정산 상태 분리 (나중에 서버 데이터 status나 별도 필드로 구분)
-  const isSettled = order.settlementStatus === "SETTLED";
+  // [1] 정산 상태 체크 (DB 데이터에 따라 'COMPLETED' 혹은 'Y' 등으로 매칭)
+  const isSettled = order.settlementStatus === "COMPLETED";
 
+  // [2] 주소 포맷팅 함수 (에러 방지를 위해 Optional Chaining 사용)
   const getShortAddr = (addr: string) => {
-    if (!addr) return "";
+    if (!addr) return "주소 정보 없음";
     const parts = addr.split(" ");
     return `${parts[0]} ${parts[1] || ""}`;
   };
@@ -35,9 +36,10 @@ export const DoneOrderCard = ({ order, onDetail }: DoneOrderCardProps) => {
             <Text style={s.receiptText}>인수증 확인됨</Text>
           </View>
         </View>
+
         <Pressable
           style={s.detailLink}
-          onPress={() => onDetail(order.orderId.toString())}
+          onPress={() => onDetail(order.orderId?.toString())}
         >
           <Text style={s.detailText}>상세보기</Text>
           <Ionicons name="chevron-forward" size={14} color="#94A3B8" />
@@ -48,19 +50,23 @@ export const DoneOrderCard = ({ order, onDetail }: DoneOrderCardProps) => {
       <View style={s.routeRow}>
         <View style={s.locGroup}>
           <Text style={s.locName}>{getShortAddr(order.startAddr)}</Text>
-          <Text style={s.dateText}>08:00 상차</Text>
+          {/* DB 데이터의 startSchedule 활용 */}
+          <Text style={s.dateText}>{order.startSchedule || "00:00"} 상차</Text>
         </View>
+
         <Ionicons
           name="arrow-forward"
           size={16}
           color="#CBD5E1"
           style={s.arrow}
         />
+
         <View style={[s.locGroup, { alignItems: "flex-end" }]}>
           <Text style={[s.locName, { textAlign: "right" }]}>
             {getShortAddr(order.endAddr)}
           </Text>
-          <Text style={s.dateText}>14:30 하차</Text>
+          {/* 하차 완료 시간 표시 (데이터가 없을 경우 하드코딩 대체) */}
+          <Text style={s.dateText}>하차 완료</Text>
         </View>
       </View>
 
@@ -68,15 +74,16 @@ export const DoneOrderCard = ({ order, onDetail }: DoneOrderCardProps) => {
       <View style={s.priceRow}>
         <View>
           <Text style={s.payMethodText}>
-            {order.payMethod || "인수증 30일"}
+            {order.payMethod || "결제 수단 미지정"}
           </Text>
           <Text style={s.carInfoText}>
             {order.reqTonnage} {order.reqCarType}
           </Text>
         </View>
+
         <View style={s.amountGroup}>
           <Text style={[s.priceText, isSettled && { color: "#10B981" }]}>
-            {order.basePrice?.toLocaleString()}원
+            {order.basePrice?.toLocaleString() ?? "0"}원
           </Text>
           <Text style={s.vatText}>(VAT 포함)</Text>
         </View>
@@ -94,6 +101,10 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#F1F5F9",
     elevation: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
   },
   topRow: {
     flexDirection: "row",
@@ -112,7 +123,11 @@ const s = StyleSheet.create({
     borderRadius: 8,
   },
   receiptText: { fontSize: 11, color: "#64748B", fontWeight: "600" },
-  detailLink: { flexDirection: "row", alignItems: "center" },
+  detailLink: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 4,
+  },
   detailText: { fontSize: 13, color: "#94A3B8", marginRight: 2 },
   routeRow: {
     flexDirection: "row",
