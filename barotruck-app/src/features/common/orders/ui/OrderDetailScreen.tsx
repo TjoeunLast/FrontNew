@@ -1,903 +1,717 @@
-import { Ionicons } from "@expo/vector-icons";
-import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
-import * as Clipboard from "expo-clipboard";
-import { Alert, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+// import { Ionicons } from "@expo/vector-icons";
+// import { useLocalSearchParams, useRouter } from "expo-router";
+// import React, { useEffect, useMemo, useState } from "react";
+// import { Alert, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+// import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { PRESET_REQUEST_TAGS } from "@/features/shipper/create-order/ui/createOrderStep1.constants";
-import { OrderApi } from "@/shared/api/orderService";
-import { ProofService } from "@/shared/api/proofService";
-import { useAppTheme } from "@/shared/hooks/useAppTheme";
-import type { OrderResponse } from "@/shared/models/order";
-import type { ProofResponse } from "@/shared/models/proof";
-import { Badge } from "@/shared/ui/feedback/Badge";
-import { Chip as FormChip } from "@/shared/ui/form/Chip";
+// import { PRESET_REQUEST_TAGS } from "@/features/shipper/create-order/ui/createOrderStep1.constants";
+// import { getLocalShipperOrders } from "@/features/shipper/home/model/localShipperOrders";
+// import { OrderApi } from "@/shared/api/orderService";
+// import { ProofService } from "@/shared/api/proofService";
+// import { useAppTheme } from "@/shared/hooks/useAppTheme";
+// import type { OrderResponse } from "@/shared/models/order";
+// import type { ProofResponse } from "@/shared/models/proof";
+// import { Card } from "@/shared/ui/base/Card";
+// import { Badge } from "@/shared/ui/feedback/Badge";
+// import { Chip as FormChip } from "@/shared/ui/form/Chip";
 
-function formatWon(v: number) {
-  const s = Math.round(v).toString();
-  return `${s.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}원`;
-}
+// function formatWon(v: number) {
+//   const s = Math.round(v).toString();
+//   return `${s.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}원`;
+// }
 
+// function toUiStatus(status: string) {
+//   if (status === "COMPLETED") return { label: "운행완료", tone: "complete" as const };
+//   if (status === "REQUESTED" || status === "PENDING") return { label: "배차대기", tone: "warning" as const };
+//   if (status === "ACCEPTED") return { label: "배차확정", tone: "success" as const };
+//   return { label: "운행중", tone: "info" as const };
+// }
 
-function resolveDriverNickname(order: OrderResponse) {
-  const fromUser = order.user?.nickname?.trim();
-  const fromAny = String((order as any).driverNickname ?? (order as any).driverName ?? "").trim();
-  if (fromUser || fromAny) return fromUser || fromAny;
-  if (["ACCEPTED", "LOADING", "IN_TRANSIT", "UNLOADING", "COMPLETED"].includes(order.status)) {
-    return "배정 기사";
-  }
-  return "기사 미배정";
-}
+// function toDetailedAddress(addr?: string) {
+//   if (!addr) return "-";
+//   const key = addr.trim();
+//   const map: Record<string, string> = {
+//     "서울 강남": "서울특별시 강남구 테헤란로 152, 강남파이낸스센터 12층 1203호 (역삼동)",
+//     "부산 해운대": "부산광역시 해운대구 센텀동로 45, B동 3층 305호 (우동)",
+//     "서울 구로": "서울특별시 구로구 디지털로 300, 코오롱디지털타워 7층 712호 (구로동)",
+//     "경기 화성": "경기도 화성시 동탄대로 181, 물류동 2층 201호 (오산동)",
+//     "인천 남동": "인천광역시 남동구 남동대로 123, 남동물류센터 A동 1층 101호 (고잔동)",
+//     "대전 유성": "대전광역시 유성구 테크노중앙로 55, 테크노타워 5층 503호 (관평동)",
+//     "서울 영등포": "서울특별시 영등포구 여의대로 24, 전경련회관 8층 802호 (여의도동)",
+//     "경기 수원": "경기도 수원시 영통구 광교중앙로 140, 광교빌딩 4층 402호 (하동)",
+//     "경기 평택": "경기도 평택시 포승읍 평택항로 184, 항만물류동 2층 215호",
+//     "충북 청주": "충청북도 청주시 흥덕구 가로수로 1164, C동 1층 105호",
+//     "대구 달서구": "대구광역시 달서구 성서공단북로 85, 공단지원센터 3층 307호 (갈산동)",
+//     "경북 구미시": "경상북도 구미시 1공단로 199, 물류창고 D동 1층 109호 (공단동)",
+//     "광주 광산구": "광주광역시 광산구 하남산단8번로 35, A동 2층 208호",
+//     "전북 전주시": "전북특별자치도 전주시 덕진구 기린대로 451, 전주유통센터 6층 601호",
+//     "울산 남구": "울산광역시 남구 삼산로 217, 울산물류타워 3층 311호 (달동)",
+//     "경남 창원시": "경상남도 창원시 의창구 창원대로 363, 창원복합물류 B동 2층 204호",
+//     "충남 아산시": "충청남도 아산시 음봉면 산동로 87, 아산허브센터 1층 103호",
+//     "대전 유성구": "대전광역시 유성구 대학로 291, 대학물류관 4층 406호 (구성동)",
+//     "서울 금천구": "서울특별시 금천구 가산디지털1로 186, 제이플라츠 9층 918호 (가산동)",
+//     "인천 연수구": "인천광역시 연수구 송도과학로 85, 송도물류센터 5층 509호 (송도동)",
+//     "경기 고양시": "경기도 고양시 일산동구 중앙로 1286, 일산오피스 A동 10층 1002호 (장항동)",
+//     "강원 원주시": "강원특별자치도 원주시 지정면 기업도시로 200, 원주허브센터 2층 207호",
+//     "부산 사상구": "부산광역시 사상구 낙동대로 910, 사상물류빌딩 3층 302호 (감전동)",
+//     "경남 김해시": "경상남도 김해시 김해대로 2596, 김해산업유통 1층 112호 (안동)",
+//     "경북 포항시": "경상북도 포항시 남구 철강로 190, 포항철강센터 4층 409호 (호동)",
+//     "대구 북구": "대구광역시 북구 유통단지로 16, 대구유통센터 C동 2층 223호 (산격동)",
+//     "경기 파주": "경기도 파주시 교하로 700, 파주물류단지 3층 318호 (동패동)",
+//     "인천항": "인천광역시 중구 서해대로 366, 인천항 국제물류센터 2층 205호 (항동7가)",
+//     "서울 구로구": "서울특별시 구로구 경인로 662, 디큐브시티 오피스동 11층 1104호 (신도림동)",
+//     "경기 화성시": "경기도 화성시 효행로 1206, 화성산업단지 지원동 2층 203호 (진안동)",
+//   };
+//   return map[key] || addr;
+// }
 
-function resolveDriverPhone(order: OrderResponse) {
-  const fromUser = order.user?.phone?.trim();
-  const fromAny = String((order as any).driverPhone ?? "").trim();
-  return fromUser || fromAny || "010-1234-5678";
-}
+// function toRelativeLabel(iso?: string) {
+//   if (!iso) return "방금 전";
+//   const t = new Date(iso).getTime();
+//   if (Number.isNaN(t)) return "방금 전";
+//   const diffMin = Math.max(0, Math.floor((Date.now() - t) / 60000));
+//   if (diffMin < 1) return "방금 전";
+//   if (diffMin < 60) return `${diffMin}분 전`;
+//   const h = Math.floor(diffMin / 60);
+//   if (h < 24) return `${h}시간 전`;
+//   return `${Math.floor(h / 24)}일 전`;
+// }
 
-type ApplicantDriver = {
-  id: string;
-  name: string;
-  phone: string;
-  detail: string;
-};
+// function toOrderStatus(localStatus: "MATCHING" | "CONFIRMED" | "DRIVING" | "DONE") {
+//   if (localStatus === "MATCHING") return "REQUESTED" as const;
+//   if (localStatus === "CONFIRMED") return "ACCEPTED" as const;
+//   if (localStatus === "DRIVING") return "IN_TRANSIT" as const;
+//   return "COMPLETED" as const;
+// }
 
-const APPLICANT_DRIVER_POOL: ApplicantDriver[] = [
-  { id: "d1", name: "박베테랑", phone: "010-2211-3344", detail: "11톤 윙바디 · 무사고 10년" },
-  { id: "d2", name: "김신속", phone: "010-5566-7788", detail: "5톤 카고 · 5km 거리" },
-  { id: "d3", name: "최성실", phone: "010-8899-1100", detail: "3.5톤 윙바디 · 평점 4.8" },
-];
+// function withTime(iso: string, hhmm: string) {
+//   const d = new Date(iso);
+//   const m = hhmm.match(/^([01]\d|2[0-3]):([0-5]\d)$/);
+//   if (m) d.setHours(Number(m[1]), Number(m[2]), 0, 0);
+//   return d.toISOString();
+// }
 
-function parseRequestInfo(cargoContent?: string) {
-  const raw = (cargoContent ?? "").trim();
-  if (!raw) return { tags: [] as string[], memoText: "" };
+// function mockTimesById(id: string) {
+//   const map: Record<string, { pickup: string; dropoff: string }> = {
+//     m1: { pickup: "09:00", dropoff: "15:00" },
+//     m2: { pickup: "10:00", dropoff: "13:30" },
+//     m3: { pickup: "14:00", dropoff: "17:00" },
+//     m4: { pickup: "09:00", dropoff: "11:00" },
+//     m5: { pickup: "08:30", dropoff: "13:30" },
+//     m6: { pickup: "10:00", dropoff: "12:00" },
+//     m7: { pickup: "09:30", dropoff: "14:00" },
+//     m8: { pickup: "16:30", dropoff: "18:00" },
+//     m9: { pickup: "08:00", dropoff: "10:00" },
+//     m10: { pickup: "13:00", dropoff: "15:00" },
+//     m11: { pickup: "11:00", dropoff: "15:00" },
+//     m12: { pickup: "09:00", dropoff: "10:30" },
+//     m13: { pickup: "07:30", dropoff: "12:00" },
+//     w1: { pickup: "09:00", dropoff: "15:00" },
+//     w2: { pickup: "11:30", dropoff: "16:00" },
+//     w3: { pickup: "10:00", dropoff: "13:30" },
+//     w4: { pickup: "09:30", dropoff: "14:00" },
+//     w5: { pickup: "13:00", dropoff: "15:00" },
+//     p1: { pickup: "14:00", dropoff: "17:00" },
+//     p2: { pickup: "16:30", dropoff: "18:00" },
+//     p3: { pickup: "11:00", dropoff: "15:00" },
+//     d1: { pickup: "09:00", dropoff: "11:00" },
+//     d2: { pickup: "08:30", dropoff: "13:30" },
+//     d3: { pickup: "10:00", dropoff: "12:00" },
+//     d4: { pickup: "08:00", dropoff: "10:00" },
+//     d5: { pickup: "09:00", dropoff: "10:30" },
+//     d6: { pickup: "07:30", dropoff: "12:00" },
+//   };
+//   return map[id] || { pickup: "09:00", dropoff: "15:00" };
+// }
 
-  const segments = raw
-    .split("|")
-    .map((x) => x.trim())
-    .filter(Boolean);
+// function localToOrderResponse(id: string): OrderResponse | null {
+//   const item = getLocalShipperOrders().find((x) => String(x.id) === String(id));
+//   if (!item) return null;
 
-  const tagsSet = new Set<string>();
-  const memoParts: string[] = [];
+//   const now = new Date().toISOString();
+//   const pickup = item.pickupTimeHHmm || "09:00";
+//   const dropoff = item.dropoffTimeHHmm || "15:00";
+//   return {
+//     orderId: -1,
+//     status: toOrderStatus(item.status),
+//     createdAt: now,
+//     updated: now,
+//     startAddr: toDetailedAddress(item.from),
+//     startPlace: toDetailedAddress(item.from),
+//     startType: "당상",
+//     startSchedule: withTime(now, pickup),
+//     endAddr: toDetailedAddress(item.to),
+//     endPlace: toDetailedAddress(item.to),
+//     endType: "당착",
+//     endSchedule: withTime(now, dropoff),
+//     cargoContent: item.cargoSummary,
+//     loadMethod: item.loadMethod,
+//     workType: item.workTool,
+//     tonnage: 0,
+//     reqCarType: item.cargoSummary,
+//     reqTonnage: "",
+//     driveMode: item.dispatchMode || "instant",
+//     basePrice: item.priceWon,
+//     payMethod: "receipt30",
+//     distance: item.distanceKm,
+//     duration: Math.max(30, Math.round(item.distanceKm * 2)),
+//   };
+// }
 
-  const absorbTagTokens = (text: string) => {
-    const tokens = text
-      .split(",")
-      .map((x) => x.trim())
-      .filter(Boolean);
-    tokens.forEach((tk) => {
-      if (PRESET_REQUEST_TAGS.includes(tk)) tagsSet.add(tk);
-    });
-  };
+// function mockToOrderResponse(id: string): OrderResponse | null {
+//   const now = new Date().toISOString();
+//   const mockTimes = mockTimesById(id);
+//   const mockMap: Record<
+//     string,
+//     {
+//       status: "REQUESTED" | "ACCEPTED" | "IN_TRANSIT" | "COMPLETED";
+//       from: string;
+//       to: string;
+//       distanceKm: number;
+//       cargo: string;
+//       priceWon: number;
+//       loadMethod: string;
+//       workType: string;
+//       driverNickname?: string;
+//       driverPhone?: string;
+//       requestTags?: string[];
+//     }
+//   > = {
+//     m1: { status: "REQUESTED", from: "서울 강남", to: "부산 해운대", distanceKm: 340, cargo: "11톤 윙바디", priceWon: 350000, loadMethod: "독차", workType: "지게차", requestTags: ["도착 전 연락", "비오면 안됨"] },
+//     m2: { status: "REQUESTED", from: "서울 구로", to: "경기 화성", distanceKm: 62, cargo: "3.5톤 카고", priceWon: 180000, loadMethod: "혼적", workType: "수작업", requestTags: ["수작업 없음", "파손주의"] },
+//     m3: { status: "ACCEPTED", from: "인천 남동", to: "대전 유성", distanceKm: 120, cargo: "5톤 카고", priceWon: 210000, loadMethod: "독차", workType: "크레인", driverNickname: "김기사", driverPhone: "010-3344-5566", requestTags: ["지게차 상하차", "도착 전 연락"] },
+//     m4: { status: "COMPLETED", from: "서울 영등포", to: "경기 수원", distanceKm: 45, cargo: "1톤 용달", priceWon: 80000, loadMethod: "혼적", workType: "호이스트" },
+//     m5: { status: "COMPLETED", from: "경기 평택", to: "충북 청주", distanceKm: 98, cargo: "5톤 윙바디", priceWon: 190000, loadMethod: "독차", workType: "지게차" },
+//     m6: { status: "COMPLETED", from: "대구 달서구", to: "경북 구미시", distanceKm: 34, cargo: "2.5톤 카고", priceWon: 90000, loadMethod: "혼적", workType: "수작업" },
+//     m7: { status: "REQUESTED", from: "광주 광산구", to: "전북 전주시", distanceKm: 92, cargo: "5톤 카고", priceWon: 175000, loadMethod: "독차", workType: "지게차" },
+//     m8: { status: "IN_TRANSIT", from: "울산 남구", to: "경남 창원시", distanceKm: 54, cargo: "3.5톤 윙바디", priceWon: 120000, loadMethod: "혼적", workType: "수작업" },
+//     m9: { status: "COMPLETED", from: "충남 아산시", to: "대전 유성구", distanceKm: 41, cargo: "1톤 용달", priceWon: 78000, loadMethod: "독차", workType: "호이스트" },
+//     m10: { status: "REQUESTED", from: "서울 금천구", to: "인천 연수구", distanceKm: 38, cargo: "2.5톤 카고", priceWon: 98000, loadMethod: "혼적", workType: "크레인" },
+//     m11: { status: "ACCEPTED", from: "경기 고양시", to: "강원 원주시", distanceKm: 114, cargo: "11톤 윙바디", priceWon: 265000, loadMethod: "독차", workType: "지게차", driverNickname: "박신속", driverPhone: "010-6655-1122", requestTags: ["지게차 상하차", "취급주의"] },
+//     m12: { status: "COMPLETED", from: "부산 사상구", to: "경남 김해시", distanceKm: 19, cargo: "1톤 탑차", priceWon: 52000, loadMethod: "혼적", workType: "수작업" },
+//     m13: { status: "COMPLETED", from: "경북 포항시", to: "대구 북구", distanceKm: 89, cargo: "5톤 냉장", priceWon: 168000, loadMethod: "독차", workType: "크레인" },
+//     w1: { status: "REQUESTED", from: "서울 강남", to: "부산 해운대", distanceKm: 340, cargo: "11톤 윙바디", priceWon: 350000, loadMethod: "독차", workType: "지게차" },
+//     w2: { status: "REQUESTED", from: "경기 파주", to: "인천항", distanceKm: 80, cargo: "5톤 카고", priceWon: 150000, loadMethod: "독차", workType: "크레인" },
+//     w3: { status: "REQUESTED", from: "서울 구로", to: "경기 화성", distanceKm: 62, cargo: "3.5톤 카고", priceWon: 180000, loadMethod: "혼적", workType: "수작업" },
+//     p1: { status: "ACCEPTED", from: "인천 남동", to: "대전 유성", distanceKm: 120, cargo: "5톤 카고", priceWon: 210000, loadMethod: "독차", workType: "지게차", driverNickname: "이성실", driverPhone: "010-7788-2211", requestTags: ["도착 전 연락", "비오면 안됨"] },
+//     d1: { status: "COMPLETED", from: "서울 영등포", to: "경기 수원", distanceKm: 45, cargo: "1톤 용달", priceWon: 80000, loadMethod: "혼적", workType: "호이스트" },
+//     d2: { status: "COMPLETED", from: "경기 평택", to: "충북 청주", distanceKm: 98, cargo: "5톤 윙바디", priceWon: 190000, loadMethod: "독차", workType: "지게차" },
+//     d3: { status: "COMPLETED", from: "대구 달서구", to: "경북 구미시", distanceKm: 34, cargo: "2.5톤 카고", priceWon: 90000, loadMethod: "혼적", workType: "수작업" },
+//     w4: { status: "REQUESTED", from: "광주 광산구", to: "전북 전주시", distanceKm: 92, cargo: "5톤 카고", priceWon: 175000, loadMethod: "독차", workType: "지게차" },
+//     w5: { status: "REQUESTED", from: "서울 금천구", to: "인천 연수구", distanceKm: 38, cargo: "2.5톤 카고", priceWon: 98000, loadMethod: "혼적", workType: "크레인" },
+//     p2: { status: "IN_TRANSIT", from: "울산 남구", to: "경남 창원시", distanceKm: 54, cargo: "3.5톤 윙바디", priceWon: 120000, loadMethod: "혼적", workType: "수작업", requestTags: ["파손주의"] },
+//     p3: { status: "IN_TRANSIT", from: "경기 고양시", to: "강원 원주시", distanceKm: 114, cargo: "11톤 윙바디", priceWon: 265000, loadMethod: "독차", workType: "지게차", requestTags: ["지게차 상하차"] },
+//     d4: { status: "COMPLETED", from: "충남 아산시", to: "대전 유성구", distanceKm: 41, cargo: "1톤 용달", priceWon: 78000, loadMethod: "독차", workType: "호이스트" },
+//     d5: { status: "COMPLETED", from: "부산 사상구", to: "경남 김해시", distanceKm: 19, cargo: "1톤 탑차", priceWon: 52000, loadMethod: "혼적", workType: "수작업" },
+//     d6: { status: "COMPLETED", from: "경북 포항시", to: "대구 북구", distanceKm: 89, cargo: "5톤 냉장", priceWon: 168000, loadMethod: "독차", workType: "크레인" },
+//   };
 
-  segments.forEach((seg) => {
-    if (seg.startsWith("요청태그:")) {
-      absorbTagTokens(seg.replace("요청태그:", "").trim());
-      return;
-    }
-    if (seg.startsWith("직접입력:")) {
-      const v = seg.replace("직접입력:", "").trim();
-      if (v) memoParts.push(v);
-      return;
-    }
-    if (seg.startsWith("추가메모:")) {
-      const v = seg.replace("추가메모:", "").trim();
-      if (v) memoParts.push(v);
-      return;
-    }
-    if (seg.startsWith("화물:") || seg.includes("연락처:")) {
-      return;
-    }
-    absorbTagTokens(seg);
-  });
+//   const row = mockMap[id];
+//   if (!row) return null;
 
-  if (!tagsSet.size && !segments.length) {
-    absorbTagTokens(raw);
-  }
+//   return {
+//     orderId: -2,
+//     status: row.status,
+//     createdAt: now,
+//     updated: now,
+//     startAddr: toDetailedAddress(row.from),
+//     startPlace: toDetailedAddress(row.from),
+//     startType: "당상",
+//     startSchedule: withTime(now, mockTimes.pickup),
+//     endAddr: toDetailedAddress(row.to),
+//     endPlace: toDetailedAddress(row.to),
+//     endType: "당착",
+//     endSchedule: withTime(now, mockTimes.dropoff),
+//     cargoContent: row.requestTags?.join(", ") || "",
+//     loadMethod: row.loadMethod,
+//     workType: row.workType,
+//     tonnage: 0,
+//     reqCarType: row.cargo,
+//     reqTonnage: "",
+//     driveMode: "instant",
+//     basePrice: row.priceWon,
+//     payMethod: "receipt30",
+//     distance: row.distanceKm,
+//     duration: Math.max(30, Math.round(row.distanceKm * 2)),
+//     user:
+//       row.driverNickname || row.driverPhone
+//         ? {
+//             userId: 0,
+//             email: "",
+//             phone: row.driverPhone || "",
+//             nickname: row.driverNickname || "배차 기사",
+//           }
+//         : undefined,
+//   };
+// }
 
-  const tags = PRESET_REQUEST_TAGS.filter((tag) => tagsSet.has(tag));
-  return { tags, memoText: memoParts.join(" / ") };
-}
+// function parseRequestInfo(cargoContent?: string) {
+//   const raw = (cargoContent ?? "").trim();
+//   if (!raw) return { tags: [] as string[], memoText: "" };
 
-function parseContactInfo(cargoContent?: string) {
-  const raw = (cargoContent ?? "").trim();
-  if (!raw) return { startContact: "", endContact: "" };
-  const segments = raw
-    .split("|")
-    .map((x) => x.trim())
-    .filter(Boolean);
-  let startContact = "";
-  let endContact = "";
-  segments.forEach((seg) => {
-    if (seg.startsWith("상차지 연락처:")) startContact = seg.replace("상차지 연락처:", "").trim();
-    if (seg.startsWith("하차지 연락처:")) endContact = seg.replace("하차지 연락처:", "").trim();
-  });
-  return { startContact, endContact };
-}
+//   const segments = raw
+//     .split("|")
+//     .map((x) => x.trim())
+//     .filter(Boolean);
 
-function toKoreanDateOnly(v?: string) {
-  if (!v) return "-";
-  const normalized = v.includes("T") ? v : v.replace(" ", "T");
-  const d = new Date(normalized);
-  if (Number.isNaN(d.getTime())) {
-    const m = v.match(/\d{4}-\d{2}-\d{2}/);
-    if (m) return m[0].replace(/-/g, ".");
-    return v;
-  }
-  const y = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${y}.${mm}.${dd}`;
-}
+//   const tagsSet = new Set<string>();
+//   const memoParts: string[] = [];
 
-function toPayMethodLabel(payMethod?: string) {
-  if (!payMethod) return "-";
-  if (payMethod === "card") return "카드";
-  if (payMethod === "receipt30") return "인수증(30일)";
-  if (payMethod === "prepay") return "선불";
-  return payMethod;
-}
+//   const absorbTagTokens = (text: string) => {
+//     const tokens = text
+//       .split(",")
+//       .map((x) => x.trim())
+//       .filter(Boolean);
+//     tokens.forEach((tk) => {
+//       if (PRESET_REQUEST_TAGS.includes(tk)) tagsSet.add(tk);
+//     });
+//   };
 
-function toDriveModeLabel(v?: string) {
-  if (!v) return "-";
-  if (v === "roundTrip") return "왕복";
-  if (v === "oneWay") return "편도";
-  if (v === "instant") return "편도";
-  if (v === "direct") return "편도";
-  return v;
-}
+//   segments.forEach((seg) => {
+//     if (seg.startsWith("요청태그:")) {
+//       absorbTagTokens(seg.replace("요청태그:", "").trim());
+//       return;
+//     }
+//     if (seg.startsWith("직접입력:")) {
+//       const v = seg.replace("직접입력:", "").trim();
+//       if (v) memoParts.push(v);
+//       return;
+//     }
+//     if (seg.startsWith("추가메모:")) {
+//       const v = seg.replace("추가메모:", "").trim();
+//       if (v) memoParts.push(v);
+//       return;
+//     }
+//     if (seg.startsWith("화물:") || seg.includes("연락처:")) {
+//       return;
+//     }
+//     absorbTagTokens(seg);
+//   });
 
-function toHHmm(v?: string, fallback = "-") {
-  if (!v) return fallback;
-  const normalized = v.includes("T") ? v : v.replace(" ", "T");
-  const d = new Date(normalized);
-  if (!Number.isNaN(d.getTime())) {
-    return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-  }
-  const m = v.match(/(\d{2}):(\d{2})/);
-  if (m) return `${m[1]}:${m[2]}`;
-  return fallback;
-}
+//   if (!tagsSet.size && !segments.length) {
+//     absorbTagTokens(raw);
+//   }
 
-function isSameText(a?: string, b?: string) {
-  return (a ?? "").trim() === (b ?? "").trim();
-}
+//   const tags = PRESET_REQUEST_TAGS.filter((tag) => tagsSet.has(tag));
+//   return { tags, memoText: memoParts.join(" / ") };
+// }
 
-function compactPlace(addr?: string) {
-  const t = (addr ?? "").trim();
-  if (!t) return "-";
-  const parts = t.split(/\s+/).filter(Boolean);
-  if (parts.length >= 2) return `${parts[0]} ${parts[1]}`;
-  return t;
-}
+// function toKoreanDateOnly(v?: string) {
+//   if (!v) return "-";
+//   const normalized = v.includes("T") ? v : v.replace(" ", "T");
+//   const d = new Date(normalized);
+//   if (Number.isNaN(d.getTime())) {
+//     const m = v.match(/\d{4}-\d{2}-\d{2}/);
+//     if (m) return m[0].replace(/-/g, ".");
+//     return v;
+//   }
+//   const y = d.getFullYear();
+//   const mm = String(d.getMonth() + 1).padStart(2, "0");
+//   const dd = String(d.getDate()).padStart(2, "0");
+//   return `${y}.${mm}.${dd}`;
+// }
 
-function formatDurationLabel(totalMinutesRaw?: number) {
-  const total = Math.max(30, Math.round(totalMinutesRaw ?? 0));
-  const h = Math.floor(total / 60);
-  const m = total % 60;
-  if (h <= 0) return `${m}분`;
-  if (m === 0) return `${h}시간`;
-  return `${h}시간 ${m}분`;
-}
+// function toPayMethodLabel(payMethod?: string) {
+//   if (!payMethod) return "-";
+//   if (payMethod === "card") return "카드";
+//   if (payMethod === "receipt30") return "인수증(30일)";
+//   if (payMethod === "prepay") return "선불";
+//   return payMethod;
+// }
 
-export default function OrderDetailScreen() {
-  const t = useAppTheme();
-  const c = t.colors;
-  const router = useRouter();
-  const insets = useSafeAreaInsets();
-  const { orderId, applicants } = useLocalSearchParams<{ orderId?: string | string[]; applicants?: string | string[] }>();
-  const resolvedOrderId = Array.isArray(orderId) ? orderId[0] : orderId;
-  const resolvedApplicants = Array.isArray(applicants) ? applicants[0] : applicants;
+// function toDriveModeLabel(v?: string) {
+//   if (!v) return "-";
+//   if (v === "roundTrip") return "왕복";
+//   if (v === "oneWay") return "편도";
+//   if (v === "instant") return "편도";
+//   if (v === "direct") return "편도";
+//   return v;
+// }
 
-  const [order, setOrder] = useState<OrderResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [proof, setProof] = useState<ProofResponse | null>(null);
-  const [proofLoading, setProofLoading] = useState(false);
-  const [openProofModal, setOpenProofModal] = useState(false);
-  const [openDriverPicker, setOpenDriverPicker] = useState(false);
-  const [rejectedApplicantIds, setRejectedApplicantIds] = useState<string[]>([]);
-  const [selectedDriver, setSelectedDriver] = useState<ApplicantDriver | null>(null);
-  const [openRatingModal, setOpenRatingModal] = useState(false);
-  const [ratingScore, setRatingScore] = useState(5);
-  const [ratingComment, setRatingComment] = useState("");
-  const [ratingSubmitted, setRatingSubmitted] = useState(false);
+// function toHHmm(v?: string, fallback = "-") {
+//   if (!v) return fallback;
+//   const normalized = v.includes("T") ? v : v.replace(" ", "T");
+//   const d = new Date(normalized);
+//   if (!Number.isNaN(d.getTime())) {
+//     return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+//   }
+//   const m = v.match(/(\d{2}):(\d{2})/);
+//   if (m) return `${m[1]}:${m[2]}`;
+//   return fallback;
+// }
 
-  useEffect(() => {
-    let active = true;
-    void (async () => {
-      try {
-        const id = String(resolvedOrderId ?? "");
-        const rows = await OrderApi.getMyShipperOrders();
-        if (!active) return;
-        const found = rows.find((x) => String(x.orderId) === id);
-        setOrder(found ?? null);
-      } catch {
-        if (active) {
-          setOrder(null);
-        }
-      } finally {
-        if (active) setLoading(false);
-      }
-    })();
-    return () => {
-      active = false;
-    };
-  }, [resolvedOrderId]);
+// function isSameText(a?: string, b?: string) {
+//   return (a ?? "").trim() === (b ?? "").trim();
+// }
 
-  useEffect(() => {
-    setRejectedApplicantIds([]);
-  }, [resolvedOrderId]);
+// export default function OrderDetailScreen() {
+//   const t = useAppTheme();
+//   const c = t.colors;
+//   const router = useRouter();
+//   const insets = useSafeAreaInsets();
+//   const { orderId } = useLocalSearchParams<{ orderId?: string | string[] }>();
+//   const resolvedOrderId = Array.isArray(orderId) ? orderId[0] : orderId;
 
-  if (loading) {
-    return (
-      <View style={[s.page, s.center, { backgroundColor: c.bg.canvas }]}>
-        <Text style={[s.title, { color: c.text.primary }]}>불러오는 중...</Text>
-      </View>
-    );
-  }
+//   const [order, setOrder] = useState<OrderResponse | null>(null);
+//   const [loading, setLoading] = useState(true);
+//   const [proof, setProof] = useState<ProofResponse | null>(null);
+//   const [proofLoading, setProofLoading] = useState(false);
+//   const [openProofModal, setOpenProofModal] = useState(false);
 
-  if (!order) {
-    return (
-      <View style={[s.page, s.center, { backgroundColor: c.bg.canvas }]}>
-        <Text style={[s.title, { color: c.text.primary }]}>주문을 찾을 수 없습니다.</Text>
-        <Pressable onPress={() => router.back()} style={[s.backBtn, { borderColor: c.border.default }]}>
-          <Text style={[s.backBtnText, { color: c.text.primary }]}>뒤로 가기</Text>
-        </Pressable>
-      </View>
-    );
-  }
+//   useEffect(() => {
+//     let active = true;
+//     void (async () => {
+//       try {
+//         const id = String(resolvedOrderId ?? "");
+//         const local = localToOrderResponse(id);
+//         if (local) {
+//           if (active) setOrder(local);
+//           return;
+//         }
 
-  const requestInfo = parseRequestInfo(order.cargoContent);
-  const contactInfo = parseContactInfo(order.cargoContent);
-  const startHHmm = toHHmm(order.startSchedule, "09:00");
-  const endHHmm = toHHmm(order.endSchedule, "15:00");
-  const isDispatched = order.status === "ACCEPTED";
-  const isInTransit = ["LOADING", "IN_TRANSIT", "UNLOADING"].includes(order.status);
-  const isCompleted = order.status === "COMPLETED";
-  const isDirectDispatch = !order.instant;
-  const hasAssignedDriver = ["ACCEPTED", "LOADING", "IN_TRANSIT", "UNLOADING", "COMPLETED"].includes(order.status);
-  const hasAssignedDriverNow = hasAssignedDriver || Boolean(selectedDriver);
-  const applicantsCountRaw = Math.max(
-    0,
-    Number.parseInt(String(resolvedApplicants ?? (order as any).applicantCount ?? (order as any).applicants ?? 0), 10) || 0
-  );
-  const waitingApplicants = APPLICANT_DRIVER_POOL.slice(0, Math.min(applicantsCountRaw, APPLICANT_DRIVER_POOL.length)).filter(
-    (driver) => !rejectedApplicantIds.includes(driver.id)
-  );
-  const applicantsCount = waitingApplicants.length;
-  const canSelectDriver = isDirectDispatch && !hasAssignedDriverNow && applicantsCount > 0;
-  const isInstantAutoDispatch = Boolean(order.instant);
-  const isInstantAssigned = isInstantAutoDispatch && hasAssignedDriverNow;
-  const isInstantWaiting = isInstantAutoDispatch && !isDispatched && !isInTransit && !isCompleted && !hasAssignedDriverNow;
-  const isDispatchWaiting = !hasAssignedDriverNow && !isDispatched && !isInTransit && !isCompleted;
-  const hasApplicantsInDirectWaiting = isDirectDispatch && isDispatchWaiting && applicantsCount > 0;
-  const canShowContactActions = (!isDirectDispatch || hasAssignedDriverNow) && !isInstantWaiting;
-  // 직접배차는 신청자가 없는 대기 상태에서만 수정/삭제 허용.
-  // 신청자가 있으면 기존처럼 "기사 선택" 흐름을 유지한다.
-  const showWaitingActions = isDispatchWaiting && !hasApplicantsInDirectWaiting;
-  const showMainAction = !isInstantAutoDispatch || isInstantWaiting;
-  const driverName = selectedDriver?.name ?? resolveDriverNickname(order);
-  const driverPhone = selectedDriver?.phone ?? resolveDriverPhone(order);
-  const chatOrderId = String(resolvedOrderId ?? order.orderId);
+//         const mock = mockToOrderResponse(id);
+//         if (mock) {
+//           if (active) setOrder(mock);
+//           return;
+//         }
 
-  const onPressCall = () => {
-    const tel = `tel:${driverPhone.replace(/[^\d+]/g, "")}`;
-    void Linking.openURL(tel).catch(() => {
-      Alert.alert("전화 연결 실패", "전화 앱을 열 수 없습니다.");
-    });
-  };
+//         const safeApiPromise: Promise<OrderResponse[]> = OrderApi.getAvailableOrders().catch(() => []);
+//         const timeoutFallback = new Promise<OrderResponse[]>((resolve) => {
+//           setTimeout(() => resolve([]), 5000);
+//         });
+//         const rows = await Promise.race([safeApiPromise, timeoutFallback]);
+//         if (!active) return;
+//         const found = rows.find((x) => String(x.orderId) === id);
+//         setOrder(found ?? null);
+//       } catch {
+//         if (active) {
+//           setOrder(null);
+//         }
+//       } finally {
+//         if (active) setLoading(false);
+//       }
+//     })();
+//     return () => {
+//       active = false;
+//     };
+//   }, [resolvedOrderId]);
 
-  const onPressDeleteOrder = () => {
-    const targetIdNum = Number(String(resolvedOrderId ?? order.orderId));
-    const doDelete = async () => {
-      if (!Number.isFinite(targetIdNum)) {
-        Alert.alert("안내", "잘못된 오더 번호입니다.");
-        return;
-      }
-      await OrderApi.cancelOrder(targetIdNum, "화주 요청으로 취소");
-      router.replace("/(shipper)/(tabs)/orders" as any);
-    };
+//   const st = useMemo(() => (order ? toUiStatus(order.status) : null), [order]);
 
-    if (Platform.OS === "web") {
-      const ok = window.confirm("등록을 취소 하시겠습니까?");
-      if (!ok) return;
-      void doDelete().catch(() => {
-        Alert.alert("안내", "오더 취소에 실패했습니다.");
-      });
-      return;
-    }
+//   if (loading) {
+//     return (
+//       <View style={[s.page, s.center, { backgroundColor: c.bg.canvas }]}>
+//         <Text style={[s.title, { color: c.text.primary }]}>불러오는 중...</Text>
+//       </View>
+//     );
+//   }
 
-    Alert.alert("삭제", "등록을 취소 하시겠습니까?", [
-      { text: "아니요", style: "cancel" },
-      {
-        text: "예",
-        style: "destructive",
-        onPress: () =>
-          void doDelete().catch(() => {
-            Alert.alert("안내", "오더 취소에 실패했습니다.");
-          }),
-      },
-    ]);
-  };
+//   if (!order) {
+//     return (
+//       <View style={[s.page, s.center, { backgroundColor: c.bg.canvas }]}>
+//         <Text style={[s.title, { color: c.text.primary }]}>주문을 찾을 수 없습니다.</Text>
+//         <Pressable onPress={() => router.back()} style={[s.backBtn, { borderColor: c.border.default }]}>
+//           <Text style={[s.backBtnText, { color: c.text.primary }]}>뒤로 가기</Text>
+//         </Pressable>
+//       </View>
+//     );
+//   }
 
-  const onPressEditOrder = () => {
-    Alert.alert("안내", "서버 오더 수정은 준비 중입니다.");
-  };
+//   const requestInfo = parseRequestInfo(order.cargoContent);
+//   const startHHmm = toHHmm(order.startSchedule, "09:00");
+//   const endHHmm = toHHmm(order.endSchedule, "15:00");
+//   const isDispatched = order.status === "ACCEPTED";
+//   const isInTransit = ["LOADING", "IN_TRANSIT", "UNLOADING"].includes(order.status);
+//   const isCompleted = order.status === "COMPLETED";
+//   const showDriverSection = isDispatched || isInTransit;
+//   const driverName = order.user?.nickname || "배차 기사";
+//   const driverPhone = order.user?.phone || "010-1234-5678";
+//   const chatOrderId = String(resolvedOrderId ?? order.orderId);
 
-  const copyAddress = async (text: string) => {
-    try {
-      await Clipboard.setStringAsync(text);
-      Alert.alert("안내", "주소가 복사되었습니다.");
-    } catch {
-      Alert.alert("안내", "주소 복사에 실패했습니다.");
-    }
-  };
+//   const onPressCall = () => {
+//     const tel = `tel:${driverPhone.replace(/[^\d+]/g, "")}`;
+//     void Linking.openURL(tel).catch(() => {
+//       Alert.alert("전화 연결 실패", "전화 앱을 열 수 없습니다.");
+//     });
+//   };
 
-  const onPressProof = async () => {
-    setProofLoading(true);
-    try {
-      const parsed = Number(String(resolvedOrderId ?? order.orderId));
-      if (Number.isFinite(parsed)) {
-        const res = await ProofService.getProof(parsed);
-        setProof(res);
-      } else {
-        setProof({
-          proofId: -1,
-          receiptImageUrl: "",
-          signatureImageUrl: "",
-          recipientName: "목업 수령인",
-        });
-      }
-      setOpenProofModal(true);
-    } catch {
-      setProof({
-        proofId: -1,
-        receiptImageUrl: "",
-        signatureImageUrl: "",
-        recipientName: "증빙 데이터 없음",
-      });
-      setOpenProofModal(true);
-    } finally {
-      setProofLoading(false);
-    }
-  };
+//   const onPressProof = async () => {
+//     setProofLoading(true);
+//     try {
+//       const parsed = Number(String(resolvedOrderId ?? order.orderId));
+//       if (Number.isFinite(parsed)) {
+//         const res = await ProofService.getProof(parsed);
+//         setProof(res);
+//       } else {
+//         setProof({
+//           proofId: -1,
+//           receiptImageUrl: "",
+//           signatureImageUrl: "",
+//           recipientName: "목업 수령인",
+//         });
+//       }
+//       setOpenProofModal(true);
+//     } catch {
+//       setProof({
+//         proofId: -1,
+//         receiptImageUrl: "",
+//         signatureImageUrl: "",
+//         recipientName: "증빙 데이터 없음",
+//       });
+//       setOpenProofModal(true);
+//     } finally {
+//       setProofLoading(false);
+//     }
+//   };
 
-  const mainActionLabel = isCompleted
-    ? ratingSubmitted
-      ? "평점 등록 완료"
-      : "기사 평점 남기기"
-    : isInstantWaiting
-      ? "기사 선택"
-      : hasAssignedDriverNow || isDispatched || isInTransit
-      ? "배차 완료"
-      : "기사 선택";
-  const mainActionReadonly = isInstantWaiting;
-  const mainActionDisabled = isCompleted
-    ? ratingSubmitted
-    : mainActionReadonly || isDispatched || isInTransit || Boolean(selectedDriver) || (isDirectDispatch && !canSelectDriver);
+//   return (
+//     <View style={[s.page, { backgroundColor: c.bg.canvas }]}>
+//       <View
+//         style={{
+//           height: 52 + insets.top + 6,
+//           paddingTop: insets.top + 6,
+//           flexDirection: "row",
+//           alignItems: "center",
+//           justifyContent: "space-between",
+//           paddingHorizontal: 16,
+//           borderBottomWidth: 1,
+//           borderBottomColor: c.border.default,
+//           backgroundColor: c.bg.canvas,
+//         }}
+//       >
+//         <Pressable onPress={() => router.back()} style={{ width: 40, height: 40, alignItems: "center", justifyContent: "center" }}>
+//           <Ionicons name="chevron-back" size={22} color={c.text.primary} />
+//         </Pressable>
+//         <Text style={{ fontSize: 16, fontWeight: "900", color: c.text.primary }}>운송 상세</Text>
+//         <View style={{ width: 40 }} />
+//       </View>
 
-  return (
-    <View style={[s.page, { backgroundColor: "#F5F7FB" }]}>
-      <View style={[s.header, { paddingTop: insets.top + 10 }]}>
-        <Pressable onPress={() => router.back()} style={s.headerBtn}>
-          <Ionicons name="arrow-back" size={24} color="#64748B" />
-        </Pressable>
-        <Text style={s.headerTitle}>오더 #{resolvedOrderId ?? order.orderId}</Text>
-        <View style={s.headerSide} />
-      </View>
+//       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 24 + insets.bottom }} showsVerticalScrollIndicator={false}>
+//         <Card padding={16} style={{ marginBottom: 18 }}>
+//           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+//             <Badge label={st?.label ?? "-"} tone={st?.tone ?? "warning"} />
+//             <Text style={{ color: c.text.secondary, fontSize: 12, fontWeight: "700" }}>
+//               {toRelativeLabel(order.updated ?? order.createdAt)}
+//             </Text>
+//           </View>
+//           <Text style={{ color: c.text.secondary, fontWeight: "800" }}>상차</Text>
+//           <Text style={{ color: c.text.primary, fontWeight: "900", marginBottom: 8 }}>
+//             {order.startAddr || "-"}
+//           </Text>
+//           {!isSameText(order.startAddr, order.startPlace) ? (
+//             <Text style={{ color: c.text.primary, fontWeight: "900", marginBottom: 8 }}>
+//               {order.startPlace || "-"}
+//             </Text>
+//           ) : null}
+//           <Text style={{ color: c.text.secondary, fontWeight: "700", marginTop: -2, marginBottom: 8 }}>{startHHmm} 상차</Text>
 
-      <ScrollView contentContainerStyle={[s.content, { paddingBottom: 112 + insets.bottom }]} showsVerticalScrollIndicator={false}>
-        <View style={s.topCard}>
-          <View style={s.topCardHead}>
-            <Badge label={order.instant ? "바로배차" : "직접배차"} tone={order.instant ? "urgent" : "direct"} />
-            <Text style={s.dateText}>{toKoreanDateOnly(order.createdAt)}</Text>
-          </View>
+//           <Text style={{ color: c.text.secondary, fontWeight: "800" }}>하차</Text>
+//           <Text style={{ color: c.text.primary, fontWeight: "900", marginBottom: 8 }}>
+//             {order.endAddr || "-"}
+//           </Text>
+//           {!isSameText(order.endAddr, order.endPlace) ? (
+//             <Text style={{ color: c.text.primary, fontWeight: "900", marginBottom: 8 }}>
+//               {order.endPlace || "-"}
+//             </Text>
+//           ) : null}
+//           <Text style={{ color: c.text.secondary, fontWeight: "700", marginTop: -2, marginBottom: 8 }}>{endHHmm} 하차</Text>
 
-            <View style={s.routeRow}>
-              <View style={s.routeSide}>
-                <Text style={s.routeBig}>{compactPlace(order.startAddr)}</Text>
-                <Text style={s.routeSmall}>{order.startPlace || "-"}</Text>
-                {contactInfo.startContact ? <Text style={s.routeSmall}>연락처: {contactInfo.startContact}</Text> : null}
-              </View>
-              <Ionicons name="arrow-forward" size={30} color="#CBD5E1" />
-              <View style={[s.routeSide, { alignItems: "flex-end" }]}>
-                <Text style={s.routeBig}>{compactPlace(order.endAddr)}</Text>
-                <Text style={s.routeSmall}>{order.endPlace || "-"}</Text>
-                {contactInfo.endContact ? <Text style={[s.routeSmall, { textAlign: "right" }]}>연락처: {contactInfo.endContact}</Text> : null}
-              </View>
-            </View>
+//           <View style={{ height: 1, backgroundColor: c.border.default, marginVertical: 12 }} />
 
-          <View style={s.infoBar}>
-            <View style={s.infoItem}>
-              <Ionicons name="navigate-outline" size={16} color="#64748B" />
-              <Text style={s.infoText}>{Math.round(order.distance ?? 0)}km</Text>
-            </View>
-            <Text style={s.infoDivider}>|</Text>
-            <View style={s.infoItem}>
-              <Ionicons name="time-outline" size={16} color="#64748B" />
-              <Text style={s.infoText}>예상 {formatDurationLabel(order.duration)}</Text>
-            </View>
-          </View>
+//           <Text style={{ color: c.text.secondary, fontWeight: "800" }}>
+//             {toKoreanDateOnly(order.startSchedule)} ({order.startType || "-"})
+//           </Text>
+//           <Text style={{ color: c.text.secondary, fontWeight: "800", marginTop: 6 }}>
+//             {`${order.reqTonnage ?? ""} ${order.reqCarType ?? ""}`.trim() || "-"} · {toDriveModeLabel(order.driveMode)}
+//           </Text>
+//         </Card>
 
-          <View style={s.fareRow}>
-            <Text style={s.fareLabel}>운송료</Text>
-            <View style={s.fareRight}>
-              <Text style={s.fareValue}>{formatWon(order.basePrice ?? 0)}</Text>
-              <View style={s.payChip}>
-                <Text style={s.payChipText}>{toPayMethodLabel(order.payMethod)}</Text>
-              </View>
-            </View>
-          </View>
+//         {isInTransit ? (
+//           <Card padding={16} style={{ marginBottom: 18 }}>
+//             <Text style={{ fontSize: 14, fontWeight: "900", color: c.text.primary, marginBottom: 12 }}>실시간 위치</Text>
+//             <View
+//               style={{
+//                 height: 170,
+//                 borderRadius: 14,
+//                 borderWidth: 1,
+//                 borderColor: c.border.default,
+//                 backgroundColor: c.bg.surface,
+//                 alignItems: "center",
+//                 justifyContent: "center",
+//               }}
+//             >
+//               <Ionicons name="map-outline" size={28} color={c.text.secondary} />
+//               <Text style={{ color: c.text.secondary, fontWeight: "800", marginTop: 8 }}>지도 연동 준비 중</Text>
+//               <Text style={{ color: c.text.secondary, fontSize: 12, marginTop: 4 }}>
+//                 추후 실시간 기사 위치를 표시할 예정입니다.
+//               </Text>
+//             </View>
+//           </Card>
+//         ) : null}
 
-          {isInstantAutoDispatch ? (
-            <View style={s.driverInfoRow}>
-              <Text style={s.driverInfoName}>기사 {driverName}</Text>
-              <Text style={s.driverInfoPhone}>{driverPhone}</Text>
-            </View>
-          ) : null}
-        </View>
+//         {showDriverSection ? (
+//           <Card padding={16} style={{ marginBottom: 18 }}>
+//             <Text style={{ fontSize: 14, fontWeight: "900", color: c.text.primary, marginBottom: 12 }}>배차 기사</Text>
+//             <Text style={{ color: c.text.primary, fontWeight: "900", fontSize: 15 }}>{driverName}</Text>
+//             <Text style={{ color: c.text.secondary, fontWeight: "800", marginTop: 4 }}>{driverPhone}</Text>
+//             <View style={{ flexDirection: "row", marginTop: 12 }}>
+//               <Pressable
+//                 onPress={onPressCall}
+//                 style={{
+//                   flex: 1,
+//                   height: 42,
+//                   borderRadius: 12,
+//                   borderWidth: 1,
+//                   borderColor: c.brand.primary,
+//                   alignItems: "center",
+//                   justifyContent: "center",
+//                   flexDirection: "row",
+//                   marginRight: 6,
+//                 }}
+//               >
+//                 <Ionicons name="call-outline" size={16} color={c.brand.primary} style={{ marginRight: 4 }} />
+//                 <Text style={{ color: c.brand.primary, fontWeight: "900", fontSize: 14 }}>전화</Text>
+//               </Pressable>
+//               <Pressable
+//                 onPress={() => router.push(`/(common)/orders/${chatOrderId}/chat` as any)}
+//                 style={{
+//                   flex: 1,
+//                   height: 42,
+//                   borderRadius: 12,
+//                   borderWidth: 1,
+//                   borderColor: c.border.default,
+//                   alignItems: "center",
+//                   justifyContent: "center",
+//                   flexDirection: "row",
+//                   marginLeft: 6,
+//                 }}
+//               >
+//                 <Ionicons name="chatbubble-ellipses-outline" size={16} color={c.text.secondary} style={{ marginRight: 4 }} />
+//                 <Text style={{ color: c.text.secondary, fontWeight: "900", fontSize: 14 }}>채팅</Text>
+//               </Pressable>
+//             </View>
+//           </Card>
+//         ) : null}
 
-        <View style={s.sectionCard}>
-          <Text style={s.sectionTitle}>운행 경로</Text>
-          <View style={s.timelineWrap}>
-            <View style={s.timelineLine} />
-            <View style={s.timelineItem}>
-              <View style={[s.dot, { backgroundColor: "#1E293B" }]}>
-                <Text style={s.dotText}>출</Text>
-              </View>
-              <View style={s.timelineContent}>
-                <Text style={s.timeText}>오늘 {startHHmm} 상차</Text>
-                <Text style={s.addrTitle}>{order.startAddr || "-"}</Text>
-                {!isSameText(order.startAddr, order.startPlace) ? <Text style={s.addrDesc}>{order.startPlace || "-"}</Text> : null}
-                {contactInfo.startContact ? <Text style={s.addrDesc}>연락처: {contactInfo.startContact}</Text> : null}
-                <Pressable style={s.copyBtn} onPress={() => void copyAddress(order.startAddr || order.startPlace || "")}>
-                  <Ionicons name="copy-outline" size={14} color="#475569" />
-                  <Text style={s.copyBtnText}>주소복사</Text>
-                </Pressable>
-              </View>
-            </View>
-            <View style={[s.timelineItem, { marginTop: 20 }]}>
-              <View style={[s.dot, { backgroundColor: "#4F46E5" }]}>
-                <Text style={s.dotText}>도</Text>
-              </View>
-              <View style={s.timelineContent}>
-                <Text style={[s.timeText, { color: "#4F46E5" }]}>하차 예정</Text>
-                <Text style={s.addrTitle}>{order.endAddr || "-"}</Text>
-                {!isSameText(order.endAddr, order.endPlace) ? <Text style={s.addrDesc}>{order.endPlace || "-"}</Text> : null}
-                {contactInfo.endContact ? <Text style={s.addrDesc}>연락처: {contactInfo.endContact}</Text> : null}
-                <Pressable style={s.copyBtn} onPress={() => void copyAddress(order.endAddr || order.endPlace || "")}>
-                  <Ionicons name="copy-outline" size={14} color="#475569" />
-                  <Text style={s.copyBtnText}>주소복사</Text>
-                </Pressable>
-              </View>
-            </View>
-          </View>
-        </View>
+//         <Card padding={16} style={{ marginBottom: 18 }}>
+//           <Text style={{ fontSize: 14, fontWeight: "900", color: c.text.primary, marginBottom: 12 }}>작업 정보</Text>
 
-        {isInTransit ? (
-          <View style={s.sectionCard}>
-            <Text style={s.sectionTitle}>실시간 위치</Text>
-            <View style={s.mapPreview}>
-              <Ionicons name="map-outline" size={24} color="#64748B" />
-              <Text style={s.mapPreviewTitle}>지도 영역 (실시간 위치 연동 예정)</Text>
-              <Text style={s.mapPreviewSub}>현재는 자리만 준비되어 있고, 추후 기사 좌표를 연결하면 바로 표시됩니다.</Text>
-            </View>
-          </View>
-        ) : null}
+//           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+//             <Text style={{ fontSize: 13, fontWeight: "800", color: c.text.secondary }}>적재 방식</Text>
+//             <Text style={{ fontSize: 14, fontWeight: "900", color: c.text.primary }}>{order.loadMethod || "-"}</Text>
+//           </View>
+//           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+//             <Text style={{ fontSize: 13, fontWeight: "800", color: c.text.secondary }}>상하차 도구</Text>
+//             <Text style={{ fontSize: 14, fontWeight: "900", color: c.text.primary }}>{order.workType || "-"}</Text>
+//           </View>
+//           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+//             <Text style={{ fontSize: 13, fontWeight: "800", color: c.text.secondary }}>거리</Text>
+//             <Text style={{ fontSize: 14, fontWeight: "900", color: c.text.primary }}>{Math.round(order.distance ?? 0)}km</Text>
+//           </View>
+//         </Card>
 
-        <View style={s.sectionCard}>
-          <Text style={s.sectionTitle}>작업 정보</Text>
-          <Text style={s.metaText}>차량: {`${order.reqTonnage ?? ""} ${order.reqCarType ?? ""}`.trim() || "-"}</Text>
-          <Text style={s.metaText}>운행형태: {toDriveModeLabel(order.driveMode)}</Text>
-          <Text style={s.metaText}>적재방식: {order.loadMethod || "-"}</Text>
-          <Text style={s.metaText}>상하차: {order.workType || "-"}</Text>
-        </View>
+//         <Card padding={16} style={{ marginBottom: 18 }}>
+//           <Text style={{ fontSize: 14, fontWeight: "900", color: c.text.primary, marginBottom: 12 }}>요청사항</Text>
 
-        <View style={s.sectionCard}>
-          <Text style={s.sectionTitle}>요청사항</Text>
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-            {requestInfo.tags.length ? requestInfo.tags.map((tag) => <FormChip key={tag} label={`#${tag}`} selected disabled onPress={() => {}} />) : <Text style={s.emptyText}>등록된 요청사항이 없습니다.</Text>}
-          </View>
-          {requestInfo.memoText ? <Text style={[s.metaText, { marginTop: 10 }]}>{requestInfo.memoText}</Text> : null}
-        </View>
-      </ScrollView>
+//           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+//             {requestInfo.tags.length ? (
+//               requestInfo.tags.map((tag) => (
+//                 <FormChip key={tag} label={`#${String(tag)}`} selected disabled onPress={() => {}} />
+//               ))
+//             ) : (
+//               <Text style={{ color: c.text.secondary, fontWeight: "700" }}>등록된 요청사항이 없습니다.</Text>
+//             )}
+//           </View>
 
-      <View style={[s.bottomBar, { paddingBottom: 10 + insets.bottom }]}>
-        {canShowContactActions ? (
-          <View style={s.iconGroup}>
-            <Pressable style={s.iconBtn} onPress={onPressCall}>
-              <Ionicons name="call-outline" size={22} color="#334155" />
-            </Pressable>
-          </View>
-        ) : null}
-        {isInstantAssigned ? (
-          <Pressable
-            style={[s.contactDriverBtn, { backgroundColor: c.brand.primary }]}
-            onPress={() => router.push(`/(common)/orders/${chatOrderId}/chat` as any)}
-          >
-            <Ionicons name="chatbubble-ellipses-outline" size={18} color="#FFFFFF" />
-            <Text style={s.contactDriverBtnText}>기사님과 연락</Text>
-          </Pressable>
-        ) : null}
-        {showWaitingActions ? (
-          <View style={s.waitingActionRow}>
-            <Pressable style={[s.waitingActionBtn, { borderColor: c.border.default }]} onPress={onPressEditOrder}>
-              <Ionicons name="create-outline" size={18} color={c.text.primary} />
-              <Text style={[s.waitingActionText, { color: c.text.primary }]}>수정</Text>
-            </Pressable>
-            <Pressable style={[s.waitingActionBtn, { borderColor: "#FECACA", backgroundColor: "#FEF2F2" }]} onPress={onPressDeleteOrder}>
-              <Ionicons name="trash-outline" size={18} color="#DC2626" />
-              <Text style={[s.waitingActionText, { color: "#DC2626" }]}>삭제</Text>
-            </Pressable>
-          </View>
-        ) : null}
-        {showMainAction && !showWaitingActions ? (
-          <Pressable
-            disabled={mainActionDisabled && !isInstantWaiting}
-            onPress={() => {
-              if (isInstantWaiting) {
-                Alert.alert("안내", "바로배차는 자동으로 배차 됩니다.");
-                return;
-              }
-              if (isCompleted) {
-                setOpenRatingModal(true);
-                return;
-              }
-              if (isDirectDispatch && !hasAssignedDriverNow && canSelectDriver) {
-                setOpenDriverPicker(true);
-                return;
-              }
-              Alert.alert("안내", "이미 배차가 확정되었습니다.");
-            }}
-            style={[s.mainBtn, { opacity: mainActionDisabled ? 0.55 : 1, backgroundColor: c.brand.primary }]}
-          >
-            <Ionicons name={isCompleted ? "document-text-outline" : "checkmark-circle-outline"} size={20} color="#FFF" />
-            <Text style={s.mainBtnText}>{proofLoading && isCompleted ? "불러오는 중..." : mainActionLabel}</Text>
-          </Pressable>
-        ) : null}
-      </View>
+//           {requestInfo.memoText ? (
+//             <View>
+//               <Text style={{ color: c.text.primary, fontSize: 14, fontWeight: "900", marginTop: 14, marginBottom: 8 }}>
+//                 추가 메모
+//               </Text>
+//               <View
+//                 style={{
+//                   borderWidth: 1,
+//                   borderColor: c.border.default,
+//                   borderRadius: 14,
+//                   padding: 12,
+//                   backgroundColor: c.bg.surface,
+//                   minHeight: 84,
+//                 }}
+//               >
+//                 <Text style={{ color: c.text.primary, fontWeight: "700", lineHeight: 20 }}>{String(requestInfo.memoText)}</Text>
+//               </View>
+//             </View>
+//           ) : null}
+//         </Card>
 
-      <Modal visible={openDriverPicker} transparent animationType="fade" onRequestClose={() => setOpenDriverPicker(false)}>
-        <View style={{ flex: 1, backgroundColor: "rgba(15,23,42,0.45)", justifyContent: "center", padding: 16 }}>
-          <View style={{ backgroundColor: c.bg.surface, borderRadius: 16, padding: 14, borderWidth: 1, borderColor: c.border.default }}>
-            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-              <Text style={{ color: c.text.primary, fontSize: 16, fontWeight: "900" }}>기사 선택</Text>
-              <Pressable onPress={() => setOpenDriverPicker(false)}>
-                <Ionicons name="close" size={20} color={c.text.primary} />
-              </Pressable>
-            </View>
+//         <Card padding={16}>
+//           <Text style={{ fontSize: 14, fontWeight: "900", color: c.text.primary, marginBottom: 12 }}>운임 정보</Text>
+//           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+//             <Text style={{ color: c.text.secondary, fontWeight: "800" }}>희망 운임</Text>
+//             <Text style={{ color: c.text.primary, fontWeight: "900", fontSize: 18 }}>{formatWon(order.basePrice ?? 0)}</Text>
+//           </View>
+//           <Text style={{ color: c.text.secondary, fontWeight: "800", marginTop: 8 }}>
+//             결제 방식: {toPayMethodLabel(order.payMethod)}
+//           </Text>
+//         </Card>
 
-            {waitingApplicants.length === 0 ? (
-              <View
-                style={{
-                  borderWidth: 1,
-                  borderColor: c.border.default,
-                  borderRadius: 12,
-                  padding: 12,
-                  backgroundColor: c.bg.surface,
-                }}
-              >
-                <Text style={{ color: c.text.secondary, fontSize: 13, fontWeight: "800" }}>
-                  신청한 기사가 없습니다.
-                </Text>
-              </View>
-            ) : null}
+//         {isCompleted ? (
+//           <Card padding={16} style={{ marginTop: 18 }}>
+//             <Pressable
+//               onPress={onPressProof}
+//               style={{
+//                 height: 44,
+//                 borderRadius: 12,
+//                 borderWidth: 1,
+//                 borderColor: c.border.default,
+//                 alignItems: "center",
+//                 justifyContent: "center",
+//                 flexDirection: "row",
+//               }}
+//             >
+//               <Ionicons name="document-text-outline" size={16} color={c.text.secondary} style={{ marginRight: 6 }} />
+//               <Text style={{ color: c.text.secondary, fontWeight: "900", fontSize: 14 }}>
+//                 {proofLoading ? "불러오는 중..." : "인수증 확인"}
+//               </Text>
+//             </Pressable>
+//           </Card>
+//         ) : null}
+//       </ScrollView>
 
-            {waitingApplicants.map((driver) => (
-              <View
-                key={driver.id}
-                style={{
-                  borderWidth: 1,
-                  borderColor: c.border.default,
-                  borderRadius: 12,
-                  padding: 12,
-                  marginBottom: 10,
-                  backgroundColor: c.bg.surface,
-                }}
-              >
-                <Text style={{ color: c.text.primary, fontSize: 14, fontWeight: "900" }}>{driver.name}</Text>
-                <Text style={{ color: c.text.secondary, fontSize: 12, fontWeight: "700", marginTop: 2 }}>{driver.detail}</Text>
-                <Text style={{ color: c.text.secondary, fontSize: 12, fontWeight: "700", marginTop: 2 }}>{driver.phone}</Text>
+//       <Modal visible={openProofModal} transparent animationType="fade" onRequestClose={() => setOpenProofModal(false)}>
+//         <View style={{ flex: 1, backgroundColor: "rgba(15, 23, 42, 0.5)", justifyContent: "center", padding: 16 }}>
+//           <View style={{ backgroundColor: c.bg.surface, borderRadius: 16, borderWidth: 1, borderColor: c.border.default, padding: 16 }}>
+//             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+//               <Text style={{ color: c.text.primary, fontSize: 16, fontWeight: "900" }}>인수증 상세</Text>
+//               <Pressable onPress={() => setOpenProofModal(false)}>
+//                 <Ionicons name="close" size={22} color={c.text.primary} />
+//               </Pressable>
+//             </View>
 
-                <View style={{ flexDirection: "row", gap: 8, marginTop: 10 }}>
-                  <Pressable
-                    onPress={() => {
-                      setSelectedDriver(driver);
-                      setOpenDriverPicker(false);
-                      Alert.alert("배차 확정", `${driver.name} 기사님으로 배차가 확정되었습니다.`);
-                    }}
-                    style={{
-                      flex: 1,
-                      height: 40,
-                      borderRadius: 10,
-                      alignItems: "center",
-                      justifyContent: "center",
-                      backgroundColor: c.brand.primary,
-                    }}
-                  >
-                    <Text style={{ color: c.text.inverse, fontSize: 13, fontWeight: "900" }}>수락</Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={() => {
-                      setRejectedApplicantIds((prev) => (prev.includes(driver.id) ? prev : [...prev, driver.id]));
-                    }}
-                    style={{
-                      flex: 1,
-                      height: 40,
-                      borderRadius: 10,
-                      alignItems: "center",
-                      justifyContent: "center",
-                      borderWidth: 1,
-                      borderColor: c.border.default,
-                      backgroundColor: c.bg.surface,
-                    }}
-                  >
-                    <Text style={{ color: c.text.secondary, fontSize: 13, fontWeight: "900" }}>거절</Text>
-                  </Pressable>
-                </View>
-              </View>
-            ))}
-          </View>
-        </View>
-      </Modal>
+//             <Text style={{ color: c.text.secondary, fontWeight: "800", marginBottom: 10 }}>
+//               수령인: {proof?.recipientName || "-"}
+//             </Text>
+//             <View style={{ borderWidth: 1, borderColor: c.border.default, borderRadius: 12, padding: 12, marginBottom: 10 }}>
+//               <Text style={{ color: c.text.primary, fontWeight: "800" }}>
+//                 인수증 이미지: {proof?.receiptImageUrl ? "등록됨" : "미등록"}
+//               </Text>
+//             </View>
+//             <View style={{ borderWidth: 1, borderColor: c.border.default, borderRadius: 12, padding: 12 }}>
+//               <Text style={{ color: c.text.primary, fontWeight: "800" }}>
+//                 수령인 서명: {proof?.signatureImageUrl ? "등록됨" : "미등록"}
+//               </Text>
+//             </View>
+//           </View>
+//         </View>
+//       </Modal>
+//     </View>
+//   );
+// }
 
-      <Modal visible={openRatingModal} transparent animationType="fade" onRequestClose={() => setOpenRatingModal(false)}>
-        <View style={{ flex: 1, backgroundColor: "rgba(15,23,42,0.45)", justifyContent: "center", padding: 16 }}>
-          <View style={{ backgroundColor: c.bg.surface, borderRadius: 16, padding: 14, borderWidth: 1, borderColor: c.border.default }}>
-            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-              <Text style={{ color: c.text.primary, fontSize: 16, fontWeight: "900" }}>기사 평점 남기기</Text>
-              <Pressable onPress={() => setOpenRatingModal(false)}>
-                <Ionicons name="close" size={20} color={c.text.primary} />
-              </Pressable>
-            </View>
-
-            <Text style={{ color: c.text.secondary, fontSize: 13, fontWeight: "700", marginBottom: 8 }}>
-              기사: {driverName}
-            </Text>
-            <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 12 }}>
-              {[1, 2, 3, 4, 5].map((score) => (
-                <Pressable key={score} onPress={() => setRatingScore(score)} style={{ marginRight: 6 }}>
-                  <Ionicons name={ratingScore >= score ? "star" : "star-outline"} size={24} color={ratingScore >= score ? "#F59E0B" : "#94A3B8"} />
-                </Pressable>
-              ))}
-              <Text style={{ color: c.text.primary, fontWeight: "800", marginLeft: 6 }}>{ratingScore}.0</Text>
-            </View>
-
-            <View style={{ borderWidth: 1, borderColor: c.border.default, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 8 }}>
-              <TextInput
-                value={ratingComment}
-                onChangeText={setRatingComment}
-                placeholder="기사님에 대한 후기를 남겨주세요 (선택)"
-                placeholderTextColor={c.text.secondary}
-                multiline
-                style={{ color: c.text.primary, minHeight: 76, textAlignVertical: "top", fontWeight: "700" }}
-              />
-            </View>
-
-            <Pressable
-              onPress={() => {
-                setRatingSubmitted(true);
-                setOpenRatingModal(false);
-                Alert.alert("등록 완료", `평점 ${ratingScore}점을 남겼습니다.`);
-              }}
-              style={{
-                marginTop: 12,
-                height: 44,
-                borderRadius: 12,
-                backgroundColor: c.brand.primary,
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <Text style={{ color: c.text.inverse, fontSize: 14, fontWeight: "900" }}>평점 등록</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
-
-      <Modal visible={openProofModal} transparent animationType="fade" onRequestClose={() => setOpenProofModal(false)}>
-        <View style={{ flex: 1, backgroundColor: "rgba(15, 23, 42, 0.5)", justifyContent: "center", padding: 16 }}>
-          <View style={{ backgroundColor: c.bg.surface, borderRadius: 16, borderWidth: 1, borderColor: c.border.default, padding: 16 }}>
-            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-              <Text style={{ color: c.text.primary, fontSize: 16, fontWeight: "900" }}>인수증 상세</Text>
-              <Pressable onPress={() => setOpenProofModal(false)}>
-                <Ionicons name="close" size={22} color={c.text.primary} />
-              </Pressable>
-            </View>
-
-            <Text style={{ color: c.text.secondary, fontWeight: "800", marginBottom: 10 }}>
-              수령인: {proof?.recipientName || "-"}
-            </Text>
-            <View style={{ borderWidth: 1, borderColor: c.border.default, borderRadius: 12, padding: 12, marginBottom: 10 }}>
-              <Text style={{ color: c.text.primary, fontWeight: "800" }}>
-                인수증 이미지: {proof?.receiptImageUrl ? "등록됨" : "미등록"}
-              </Text>
-            </View>
-            <View style={{ borderWidth: 1, borderColor: c.border.default, borderRadius: 12, padding: 12 }}>
-              <Text style={{ color: c.text.primary, fontWeight: "800" }}>
-                수령인 서명: {proof?.signatureImageUrl ? "등록됨" : "미등록"}
-              </Text>
-            </View>
-          </View>
-        </View>
-      </Modal>
-    </View>
-  );
-}
-
-const s = StyleSheet.create({
-  page: { flex: 1, backgroundColor: "#F5F7FB" },
-  center: { justifyContent: "center", alignItems: "center", paddingHorizontal: 20 },
-  title: { fontSize: 16, fontWeight: "800" },
-  backBtn: { marginTop: 12, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10 },
-  backBtnText: { fontSize: 12, fontWeight: "700" },
-  header: {
-    height: 86,
-    paddingHorizontal: 16,
-    alignItems: "center",
-    justifyContent: "space-between",
-    flexDirection: "row",
-    backgroundColor: "#F5F7FB",
-  },
-  headerBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
-  headerTitle: { fontSize: 15, fontWeight: "700", color: "#0F172A" },
-  headerSide: { width: 40 },
-  content: { padding: 16 },
-  topCard: {
-    backgroundColor: "#FFF",
-    borderRadius: 24,
-    padding: 18,
-    marginBottom: 14,
-  },
-  topCardHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },
-  dateText: { color: "#94A3B8", fontSize: 11, fontWeight: "700" },
-  routeRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  routeSide: { flex: 1 },
-  routeBig: { color: "#0F172A", fontSize: 18, fontWeight: "800" },
-  routeSmall: { color: "#64748B", fontSize: 13, fontWeight: "700", marginTop: 5 },
-  infoBar: {
-    marginTop: 16,
-    borderRadius: 14,
-    backgroundColor: "#F1F5F9",
-    paddingVertical: 11,
-    paddingHorizontal: 14,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  infoItem: { flexDirection: "row", alignItems: "center" },
-  infoText: { color: "#475569", fontSize: 12, fontWeight: "700", marginLeft: 6 },
-  infoDivider: { color: "#CBD5E1", marginHorizontal: 12, fontWeight: "800" },
-  fareRow: {
-    marginTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: "#E2E8F0",
-    paddingTop: 14,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  fareLabel: { color: "#64748B", fontSize: 13, fontWeight: "700" },
-  fareRight: { flexDirection: "row", alignItems: "center" },
-  fareValue: { color: "#EF4444", fontSize: 16, fontWeight: "900" },
-  payChip: {
-    marginLeft: 8,
-    borderWidth: 1,
-    borderColor: "#93C5FD",
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: "#EFF6FF",
-  },
-  payChipText: { color: "#3B82F6", fontSize: 11, fontWeight: "800" },
-  driverInfoRow: {
-    marginTop: 12,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    borderTopWidth: 1,
-    borderTopColor: "#E2E8F0",
-    paddingTop: 10,
-  },
-  driverInfoName: { color: "#0F172A", fontSize: 13, fontWeight: "800" },
-  driverInfoPhone: { color: "#64748B", fontSize: 12, fontWeight: "700" },
-  sectionCard: { backgroundColor: "#FFF", borderRadius: 24, padding: 18, marginBottom: 14 },
-  sectionTitle: { color: "#0F172A", fontSize: 15, fontWeight: "800", marginBottom: 10 },
-  timelineWrap: { position: "relative", paddingLeft: 2 },
-  timelineLine: { position: "absolute", left: 20, top: 8, bottom: 8, width: 2, backgroundColor: "#E2E8F0" },
-  timelineItem: { flexDirection: "row" },
-  dot: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", marginTop: 2 },
-  dotText: { color: "#FFF", fontSize: 12, fontWeight: "800" },
-  timelineContent: { flex: 1, paddingLeft: 14 },
-  timeText: { color: "#4F46E5", fontSize: 11, fontWeight: "800", marginBottom: 4 },
-  addrTitle: { color: "#0F172A", fontSize: 15, fontWeight: "700" },
-  addrDesc: { color: "#64748B", fontSize: 12, fontWeight: "700", marginTop: 3 },
-  copyBtn: {
-    marginTop: 10,
-    alignSelf: "flex-start",
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#F1F5F9",
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-  },
-  copyBtnText: { color: "#475569", fontSize: 10, fontWeight: "700", marginLeft: 4 },
-  mapPreview: {
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    borderRadius: 16,
-    backgroundColor: "#F8FAFC",
-    minHeight: 170,
-    paddingHorizontal: 14,
-    paddingVertical: 16,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  mapPreviewTitle: { color: "#0F172A", fontSize: 13, fontWeight: "800", marginTop: 8 },
-  mapPreviewSub: { color: "#64748B", fontSize: 11, fontWeight: "700", marginTop: 6, textAlign: "center" },
-  metaText: { color: "#475569", fontSize: 12, fontWeight: "700", marginBottom: 5 },
-  emptyText: { color: "#94A3B8", fontSize: 11, fontWeight: "700" },
-  bottomBar: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "#FFFFFF",
-    borderTopWidth: 1,
-    borderTopColor: "#E2E8F0",
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  iconGroup: { flexDirection: "row", marginRight: 10 },
-  iconBtn: {
-    width: 56,
-    height: 56,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    backgroundColor: "#F8FAFC",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 8,
-  },
-  mainBtn: {
-    flex: 1,
-    height: 56,
-    borderRadius: 18,
-    backgroundColor: "#EF4444",
-    alignItems: "center",
-    justifyContent: "center",
-    flexDirection: "row",
-  },
-  mainBtnText: { color: "#FFF", fontSize: 16, fontWeight: "700", marginLeft: 8 },
-  waitingActionRow: { flex: 1, flexDirection: "row", gap: 8 },
-  waitingActionBtn: {
-    flex: 1,
-    height: 56,
-    borderRadius: 18,
-    borderWidth: 1,
-    backgroundColor: "#FFFFFF",
-    alignItems: "center",
-    justifyContent: "center",
-    flexDirection: "row",
-  },
-  waitingActionText: { fontSize: 15, fontWeight: "800", marginLeft: 6 },
-  contactDriverBtn: {
-    flex: 1,
-    height: 56,
-    borderRadius: 18,
-    alignItems: "center",
-    justifyContent: "center",
-    flexDirection: "row",
-  },
-  contactDriverBtnText: {
-    color: "#FFFFFF",
-    fontSize: 15,
-    fontWeight: "800",
-    marginLeft: 8,
-  },
-});
+// const s = StyleSheet.create({
+//   page: { flex: 1 },
+//   center: { justifyContent: "center", alignItems: "center", paddingHorizontal: 20 },
+//   title: { fontSize: 18, fontWeight: "900" },
+//   backBtn: { marginTop: 12, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10 },
+//   backBtnText: { fontSize: 13, fontWeight: "800" },
+// });
