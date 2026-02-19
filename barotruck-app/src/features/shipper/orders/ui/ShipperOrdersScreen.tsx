@@ -7,8 +7,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { type DispatchStatusKey } from "@/features/common/orders/ui/DispatchStatusBadge";
 import { OrderApi } from "@/shared/api/orderService";
-import { getLocalShipperOrders, hydrateLocalShipperOrders } from "@/features/shipper/home/model/localShipperOrders";
-import { MOCK_SHIPPER_ORDERS } from "@/features/shipper/mock";
 import type { OrderResponse } from "@/shared/models/order";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import { RecommendedOrderCard } from "@/shared/ui/business/RecommendedOrderCard";
@@ -24,6 +22,8 @@ type DispatchCardItem = {
   timeLabel: string;
   from: string;
   to: string;
+  fromDetail?: string;
+  toDetail?: string;
   distanceKm: number;
   pickupTimeHHmm?: string;
   dropoffTimeHHmm?: string;
@@ -110,6 +110,8 @@ function toWorkToolShort(v?: string) {
 function toUiCard(order: OrderResponse): DispatchCardItem | null {
   const from = order.startAddr || order.startPlace || "출발지 미정";
   const to = order.endAddr || order.endPlace || "도착지 미정";
+  const fromDetail = order.startPlace || "";
+  const toDetail = order.endPlace || "";
   const cargoLabel = `${order.reqTonnage ?? ""} ${order.reqCarType ?? ""}`.trim() || order.cargoContent || "차량 정보 미정";
   const timeLabel = relativeLabel(order.updated ?? order.createdAt);
   const distanceKm = Math.round(order.distance ?? 0);
@@ -132,6 +134,8 @@ function toUiCard(order: OrderResponse): DispatchCardItem | null {
       timeLabel,
       from,
       to,
+      fromDetail,
+      toDetail,
       distanceKm,
       pickupTimeHHmm: toHHmm(order.startSchedule),
       dropoffTimeHHmm: toHHmm(order.endSchedule),
@@ -153,6 +157,8 @@ function toUiCard(order: OrderResponse): DispatchCardItem | null {
       timeLabel,
       from,
       to,
+      fromDetail,
+      toDetail,
       distanceKm,
       pickupTimeHHmm: toHHmm(order.startSchedule),
       dropoffTimeHHmm: toHHmm(order.endSchedule),
@@ -176,6 +182,8 @@ function toUiCard(order: OrderResponse): DispatchCardItem | null {
       timeLabel,
       from,
       to,
+      fromDetail,
+      toDetail,
       distanceKm,
       pickupTimeHHmm: toHHmm(order.startSchedule),
       dropoffTimeHHmm: toHHmm(order.endSchedule),
@@ -201,6 +209,8 @@ function toUiCard(order: OrderResponse): DispatchCardItem | null {
       timeLabel: `어제 완료`,
       from,
       to,
+      fromDetail,
+      toDetail,
       distanceKm,
       pickupTimeHHmm: toHHmm(order.startSchedule),
       dropoffTimeHHmm: toHHmm(order.endSchedule),
@@ -214,192 +224,6 @@ function toUiCard(order: OrderResponse): DispatchCardItem | null {
 
   return null;
 }
-
-function mapLocalToDispatchCards(): DispatchCardItem[] {
-  return getLocalShipperOrders().map((item) => {
-    if (item.status === "CONFIRMED") {
-      return {
-        id: item.id,
-        isInstantDispatch: item.dispatchMode === "instant",
-        tab: "WAITING",
-        statusLabel: "배차완료",
-        statusTone: "blue",
-        timeLabel: item.updatedAtLabel,
-        from: item.from,
-        to: item.to,
-        distanceKm: item.distanceKm,
-        pickupTimeHHmm: item.pickupTimeHHmm || "09:00",
-        dropoffTimeHHmm: item.dropoffTimeHHmm || "15:00",
-        cargoLabel: item.cargoSummary,
-        loadMethodShort: toLoadMethodShort(item.loadMethod),
-        workToolShort: toWorkToolShort(item.workTool),
-        priceWon: item.priceWon,
-        driverName: "선착순 배차",
-        driverVehicle: item.cargoSummary,
-      };
-    }
-
-    if (item.status === "DRIVING") {
-      return {
-        id: item.id,
-        isInstantDispatch: item.dispatchMode === "instant",
-        tab: "PROGRESS",
-        statusLabel: "운송중",
-        statusTone: "blue",
-        timeLabel: item.updatedAtLabel,
-        from: item.from,
-        to: item.to,
-        distanceKm: item.distanceKm,
-        pickupTimeHHmm: item.pickupTimeHHmm || "09:00",
-        dropoffTimeHHmm: item.dropoffTimeHHmm || "15:00",
-        cargoLabel: item.cargoSummary,
-        loadMethodShort: toLoadMethodShort(item.loadMethod),
-        workToolShort: toWorkToolShort(item.workTool),
-        priceWon: item.priceWon,
-        driverName: "배차된 기사",
-        driverVehicle: item.cargoSummary,
-        drivingStageLabel: "배달 중",
-      };
-    }
-
-    if (item.status === "DONE") {
-      return {
-        id: item.id,
-        isInstantDispatch: item.dispatchMode === "instant",
-        tab: "DONE",
-        statusLabel: "운행완료",
-        statusTone: "gray",
-        timeLabel: item.updatedAtLabel,
-        from: item.from,
-        to: item.to,
-        distanceKm: item.distanceKm,
-        pickupTimeHHmm: item.pickupTimeHHmm || "09:00",
-        dropoffTimeHHmm: item.dropoffTimeHHmm || "15:00",
-        cargoLabel: item.cargoSummary,
-        loadMethodShort: toLoadMethodShort(item.loadMethod),
-        workToolShort: toWorkToolShort(item.workTool),
-        priceWon: item.priceWon,
-        receiptLabel: "인수증 확인",
-      };
-    }
-
-    return {
-      id: item.id,
-      isInstantDispatch: item.dispatchMode === "instant",
-      tab: "WAITING",
-      statusLabel: "대기중",
-      statusTone: "gray",
-      timeLabel: item.updatedAtLabel,
-      from: item.from,
-      to: item.to,
-      distanceKm: item.distanceKm,
-      pickupTimeHHmm: item.pickupTimeHHmm || "09:00",
-      dropoffTimeHHmm: item.dropoffTimeHHmm || "15:00",
-      cargoLabel: item.cargoSummary,
-      loadMethodShort: toLoadMethodShort(item.loadMethod),
-      workToolShort: toWorkToolShort(item.workTool),
-      priceWon: item.priceWon,
-      applicants: 0,
-    };
-  });
-}
-
-function mapSharedMockToDispatchCards(): DispatchCardItem[] {
-  return MOCK_SHIPPER_ORDERS.map((item, index) => {
-    if (item.status === "DISPATCHED") {
-      return {
-        id: item.id,
-        isInstantDispatch: item.isInstantDispatch,
-        tab: "WAITING",
-        statusLabel: "배차완료",
-        statusTone: "blue",
-        timeLabel: item.updatedAtLabel,
-        from: item.from,
-        to: item.to,
-        distanceKm: item.distanceKm,
-        pickupTimeHHmm: item.pickupTimeHHmm || "09:00",
-        dropoffTimeHHmm: item.dropoffTimeHHmm || "15:00",
-        cargoLabel: item.cargoSummary,
-        loadMethodShort: item.loadMethodShort || "-",
-        workToolShort: item.workToolShort || "-",
-        priceWon: item.priceWon,
-        driverName: "선착순 배차",
-        driverVehicle: item.cargoSummary,
-        pickupLabel: item.updatedAtLabel,
-      };
-    }
-
-    if (item.status === "DRIVING") {
-      return {
-        id: item.id,
-        isInstantDispatch: item.isInstantDispatch,
-        tab: "PROGRESS",
-        statusLabel: "운송중",
-        statusTone: "blue",
-        timeLabel: item.updatedAtLabel,
-        from: item.from,
-        to: item.to,
-        distanceKm: item.distanceKm,
-        pickupTimeHHmm: item.pickupTimeHHmm || "09:00",
-        dropoffTimeHHmm: item.dropoffTimeHHmm || "15:00",
-        cargoLabel: item.cargoSummary,
-        loadMethodShort: item.loadMethodShort || "-",
-        workToolShort: item.workToolShort || "-",
-        priceWon: item.priceWon,
-        driverName: "배차된 기사",
-        driverVehicle: item.cargoSummary,
-        pickupLabel: item.updatedAtLabel,
-        drivingStageLabel: "배달 중",
-      };
-    }
-
-    if (item.status === "DONE") {
-      return {
-        id: item.id,
-        isInstantDispatch: item.isInstantDispatch,
-        tab: "DONE",
-        statusLabel: "운행완료",
-        statusTone: "gray",
-        timeLabel: item.updatedAtLabel,
-        from: item.from,
-        to: item.to,
-        distanceKm: item.distanceKm,
-        pickupTimeHHmm: item.pickupTimeHHmm || "09:00",
-        dropoffTimeHHmm: item.dropoffTimeHHmm || "15:00",
-        cargoLabel: item.cargoSummary,
-        loadMethodShort: item.loadMethodShort || "-",
-        workToolShort: item.workToolShort || "-",
-        priceWon: item.priceWon,
-        receiptLabel: "인수증 확인",
-      };
-    }
-
-    const mockApplicants = index % 2 === 0 ? 3 : 2;
-    return {
-      id: item.id,
-      isInstantDispatch: item.isInstantDispatch,
-      tab: "WAITING",
-      statusLabel: mockApplicants > 0 ? `신청 ${mockApplicants}명` : "대기중",
-      statusTone: mockApplicants > 0 ? "yellow" : "gray",
-      timeLabel: item.updatedAtLabel,
-      from: item.from,
-      to: item.to,
-      distanceKm: item.distanceKm,
-      pickupTimeHHmm: item.pickupTimeHHmm || "09:00",
-      dropoffTimeHHmm: item.dropoffTimeHHmm || "15:00",
-      cargoLabel: item.cargoSummary,
-      loadMethodShort: item.loadMethodShort || "-",
-      workToolShort: item.workToolShort || "-",
-      priceWon: item.priceWon,
-      applicants: mockApplicants,
-    };
-  });
-}
-
-const FORCE_MOCK_DISPATCH_DATA =
-  ["1", "true", "yes", "on"].includes(String(process.env.EXPO_PUBLIC_USE_SHIPPER_MOCK ?? "").trim().toLowerCase()) ||
-  ["1", "true", "yes", "on"].includes(String(process.env.EXPO_PUBLIC_USE_MOCK ?? "").trim().toLowerCase());
-const SHARED_MOCK_DISPATCH_CARDS = mapSharedMockToDispatchCards();
 
 function badgeStatusOf(item: DispatchCardItem): DispatchStatusKey {
   if (item.tab === "WAITING") {
@@ -435,56 +259,30 @@ export default function ShipperOrdersScreen() {
 
   useFocusEffect(
     React.useCallback(() => {
-      // MOCK 데이터 모드일 때는 기존 로직 유지 (테스트용)
-      if (FORCE_MOCK_DISPATCH_DATA) {
-        setCards(SHARED_MOCK_DISPATCH_CARDS); // 로컬 제외하고 Mock만
-        return () => {};
-      }
-
       let active = true;
       void (async () => {
         try {
-          console.log("🔍 [1. API 요청 시작] /api/v1/orders/my-shipper");
-          // 서버에서 실데이터만 가져옴 (로컬 로직 삭제)
           const rows = await OrderApi.getMyShipperOrders();
-          
+
           if (!active) return;
-          // 서버에서 들어온 생데이터(Raw Data) 구조 파악용 로그
-          console.log("📦 [2. 서버 응답 성공] 데이터 개수:", rows.length);
-          if (rows.length > 0) {
-            console.log("📄 [3. 첫 번째 데이터 샘플]:", JSON.stringify(rows[0], null, 2));
-            
-            // 특정 필드들 집중 점검
-            console.log("📅 createdAt 타입:", typeof rows[0].createdAt, "| 값:", rows[0].createdAt);
-            console.log("🏷️ tag 타입:", Array.isArray(rows[0].tag) ? "Array" : typeof rows[0].tag, "| 값:", rows[0].tag);
-          }
-
-
-          // 서버 데이터 매핑 및 유효성 검사
           const serverMapped = rows
             .map(toUiCard)
             .filter((row): row is DispatchCardItem => row !== null);
-
-          // 오직 서버 데이터만 상태에 저장
           setCards(serverMapped);
         } catch (error: any) {
-        // 400 에러의 진짜 이유(서버가 보낸 메세지) 출력
-        console.error("🔥 [API 에러 발생]");
-        console.error("상태 코드:", error.response?.status);
-        console.error("에러 데이터(서버 메세지):", JSON.stringify(error.response?.data, null, 2));
-        
-        if (error.response?.status === 400) {
-          Alert.alert("데이터 오류", "서버 응답 형식이 올바르지 않습니다. 로그를 확인하세요.");
+          if (error?.response?.status === 400) {
+            Alert.alert("데이터 오류", "서버 응답 형식이 올바르지 않습니다.");
+          }
+          if (!active) return;
+          setCards([]);
         }
-        
-        if (!active) return;
-        setCards([]);
-      }
-    })();
+      })();
 
-    return () => { active = false; };
-  }, [])
-);
+      return () => {
+        active = false;
+      };
+    }, [])
+  );
 
   const filtered = cards.filter((item) => item.tab === tab);
   const hasWaitingApplicants = cards.some(
@@ -583,6 +381,8 @@ export default function ShipperOrdersScreen() {
               statusKey={toHomeStatusKey(item)}
               from={item.from}
               to={item.to}
+              fromDetail={item.fromDetail}
+              toDetail={item.toDetail}
               distanceKm={item.distanceKm}
               statusLabel={statusLabel}
               etaHHmm={item.dropoffTimeHHmm}

@@ -29,13 +29,15 @@ export function DispatchStatusBadge({
       : status === "DRIVING"
         ? c.status.danger
         : c.text.secondary;
+  const mergedStyle: ViewStyle = { backgroundColor: bg, borderColor: bg, ...(style ?? {}) };
+  const mergedTextStyle: TextStyle = { color: c.text.inverse, fontWeight: "800", ...(textStyle ?? {}) };
 
   return (
     <Badge
       label={labelByKey(status)}
       tone="neutral"
-      style={[{ backgroundColor: bg, borderColor: bg }, style]}
-      textStyle={[{ color: c.text.inverse, fontWeight: "800" }, textStyle]}
+      style={mergedStyle}
+      textStyle={mergedTextStyle}
     />
   );
 }

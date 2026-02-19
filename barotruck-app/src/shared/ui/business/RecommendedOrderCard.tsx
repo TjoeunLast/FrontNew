@@ -10,6 +10,8 @@ export type RecommendedOrderCardProps = {
   statusKey: "MATCHING" | "DISPATCHED" | "DRIVING" | "DONE";
   from: string;
   to: string;
+  fromDetail?: string;
+  toDetail?: string;
   distanceKm: number;
   statusLabel: string;
   etaHHmm?: string;
@@ -25,6 +27,8 @@ export function RecommendedOrderCard({
   statusKey,
   from,
   to,
+  fromDetail,
+  toDetail,
   distanceKm,
   statusLabel,
   etaHHmm,
@@ -57,6 +61,12 @@ export function RecommendedOrderCard({
     const parts = (addr || "").trim().split(/\s+/);
     return `${parts[0] || ""} ${parts[1] || ""}`.trim() || "-";
   };
+  const normalizeText = (v?: string) => (v || "").trim().replace(/\s+/g, " ");
+  const fromDetailText = normalizeText(fromDetail);
+  const toDetailText = normalizeText(toDetail);
+  // 차주 카드와 동일하게 "상세주소 없음" 문구를 쓰지 않고 실제 상세주소를 우선 노출한다.
+  const fromSubText = fromDetailText || normalizeText(from) || "-";
+  const toSubText = toDetailText || normalizeText(to) || "-";
 
   return (
     <Pressable
@@ -91,7 +101,7 @@ export function RecommendedOrderCard({
             {getShortAddr(from)}
           </Text>
           <Text style={[s.placeText, { color: isDone ? "#94A3B8" : c.text.secondary }]} numberOfLines={1}>
-            {from}
+            {fromSubText}
           </Text>
         </View>
 
@@ -110,7 +120,7 @@ export function RecommendedOrderCard({
             {getShortAddr(to)}
           </Text>
           <Text style={[s.placeText, { textAlign: "right", color: isDone ? "#94A3B8" : c.text.secondary }]} numberOfLines={1}>
-            {to}
+            {toSubText}
           </Text>
         </View>
       </View>

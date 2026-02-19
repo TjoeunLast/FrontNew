@@ -5,7 +5,7 @@ import React, { useMemo, useState } from "react";
 import { Alert, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { setCreateOrderDraft } from "@/features/shipper/create-order/model/createOrderDraft";
+import { getCreateOrderDraft, setCreateOrderDraft } from "@/features/shipper/create-order/model/createOrderDraft";
 import { AddressApi } from "@/shared/api/addressService";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import { Button } from "@/shared/ui/base/Button";
@@ -47,34 +47,43 @@ export function ShipperCreateOrderStep1Screen() {
   const c = t.colors;
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const initialDraft = getCreateOrderDraft();
 
-  const [startSelected, setStartSelected] = useState("");
-  const [startAddrDetail, setStartAddrDetail] = useState("");
-  const [startContact, setStartContact] = useState("");
-  const [startSearch, setStartSearch] = useState("");
-  const [loadDay, setLoadDay] = useState<LoadDayType>("당상(오늘)");
-  const [loadDate, setLoadDate] = useState(new Date());
+  const [startSelected, setStartSelected] = useState(initialDraft?.startSelected ?? "");
+  const [startAddrDetail, setStartAddrDetail] = useState(initialDraft?.startAddrDetail ?? "");
+  const [startContact, setStartContact] = useState(initialDraft?.startContact ?? "");
+  const [startSearch, setStartSearch] = useState(initialDraft?.startSelected ?? "");
+  const [loadDay, setLoadDay] = useState<LoadDayType>(initialDraft?.loadDay ?? "당상(오늘)");
+  const [loadDate, setLoadDate] = useState(
+    initialDraft?.loadDateISO ? new Date(initialDraft.loadDateISO) : new Date()
+  );
   const [loadDatePickerOpen, setLoadDatePickerOpen] = useState(false);
-  const [startTimeHHmm, setStartTimeHHmm] = useState("09:00");
+  const [startTimeHHmm, setStartTimeHHmm] = useState(initialDraft?.startTimeHHmm ?? "09:00");
   const [startTimePickerOpen, setStartTimePickerOpen] = useState(false);
-  const [endAddr, setEndAddr] = useState("");
-  const [endAddrDetail, setEndAddrDetail] = useState("");
-  const [endContact, setEndContact] = useState("");
-  const [endTimeHHmm, setEndTimeHHmm] = useState("18:00");
+  const [endAddr, setEndAddr] = useState(initialDraft?.endAddr ?? "");
+  const [endAddrDetail, setEndAddrDetail] = useState(initialDraft?.endAddrDetail ?? "");
+  const [endContact, setEndContact] = useState(initialDraft?.endContact ?? "");
+  const [endTimeHHmm, setEndTimeHHmm] = useState(initialDraft?.endTimeHHmm ?? "18:00");
   const [endTimePickerOpen, setEndTimePickerOpen] = useState(false);
-  const [arriveType, setArriveType] = useState<ArriveType>("당착");
+  const [arriveType, setArriveType] = useState<ArriveType>(initialDraft?.arriveType ?? "당착");
 
-  const [carType, setCarType] = useState<Option>(CAR_TYPE_OPTIONS[1]);
-  const [ton, setTon] = useState<Option>(TON_OPTIONS[3]);
-  const [cargoDetail, setCargoDetail] = useState("");
-  const [weightTon, setWeightTon] = useState("0");
+  const [carType, setCarType] = useState<Option>(initialDraft?.carType ?? CAR_TYPE_OPTIONS[1]);
+  const [ton, setTon] = useState<Option>(initialDraft?.ton ?? TON_OPTIONS[3]);
+  const [cargoDetail, setCargoDetail] = useState(initialDraft?.cargoDetail ?? "");
+  const [weightTon, setWeightTon] = useState(initialDraft?.weightTon ?? "0");
 
-  const [photos, setPhotos] = useState(DEFAULT_PHOTOS);
-  const [dispatch, setDispatch] = useState<DispatchType>("instant");
-  const [tripType, setTripType] = useState<TripType>("oneWay");
-  const [pay, setPay] = useState<PayType>("receipt30");
-  const [fareInput, setFareInput] = useState("");
-  const [appliedBaseFare, setAppliedBaseFare] = useState(0);
+  const [photos, setPhotos] = useState(initialDraft?.photos ?? DEFAULT_PHOTOS);
+  const [dispatch, setDispatch] = useState<DispatchType>(initialDraft?.dispatch ?? "instant");
+  const [tripType, setTripType] = useState<TripType>(initialDraft?.tripType ?? "oneWay");
+  const [pay, setPay] = useState<PayType>(initialDraft?.pay ?? "receipt30");
+  const [fareInput, setFareInput] = useState(
+    initialDraft?.appliedFare ? String(initialDraft.appliedFare) : ""
+  );
+  const [appliedBaseFare, setAppliedBaseFare] = useState(() => {
+    if (!initialDraft) return 0;
+    if (initialDraft.tripType === "roundTrip") return Math.max(0, Math.round(initialDraft.appliedFare / 1.8));
+    return initialDraft.appliedFare;
+  });
   const [carDropdownOpen, setCarDropdownOpen] = useState(false);
   const [tonDropdownOpen, setTonDropdownOpen] = useState(false);
   const [startAddrSuggestions, setStartAddrSuggestions] = useState<string[]>([]);
@@ -248,6 +257,7 @@ export function ShipperCreateOrderStep1Screen() {
     }
 
     setCreateOrderDraft({
+      editOrderId: initialDraft?.editOrderId,
       startSelected: resolvedStartAddr,
       startAddrDetail: startAddrDetail.trim(),
       startContact: startContact.trim(),
@@ -863,7 +873,7 @@ export function ShipperCreateOrderStep1Screen() {
           </View>
         </View>
 
-        <Button title="화물 등록하기" onPress={submit} fullWidth />
+        <Button title="다음" onPress={submit} fullWidth />
       </View>
     </View>
   );

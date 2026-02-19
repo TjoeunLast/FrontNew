@@ -1,7 +1,7 @@
 ﻿import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React from "react";
-import { Alert, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Alert, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
@@ -9,7 +9,6 @@ import {
   getCreateOrderDraft,
 } from "@/features/shipper/create-order/model/createOrderDraft";
 import { PRESET_REQUEST_TAGS } from "@/features/shipper/create-order/ui/createOrderStep1.constants";
-import { addLocalShipperOrder } from "@/features/shipper/home/model/localShipperOrders";
 import { OrderApi } from "@/shared/api/orderService";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import type { OrderRequest } from "@/shared/models/order";
@@ -20,9 +19,6 @@ import { Chip as FormChip } from "@/shared/ui/form/Chip";
 import { Chip as RequestChip } from "./createOrderStep1.components";
 import { s as step1Styles } from "./createOrderStep1.styles";
 
-const FORCE_MOCK_CREATE_ORDER =
-  ["1", "true", "yes", "on"].includes(String(process.env.EXPO_PUBLIC_USE_SHIPPER_MOCK ?? "").trim().toLowerCase()) ||
-  ["1", "true", "yes", "on"].includes(String(process.env.EXPO_PUBLIC_USE_MOCK ?? "").trim().toLowerCase());
 const EXCLUSIVE_LOAD_SURCHARGE_RATE = 0.1;
 const MIXED_LOAD_DISCOUNT_RATE = 0.1;
 const PACKAGING_FEE_WON = 30000;
@@ -73,17 +69,6 @@ function parseTonnage(label: string, value: string) {
   return 0;
 }
 
-function toLocalOrderTimeLabel() {
-  return "방금 전";
-}
-
-function toLocalStatusFromOrderStatus(status?: string): "MATCHING" | "CONFIRMED" | "DRIVING" | "DONE" {
-  if (status === "ACCEPTED") return "CONFIRMED";
-  if (status === "LOADING" || status === "IN_TRANSIT" || status === "UNLOADING") return "DRIVING";
-  if (status === "COMPLETED") return "DONE";
-  return "MATCHING";
-}
-
 export function ShipperCreateOrderStep2CargoScreen() {
   const { colors: c } = useAppTheme();
   const router = useRouter();
@@ -128,35 +113,6 @@ export function ShipperCreateOrderStep2CargoScreen() {
   const submitFinal = async () => {
     setLoading(true);
     try {
-      const localOrder: Parameters<typeof addLocalShipperOrder>[0] = {
-        id: `local-${Date.now()}`,
-        status: draft.dispatch === "instant" ? "CONFIRMED" : "MATCHING",
-        dispatchMode: draft.dispatch,
-        pickupTypeLabel: draft.loadDay,
-        dropoffTypeLabel: draft.arriveType,
-        from: draft.startSelected,
-        to: draft.endAddr,
-        pickupTimeHHmm: draft.startTimeHHmm,
-        dropoffTimeHHmm: draft.endTimeHHmm,
-        distanceKm: Math.round(draft.distanceKm),
-        cargoSummary: `${draft.ton.label} ${draft.carType.label}`.trim(),
-        loadMethod,
-        workTool: resolvedWorkType,
-        priceWon: finalFare,
-        updatedAtLabel: toLocalOrderTimeLabel(),
-      };
-
-      if (FORCE_MOCK_CREATE_ORDER) {
-        addLocalShipperOrder(localOrder);
-        clearCreateOrderDraft();
-        Alert.alert(
-          "등록 완료",
-          "목업 모드에서 화물 등록이 완료되었습니다.",
-          [{ text: "확인", onPress: () => router.replace("/(shipper)/(tabs)") }]
-        );
-        return;
-      }
-
       const request: OrderRequest = {
         startAddr: draft.startSelected,
         startPlace: draft.startAddrDetail || draft.startSelected,
@@ -195,12 +151,7 @@ export function ShipperCreateOrderStep2CargoScreen() {
         duration: Math.max(30, Math.round(draft.distanceKm * 2)),
       };
 
-      const created = await OrderApi.createOrder(request);
-      addLocalShipperOrder({
-        ...localOrder,
-        id: String(created.orderId ?? `api-${Date.now()}`),
-        status: toLocalStatusFromOrderStatus(created.status),
-      });
+      await OrderApi.createOrder(request);
 
       clearCreateOrderDraft();
       Alert.alert(
@@ -460,7 +411,7 @@ export function ShipperCreateOrderStep2CargoScreen() {
           </View>
         </View>
 
-        <Button title="등록 완료" onPress={submitFinal} fullWidth loading={loading} />
+        <Button title={draft.editOrderId ? "수정 완료" : "등록 완료"} onPress={submitFinal} fullWidth loading={loading} />
       </View>
     </View>
   );

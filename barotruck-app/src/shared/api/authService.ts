@@ -1,5 +1,6 @@
 import * as SecureStore from 'expo-secure-store';
 import { AuthResponse, RegisterRequest } from '../models/auth';
+import { USE_MOCK } from '@/shared/config/mock';
 import apiClient from './apiClient';
 
 export const AuthService = {
@@ -7,6 +8,28 @@ export const AuthService = {
    * 1. 회원가입 (POST /api/v1/auth/register) 
    */
   register: async (data: RegisterRequest): Promise<AuthResponse> => {
+    if (USE_MOCK) {
+      const mockRes: AuthResponse = {
+        access_token: `mock-access-${Date.now()}`,
+        refresh_token: `mock-refresh-${Date.now()}`,
+        user_id: Date.now(),
+      };
+
+      await SecureStore.setItemAsync('userToken', mockRes.access_token);
+      await SecureStore.setItemAsync('refreshToken', mockRes.refresh_token);
+      await SecureStore.setItemAsync(
+        'baro_mock_auth_session',
+        JSON.stringify({
+          userId: mockRes.user_id,
+          email: data.email,
+          nickname: data.nickname || '목업사용자',
+          phone: data.phone || '01000000000',
+          role: data.role || 'SHIPPER',
+        })
+      );
+      return mockRes;
+    }
+
     const res = await apiClient.post('/api/v1/auth/register', data);
 
     // 백엔드 @JsonProperty 설정에 맞춰 access_token으로 확인
@@ -22,6 +45,30 @@ export const AuthService = {
    * 2. 로그인 (POST /api/v1/auth/authenticate) 
    */
   login: async (email: string, password: string): Promise<AuthResponse> => {
+    if (USE_MOCK) {
+      const role = /driver/i.test(email) ? 'DRIVER' : 'SHIPPER';
+      const mockRes: AuthResponse = {
+        access_token: `mock-access-${Date.now()}`,
+        refresh_token: `mock-refresh-${Date.now()}`,
+        user_id: Date.now(),
+      };
+
+      await SecureStore.setItemAsync('userToken', mockRes.access_token);
+      await SecureStore.setItemAsync('refreshToken', mockRes.refresh_token);
+      await SecureStore.setItemAsync(
+        'baro_mock_auth_session',
+        JSON.stringify({
+          userId: mockRes.user_id,
+          email,
+          nickname: email.split('@')[0] || '목업사용자',
+          phone: '01012345678',
+          role,
+          passwordHint: password ? 'set' : 'empty',
+        })
+      );
+      return mockRes;
+    }
+
     const res = await apiClient.post('/api/v1/auth/authenticate', { email, password });
     
     // 디버깅을 위한 로그
@@ -44,6 +91,7 @@ export const AuthService = {
    * 3. 토큰 갱신 (POST /api/v1/auth/refresh-token) 
    */
   refreshToken: async (): Promise<void> => {
+    if (USE_MOCK) return;
     await apiClient.post('/api/v1/auth/refresh-token');
   },
 

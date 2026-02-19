@@ -6,6 +6,7 @@ import apiClient from './apiClient'; // 보내주신 axios 인스턴스
 import { ChatMessageResponse, ChatRoomResponse, ChatHistoryResponse } from '../models/chat';
 import { jwtDecode } from "jwt-decode"; // 설치 필요: npm install jwt-decode
 import { UserService } from './userService';
+import { USE_MOCK } from "@/shared/config/mock";
 
 
 export const useChatManager = () => {
@@ -59,6 +60,10 @@ export const useChatManager = () => {
 
   // 1. 내 채팅방 목록 조회 (ChatRoomController.getMyRooms)
   const fetchMyRooms = async () => {
+    if (USE_MOCK) {
+      setRooms([]);
+      return;
+    }
     try {
       const res = await apiClient.get<ChatRoomResponse[]>('/api/chat/room');
       setRooms(res.data);
@@ -69,6 +74,7 @@ export const useChatManager = () => {
 
   // 2. 1:1 채팅방 생성 및 입장 (ChatRoomController.createPersonalRoom)
   const startOrGetChat = async (targetId: number) => {
+    if (USE_MOCK) return Number(targetId) + 1000;
     try {
       const res = await apiClient.post<number>(`/api/chat/room/personal/${targetId}`);
       return res.data; // 기존 방이 있으면 해당 ID, 없으면 새 ID 반환
@@ -80,6 +86,11 @@ export const useChatManager = () => {
   // 3. 과거 내역 조회 (수정)
 const loadHistory = async (roomId: number, page: number = 0) => {
   if (!roomId || isNaN(roomId)) return;
+  if (USE_MOCK) {
+    if (page === 0) setMessages([]);
+    setHasNext(false);
+    return;
+  }
 
   try {
     const res = await apiClient.get<ChatHistoryResponse>(`/api/chat/room/${roomId}`, {
@@ -108,6 +119,7 @@ const loadHistory = async (roomId: number, page: number = 0) => {
 
   // 4. WebSocket 연결 및 실시간 구독 (ChatMessageController 대응)
   const connectSocket = async (roomId: number) => {
+    if (USE_MOCK) return;
     // ✨ 추가: roomId가 없으면 실행 중단
     if (!roomId || isNaN(roomId)) {
       console.warn("유효하지 않은 roomId로 소켓 연결을 시도했습니다.");

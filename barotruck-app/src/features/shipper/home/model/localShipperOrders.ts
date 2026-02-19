@@ -11,12 +11,20 @@ export type LocalShipperOrderItem = {
   dropoffTypeLabel?: string;
   from: string;
   to: string;
+  fromDetail?: string;
+  toDetail?: string;
+  startContact?: string;
+  endContact?: string;
   pickupTimeHHmm?: string;
   dropoffTimeHHmm?: string;
   distanceKm: number;
   cargoSummary: string;
+  cargoDetail?: string;
   loadMethod?: string;
   workTool?: string;
+  requestTags?: string[];
+  requestText?: string;
+  memo?: string;
   priceWon: number;
   updatedAtLabel: string;
 };
@@ -51,6 +59,8 @@ async function persistLocalShipperOrders() {
 export async function hydrateLocalShipperOrders() {
   if (hydrated) return;
   hydrated = true;
+  // In-memory에 이미 최신 등록건이 있으면 저장소 값으로 덮어쓰지 않는다.
+  if (localShipperOrders.length > 0) return;
   try {
     const raw = await AsyncStorage.getItem(STORAGE_KEY);
     if (!raw) return;
@@ -67,7 +77,24 @@ export function getLocalShipperOrders() {
   return [...localShipperOrders];
 }
 
+export function getLocalShipperOrderById(id: string) {
+  return localShipperOrders.find((x) => String(x.id) === String(id)) ?? null;
+}
+
 export function addLocalShipperOrder(order: LocalShipperOrderItem) {
+  const index = localShipperOrders.findIndex((x) => String(x.id) === String(order.id));
+  if (index >= 0) {
+    localShipperOrders.splice(index, 1);
+  }
   localShipperOrders.unshift(order);
   void persistLocalShipperOrders();
+}
+
+export function removeLocalShipperOrder(id: string) {
+  const before = localShipperOrders.length;
+  const next = localShipperOrders.filter((x) => String(x.id) !== String(id));
+  if (next.length === before) return false;
+  localShipperOrders.splice(0, localShipperOrders.length, ...next);
+  void persistLocalShipperOrders();
+  return true;
 }

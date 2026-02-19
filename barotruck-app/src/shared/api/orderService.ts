@@ -1,15 +1,17 @@
-import axios from 'axios'; // npm install axios 필요
+import { AssignedDriverInfoResponse, OrderRequest, OrderResponse, OrderStatus } from '../models/order'; //
 import apiClient from './apiClient'; // 위에서 만든 클라이언트 임포트
-import { OrderResponse, OrderRequest, DriverDashboardResponse, OrderStatus, AssignedDriverInfoResponse } from '../models/order'; //
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { USE_MOCK } from '@/shared/config/mock';
+import { MOCK_ORDERS } from '@/shared/mockData';
+import { MOCK_SHIPPER_ORDERS } from '@/features/shipper/mock/shipperMockOrders';
+import {
+  addLocalShipperOrder,
+  getLocalShipperOrders,
+  hydrateLocalShipperOrders,
+  removeLocalShipperOrder,
+  type LocalShipperOrderStatus,
+} from '@/features/shipper/home/model/localShipperOrders';
 
 const API_BASE = '/api/v1/orders';
-const SHIPPER_ORDERS_ENDPOINT_CACHE_KEY = "baro_shipper_orders_endpoint_v1";
-
-type EndpointCandidate = {
-  url: string;
-  params?: Record<string, string | number | boolean>;
-};
 
 function normalizeStatus(raw: any): OrderStatus {
   const v = String(raw ?? "").toUpperCase();
@@ -112,21 +114,203 @@ function toOrderList(payload: any): OrderResponse[] {
   return [];
 }
 
+function toScheduleIsoFromHHmm(hhmm?: string) {
+  if (!hhmm) return new Date().toISOString();
+  const m = hhmm.match(/^([01]\d|2[0-3]):([0-5]\d)$/);
+  if (!m) return new Date().toISOString();
+  const d = new Date();
+  d.setHours(Number(m[1]), Number(m[2]), 0, 0);
+  return d.toISOString();
+}
+
+function toStableNumericId(raw: string | number, seed = 0) {
+  const n = Number(raw);
+  if (Number.isFinite(n)) return Math.trunc(n);
+
+  const s = String(raw);
+  let hash = 0;
+  for (let i = 0; i < s.length; i += 1) {
+    hash = (hash * 31 + s.charCodeAt(i)) >>> 0;
+  }
+  return 700_000_000 + hash + seed;
+}
+
+function mapLocalStatusToOrderStatus(status: LocalShipperOrderStatus): OrderStatus {
+  if (status === "MATCHING") return "REQUESTED";
+  if (status === "CONFIRMED") return "ACCEPTED";
+  if (status === "DRIVING") return "IN_TRANSIT";
+  return "COMPLETED";
+}
+
+function mapLocalOrderToResponse(row: ReturnType<typeof getLocalShipperOrders>[number]): OrderResponse {
+  return {
+    orderId: toStableNumericId(row.id),
+    status: mapLocalStatusToOrderStatus(row.status),
+    createdAt: new Date().toISOString(),
+    updated: new Date().toISOString(),
+    startAddr: row.from,
+    startPlace: row.fromDetail || row.from,
+    startType: row.pickupTypeLabel || "당상",
+    startSchedule: toScheduleIsoFromHHmm(row.pickupTimeHHmm),
+    endAddr: row.to,
+    endPlace: row.toDetail || row.to,
+    endType: row.dropoffTypeLabel || "당착",
+    endSchedule: toScheduleIsoFromHHmm(row.dropoffTimeHHmm),
+    cargoContent: row.cargoDetail || row.cargoSummary,
+    loadMethod: row.loadMethod,
+    workType: row.workTool,
+    tonnage: 0,
+    reqCarType: row.cargoSummary,
+    reqTonnage: "",
+    driveMode: row.dispatchMode,
+    loadWeight: undefined,
+    basePrice: row.priceWon,
+    laborFee: 0,
+    packagingPrice: 0,
+    insuranceFee: 0,
+    payMethod: "",
+    instant: row.dispatchMode === "instant",
+    distance: row.distanceKm,
+    duration: Math.max(30, Math.round(row.distanceKm * 2)),
+    user: {
+      userId: 1,
+      email: "mock@baro.local",
+      phone: row.startContact || "01012345678",
+      nickname: "목업화주",
+      role: "SHIPPER",
+    },
+    applicantCount: row.status === "MATCHING" ? 2 : 0,
+  };
+}
+
+function mapShipperMockToResponse(row: (typeof MOCK_SHIPPER_ORDERS)[number], index: number): OrderResponse {
+  const status: OrderStatus =
+    row.status === "MATCHING"
+      ? "REQUESTED"
+      : row.status === "DISPATCHED"
+        ? "ACCEPTED"
+        : row.status === "DRIVING"
+          ? "IN_TRANSIT"
+          : "COMPLETED";
+
+  return {
+    orderId: toStableNumericId(row.id, index),
+    status,
+    createdAt: new Date().toISOString(),
+    updated: new Date().toISOString(),
+    startAddr: row.from,
+    startPlace: row.from,
+    startType: row.pickupTypeLabel || "당상",
+    startSchedule: toScheduleIsoFromHHmm(row.pickupTimeHHmm),
+    endAddr: row.to,
+    endPlace: row.to,
+    endType: row.dropoffTypeLabel || "당착",
+    endSchedule: toScheduleIsoFromHHmm(row.dropoffTimeHHmm),
+    cargoContent: row.cargoSummary,
+    loadMethod: row.loadMethodShort,
+    workType: row.workToolShort,
+    tonnage: 0,
+    reqCarType: row.cargoSummary,
+    reqTonnage: "",
+    driveMode: row.isInstantDispatch ? "instant" : "direct",
+    loadWeight: undefined,
+    basePrice: row.priceWon,
+    laborFee: 0,
+    packagingPrice: 0,
+    insuranceFee: 0,
+    payMethod: "",
+    instant: Boolean(row.isInstantDispatch),
+    distance: row.distanceKm,
+    duration: Math.max(30, Math.round(row.distanceKm * 2)),
+    user: {
+      userId: 1,
+      email: "mock@baro.local",
+      phone: "01012345678",
+      nickname: "목업화주",
+      role: "SHIPPER",
+    },
+    applicantCount: row.status === "MATCHING" ? 2 : 0,
+  };
+}
+
+async function getMockShipperOrders(): Promise<OrderResponse[]> {
+  await hydrateLocalShipperOrders();
+  const localRows = getLocalShipperOrders().map(mapLocalOrderToResponse);
+  const seededRows = MOCK_SHIPPER_ORDERS.map(mapShipperMockToResponse);
+  return [...localRows, ...seededRows];
+}
+
 export const OrderApi = {
   /** 1. 화주: 신규 오더 생성 */
   createOrder: async (data: OrderRequest): Promise<OrderResponse> => {
+    if (USE_MOCK) {
+      const orderId = Date.now();
+      addLocalShipperOrder({
+        id: String(orderId),
+        status: "MATCHING",
+        dispatchMode: data.instant ? "instant" : "direct",
+        pickupTypeLabel: data.startType || "당상",
+        dropoffTypeLabel: data.endType || "당착",
+        from: data.startAddr || "-",
+        to: data.endAddr || "-",
+        fromDetail: data.startPlace || "-",
+        toDetail: data.endPlace || "-",
+        pickupTimeHHmm: "09:00",
+        dropoffTimeHHmm: "18:00",
+        distanceKm: Math.round(Number(data.distance ?? 0)),
+        cargoSummary: `${data.reqTonnage ?? ""} ${data.reqCarType ?? ""}`.trim() || data.cargoContent || "-",
+        cargoDetail: data.cargoContent,
+        loadMethod: data.loadMethod,
+        workTool: data.workType,
+        priceWon: Number(data.basePrice ?? 0),
+        updatedAtLabel: "방금 전",
+      });
+      return {
+        orderId,
+        status: "REQUESTED",
+        createdAt: new Date().toISOString(),
+        updated: new Date().toISOString(),
+        startAddr: data.startAddr,
+        startPlace: data.startPlace,
+        startType: data.startType,
+        startSchedule: data.startSchedule,
+        endAddr: data.endAddr,
+        endPlace: data.endPlace,
+        endType: data.endType,
+        endSchedule: data.endSchedule,
+        cargoContent: data.cargoContent ?? "",
+        loadMethod: data.loadMethod,
+        workType: data.workType,
+        tonnage: data.tonnage,
+        reqCarType: data.reqCarType,
+        reqTonnage: data.reqTonnage,
+        driveMode: data.driveMode,
+        loadWeight: data.loadWeight,
+        basePrice: data.basePrice,
+        laborFee: data.laborFee,
+        packagingPrice: data.packagingPrice,
+        insuranceFee: data.insuranceFee,
+        payMethod: data.payMethod,
+        instant: data.instant,
+        distance: data.distance,
+        duration: data.duration,
+      };
+    }
+
     const res = await apiClient.post(API_BASE, data);
     return res.data;
   },
 
   /** 2. 차주: 배차 가능한 오더 목록 조회 */
   getAvailableOrders: async (): Promise<OrderResponse[]> => {
+    if (USE_MOCK) return MOCK_ORDERS;
     const res = await apiClient.get(`${API_BASE}/available`);
     return res.data;
   },
 
   /** 3. 차주: 내 차량 맞춤 추천 오더 조회 */
   getRecommendedOrders: async (): Promise<OrderResponse[]> => {
+    if (USE_MOCK) return MOCK_ORDERS.filter((x) => x.status === "REQUESTED");
     const res = await apiClient.get(`${API_BASE}/recommended`);
     return res.data;
   },
@@ -135,23 +319,34 @@ export const OrderApi = {
    * 백엔드 GET /api/v1/orders/my-shipper 호출
    */
   getMyShipperOrders: async (): Promise<OrderResponse[]> => {
+    if (USE_MOCK) return getMockShipperOrders();
     try {
       const res = await apiClient.get(`${API_BASE}/my-shipper`);
       // 데이터가 페이징(Page<T>) 형태로 올 경우를 대비해 toOrderList로 필터링
       return toOrderList(res.data);
-    } catch (error) {
-      console.error("화주 오더 목록 조회 실패:", error);
+    } catch (error: any) {
+      console.error("화주 오더 목록 조회 실패:", {
+        endpoint: `${API_BASE}/my-shipper`,
+        status: error?.response?.status,
+        data: error?.response?.data,
+        message: error?.message,
+      });
       return [];
     }
   },
 
   /** 4. 차주: 오더 수락 (배차 신청) */
   acceptOrder: async (orderId: number): Promise<void> => {
+    if (USE_MOCK) return;
     await apiClient.patch(`${API_BASE}/${orderId}/accept`);
   },
 
   /** 5. 공통: 오더 취소 (사유 포함) */
   cancelOrder: async (orderId: number, reason: string): Promise<void> => {
+    if (USE_MOCK) {
+      removeLocalShipperOrder(String(orderId));
+      return;
+    }
     await apiClient.patch(`${API_BASE}/${orderId}/cancel`, null, {
       params: { reason }
     });
@@ -159,6 +354,33 @@ export const OrderApi = {
 
   /** 6. 차주: 오더 상태 변경 (상차, 이동중, 완료 등) */
   updateStatus: async (orderId: number, newStatus: OrderStatus): Promise<OrderResponse> => {
+    if (USE_MOCK) {
+      const found = MOCK_ORDERS.find((x) => x.orderId === orderId);
+      if (found) return { ...found, status: newStatus, updated: new Date().toISOString() };
+      return {
+        orderId,
+        status: newStatus,
+        createdAt: new Date().toISOString(),
+        updated: new Date().toISOString(),
+        startAddr: "-",
+        startPlace: "-",
+        startType: "당상",
+        startSchedule: new Date().toISOString(),
+        endAddr: "-",
+        endPlace: "-",
+        endType: "당착",
+        endSchedule: new Date().toISOString(),
+        cargoContent: "-",
+        tonnage: 0,
+        reqCarType: "-",
+        reqTonnage: "-",
+        basePrice: 0,
+        payMethod: "",
+        instant: false,
+        distance: 0,
+        duration: 0,
+      };
+    }
     const res = await apiClient.patch(`${API_BASE}/${orderId}/status`, null, {
       params: { newStatus }
     });
@@ -174,6 +396,22 @@ export const OrderApi = {
 
   /** [추가] 7. 화주: 특정 오더에 배차 신청한 차주 리스트 조회 */
   getApplicants: async (orderId: number): Promise<AssignedDriverInfoResponse[]> => {
+    if (USE_MOCK) {
+      return [
+        {
+          userId: 101,
+          email: "driver1@mock.local",
+          nickname: "목업기사1",
+          phone: "01011112222",
+          ratingAvg: 4.8,
+          driverId: 1001,
+          carNum: "12가3456",
+          carType: "카고",
+          tonnage: "5톤",
+          career: 5,
+        },
+      ];
+    }
     // GET /api/v1/orders/{orderId}/applicants
     const res = await apiClient.get(`${API_BASE}/${orderId}/applicants`);
     return res.data;
@@ -181,6 +419,7 @@ export const OrderApi = {
 
   /** [추가] 8. 화주: 차주 최종 선택 (배차 확정) */
   selectDriver: async (orderId: number, driverNo: number): Promise<string> => {
+    if (USE_MOCK) return `목업 배차 확정 완료 (${orderId}, ${driverNo})`;
     // POST /api/v1/orders/{orderId}/select-driver?driverNo=...
     const res = await apiClient.post(`${API_BASE}/${orderId}/select-driver`, null, {
       params: { driverNo }
@@ -195,23 +434,53 @@ export const OrderApi = {
 export const OrderService = {
   // 차주: 추천 오더 목록만 직접 조회
   getRecommendedOrders: async (): Promise<OrderResponse[]> => {
+    if (USE_MOCK) return MOCK_ORDERS.filter((x) => x.status === "REQUESTED");
     const res = await apiClient.get(`${API_BASE}/recommended`);
     return res.data;
   },
 
   /** 2. 차주: 배차 가능한 오더 목록 조회 */
   getAvailableOrders: async (): Promise<OrderResponse[]> => {
+    if (USE_MOCK) return MOCK_ORDERS;
     const res = await apiClient.get(`${API_BASE}/available`);
     return res.data;
   },
 
   // 차주: 오더 수락
   acceptOrder: async (orderId: number): Promise<void> => {
+    if (USE_MOCK) return;
     await apiClient.patch(`${API_BASE}/${orderId}/accept`);
   },
 
   /** 차주: 오더 상태 변경 (상차, 이동중, 하차, 완료 등) */
   updateStatus: async (orderId: number, newStatus: string): Promise<OrderResponse> => {
+    if (USE_MOCK) {
+      const found = MOCK_ORDERS.find((x) => x.orderId === orderId);
+      if (found) return { ...found, status: (newStatus as OrderStatus), updated: new Date().toISOString() };
+      return {
+        orderId,
+        status: "IN_TRANSIT",
+        createdAt: new Date().toISOString(),
+        updated: new Date().toISOString(),
+        startAddr: "-",
+        startPlace: "-",
+        startType: "당상",
+        startSchedule: new Date().toISOString(),
+        endAddr: "-",
+        endPlace: "-",
+        endType: "당착",
+        endSchedule: new Date().toISOString(),
+        cargoContent: "-",
+        tonnage: 0,
+        reqCarType: "-",
+        reqTonnage: "-",
+        basePrice: 0,
+        payMethod: "",
+        instant: false,
+        distance: 0,
+        duration: 0,
+      };
+    }
     // PATCH /api/v1/orders/{orderId}/status?newStatus=...
     const res = await apiClient.patch(`${API_BASE}/${orderId}/status`, null, {
       params: { newStatus }
@@ -221,6 +490,7 @@ export const OrderService = {
 
   /** 5. 공통: 오더 취소 (사유 포함) */
   cancelOrder: async (orderId: number, reason: string): Promise<void> => {
+    if (USE_MOCK) return;
     await apiClient.patch(`${API_BASE}/${orderId}/cancel`, null, {
       params: { reason }
     });
@@ -230,6 +500,7 @@ export const OrderService = {
    * 백엔드 GET /api/v1/orders/my-driving 엔드포인트 호출
    */
   getMyDrivingOrders: async (): Promise<OrderResponse[]> => {
+    if (USE_MOCK) return MOCK_ORDERS.filter((x) => ["ACCEPTED", "LOADING", "IN_TRANSIT", "UNLOADING"].includes(x.status));
     // apiClient를 사용하여 인증 헤더와 함께 요청 전송
     const res = await apiClient.get(`${API_BASE}/my-driving`);
     return res.data;
