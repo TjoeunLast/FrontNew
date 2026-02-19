@@ -1,9 +1,11 @@
-﻿import { useFocusEffect } from "@react-navigation/native";
+﻿import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useFocusEffect } from "@react-navigation/native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useMemo, useState } from "react";
 import {
   Alert,
+  Image,
   Platform,
   Pressable,
   ScrollView,
@@ -11,12 +13,15 @@ import {
   Switch,
   Text,
   View,
+  type ImageStyle,
   type TextStyle,
   type ViewStyle,
 } from "react-native";
 
 import { AuthService } from "@/shared/api/authService";
+import apiClient from "@/shared/api/apiClient";
 import { UserService } from "@/shared/api/userService";
+import { USE_MOCK } from "@/shared/config/mock";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import { withAlpha } from "@/shared/utils/color";
 import {
@@ -25,11 +30,14 @@ import {
   saveCurrentUserSnapshot,
 } from "@/shared/utils/currentUserStorage";
 
+const PROFILE_IMAGE_STORAGE_KEY = "baro_profile_image_url_v1";
+
 type ProfileView = {
   email: string;
   name: string;
   nickname: string;
   role: string;
+  shipperType: string;
 };
 
 function roleToKorean(role: string) {
@@ -37,6 +45,27 @@ function roleToKorean(role: string) {
   if (role === "DRIVER") return "차주";
   if (role === "ADMIN") return "관리자";
   return role || "-";
+}
+
+function resolveShipperType(me: any) {
+  const isCorporateRaw = String(me?.isCorporate ?? "").trim().toUpperCase();
+  if (isCorporateRaw === "Y") return "사업자";
+  if (isCorporateRaw === "N") return "개인";
+
+  const hasBusinessInfo = Boolean(String(me?.bizRegNum ?? "").trim() || String(me?.companyName ?? "").trim());
+  return hasBusinessInfo ? "사업자" : "개인";
+}
+
+async function fetchShipperTypeFromServer(baseMe: any) {
+  if (USE_MOCK) return resolveShipperType(baseMe);
+  try {
+    const role = String(baseMe?.role ?? "").trim().toUpperCase();
+    if (role !== "SHIPPER") return "-";
+    const res = await apiClient.get("/api/v1/shippers/me");
+    return resolveShipperType(res.data);
+  } catch {
+    return resolveShipperType(baseMe);
+  }
 }
 
 export default function ShipperMyScreen() {
@@ -51,38 +80,48 @@ export default function ShipperMyScreen() {
     name: "-",
     nickname: "-",
     role: "-",
+    shipperType: "-",
   });
+  const [profileImageUrl, setProfileImageUrl] = useState("");
 
   useFocusEffect(
     React.useCallback(() => {
       let active = true;
 
       void (async () => {
+        const localImageUrl = (await AsyncStorage.getItem(PROFILE_IMAGE_STORAGE_KEY)) ?? "";
+
         try {
           const me = await UserService.getMyInfo();
           const cached = await getCurrentUserSnapshot();
+          const shipperType = await fetchShipperTypeFromServer(me);
           const next: ProfileView = {
             email: me.email || "-",
-            name: cached?.name || "-",
+            name: me.name || cached?.name || "-",
             nickname: me.nickname || cached?.nickname || "-",
             role: roleToKorean(me.role || cached?.role || ""),
+            shipperType,
           };
           if (!active) return;
           setProfile(next);
+          setProfileImageUrl(localImageUrl || me.profileImageUrl || "");
           await saveCurrentUserSnapshot({
             email: me.email,
             nickname: me.nickname,
-            name: cached?.name,
+            name: me.name || cached?.name,
             role: me.role,
           });
         } catch {
           const cached = await getCurrentUserSnapshot();
-          if (!active || !cached) return;
+          if (!active) return;
+          setProfileImageUrl(localImageUrl);
+          if (!cached) return;
           setProfile({
             email: cached.email || "-",
             name: cached.name || "-",
             nickname: cached.nickname || "-",
             role: roleToKorean(cached.role || ""),
+            shipperType: "-",
           });
         }
       })();
@@ -110,10 +149,12 @@ export default function ShipperMyScreen() {
         width: 56,
         height: 56,
         borderRadius: 28,
+        overflow: "hidden",
         justifyContent: "center",
         alignItems: "center",
         backgroundColor: withAlpha(c.brand.primary, 0.12),
       } as ViewStyle,
+      profileImage: { width: "100%", height: "100%" } as ImageStyle,
       profileInfo: { flex: 1, gap: 2 } as ViewStyle,
       profileName: { fontSize: 20, fontWeight: "900", color: c.text.primary } as TextStyle,
       profileSub: { fontSize: 12, fontWeight: "700", color: c.text.secondary } as TextStyle,
@@ -207,12 +248,19 @@ export default function ShipperMyScreen() {
 
       <Pressable style={s.profileCard} onPress={() => router.push("/(common)/settings/profile" as any)}>
         <View style={s.profileIcon}>
-          <MaterialCommunityIcons name="warehouse" size={28} color={c.brand.primary} />
+          {profileImageUrl ? (
+            <Image source={{ uri: profileImageUrl }} style={s.profileImage} resizeMode="cover" />
+          ) : (
+            <MaterialCommunityIcons name="warehouse" size={28} color={c.brand.primary} />
+          )}
         </View>
         <View style={s.profileInfo}>
           <Text style={s.profileName}>{profile.name === "-" ? "화주 님" : `${profile.name} 님`}</Text>
           <Text style={s.profileSub}>{profile.email}</Text>
-          <Text style={s.profileSub}>{profile.role}</Text>
+          <Text style={s.profileSub}>닉네임: {profile.nickname}</Text>
+          <Text style={s.profileSub}>
+            {profile.role} · {profile.shipperType}
+          </Text>
         </View>
         <View style={s.arrowCircle}>
           <Ionicons name="chevron-forward" size={20} color={c.text.secondary} />

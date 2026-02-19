@@ -27,15 +27,6 @@ const ROUTES = {
   driverTabs: "/(driver)/(tabs)" as const,
 };
 
-const MOCK = {
-  shipper: { email: "shipper@barotruck.com", password: "12341234", name: "바로화주", role: "SHIPPER" as const },
-  driver: { email: "driver@barotruck.com", password: "12341234", name: "바로기사", role: "DRIVER" as const },
-};
-
-const FORCE_MOCK_AUTH =
-  ["1", "true", "yes", "on"].includes(String(process.env.EXPO_PUBLIC_USE_MOCK ?? "").trim().toLowerCase()) ||
-  ["1", "true", "yes", "on"].includes(String(process.env.EXPO_PUBLIC_USE_SHIPPER_MOCK ?? "").trim().toLowerCase());
-
 export default function LoginScreen() {
   const router = useRouter();
   const t = useAppTheme();
@@ -54,36 +45,10 @@ export default function LoginScreen() {
   };
 
   const onLogin = async () => {
-    if (submitting) return;
-    if (!canLogin) return;
+    if (!canLogin || submitting) return;
 
     setSubmitting(true);
     try {
-      if (FORCE_MOCK_AUTH) {
-        const e = email.trim().toLowerCase();
-        const p = pw.trim();
-        const matched =
-          e === MOCK.shipper.email && p === MOCK.shipper.password
-            ? MOCK.shipper
-            : e === MOCK.driver.email && p === MOCK.driver.password
-              ? MOCK.driver
-              : null;
-
-        if (!matched) {
-          showError("목업 계정을 확인해주세요. (shipper/driver@barotruck.com, 12341234)");
-          return;
-        }
-
-        void saveCurrentUserSnapshot({
-          email: matched.email,
-          nickname: matched.name,
-          role: matched.role,
-        }).catch(() => {});
-
-        router.replace(matched.role === "DRIVER" ? ROUTES.driverTabs : ROUTES.shipperTabs);
-        return;
-      }
-
       await AuthService.login(email, pw);
       const me = await UserService.getMyInfo();
 

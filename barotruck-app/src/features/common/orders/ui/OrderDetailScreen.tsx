@@ -2,12 +2,10 @@ import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import * as Clipboard from "expo-clipboard";
-import { Alert, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { PRESET_REQUEST_TAGS } from "@/features/shipper/create-order/ui/createOrderStep1.constants";
-import { getLocalShipperOrders, hydrateLocalShipperOrders } from "@/features/shipper/home/model/localShipperOrders";
-import { MOCK_SHIPPER_ORDERS } from "@/features/shipper/mock";
 import { OrderApi } from "@/shared/api/orderService";
 import { ProofService } from "@/shared/api/proofService";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
@@ -21,158 +19,6 @@ function formatWon(v: number) {
   return `${s.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}원`;
 }
 
-function toDetailedAddress(addr?: string) {
-  if (!addr) return "-";
-  const key = addr.trim();
-  const map: Record<string, string> = {
-    "서울 강남": "서울특별시 강남구 테헤란로 152, 강남파이낸스센터 12층 1203호 (역삼동)",
-    "부산 해운대": "부산광역시 해운대구 센텀동로 45, B동 3층 305호 (우동)",
-    "서울 구로": "서울특별시 구로구 디지털로 300, 코오롱디지털타워 7층 712호 (구로동)",
-    "경기 화성": "경기도 화성시 동탄대로 181, 물류동 2층 201호 (오산동)",
-    "인천 남동": "인천광역시 남동구 남동대로 123, 남동물류센터 A동 1층 101호 (고잔동)",
-    "대전 유성": "대전광역시 유성구 테크노중앙로 55, 테크노타워 5층 503호 (관평동)",
-    "서울 영등포": "서울특별시 영등포구 여의대로 24, 전경련회관 8층 802호 (여의도동)",
-    "경기 수원": "경기도 수원시 영통구 광교중앙로 140, 광교빌딩 4층 402호 (하동)",
-    "경기 평택": "경기도 평택시 포승읍 평택항로 184, 항만물류동 2층 215호",
-    "충북 청주": "충청북도 청주시 흥덕구 가로수로 1164, C동 1층 105호",
-    "대구 달서구": "대구광역시 달서구 성서공단북로 85, 공단지원센터 3층 307호 (갈산동)",
-    "경북 구미시": "경상북도 구미시 1공단로 199, 물류창고 D동 1층 109호 (공단동)",
-    "광주 광산구": "광주광역시 광산구 하남산단8번로 35, A동 2층 208호",
-    "전북 전주시": "전북특별자치도 전주시 덕진구 기린대로 451, 전주유통센터 6층 601호",
-    "울산 남구": "울산광역시 남구 삼산로 217, 울산물류타워 3층 311호 (달동)",
-    "경남 창원시": "경상남도 창원시 의창구 창원대로 363, 창원복합물류 B동 2층 204호",
-    "충남 아산시": "충청남도 아산시 음봉면 산동로 87, 아산허브센터 1층 103호",
-    "대전 유성구": "대전광역시 유성구 대학로 291, 대학물류관 4층 406호 (구성동)",
-    "서울 금천구": "서울특별시 금천구 가산디지털1로 186, 제이플라츠 9층 918호 (가산동)",
-    "인천 연수구": "인천광역시 연수구 송도과학로 85, 송도물류센터 5층 509호 (송도동)",
-    "경기 고양시": "경기도 고양시 일산동구 중앙로 1286, 일산오피스 A동 10층 1002호 (장항동)",
-    "강원 원주시": "강원특별자치도 원주시 지정면 기업도시로 200, 원주허브센터 2층 207호",
-    "부산 사상구": "부산광역시 사상구 낙동대로 910, 사상물류빌딩 3층 302호 (감전동)",
-    "경남 김해시": "경상남도 김해시 김해대로 2596, 김해산업유통 1층 112호 (안동)",
-    "경북 포항시": "경상북도 포항시 남구 철강로 190, 포항철강센터 4층 409호 (호동)",
-    "대구 북구": "대구광역시 북구 유통단지로 16, 대구유통센터 C동 2층 223호 (산격동)",
-    "경기 파주": "경기도 파주시 교하로 700, 파주물류단지 3층 318호 (동패동)",
-    "인천항": "인천광역시 중구 서해대로 366, 인천항 국제물류센터 2층 205호 (항동7가)",
-    "서울 구로구": "서울특별시 구로구 경인로 662, 디큐브시티 오피스동 11층 1104호 (신도림동)",
-    "경기 화성시": "경기도 화성시 효행로 1206, 화성산업단지 지원동 2층 203호 (진안동)",
-  };
-  return map[key] || addr;
-}
-
-function toOrderStatus(localStatus: "MATCHING" | "CONFIRMED" | "DRIVING" | "DONE") {
-  if (localStatus === "MATCHING") return "REQUESTED" as const;
-  if (localStatus === "CONFIRMED") return "ACCEPTED" as const;
-  if (localStatus === "DRIVING") return "IN_TRANSIT" as const;
-  return "COMPLETED" as const;
-}
-
-function withTime(iso: string, hhmm: string) {
-  const d = new Date(iso);
-  const m = hhmm.match(/^([01]\d|2[0-3]):([0-5]\d)$/);
-  if (m) d.setHours(Number(m[1]), Number(m[2]), 0, 0);
-  return d.toISOString();
-}
-
-function localToOrderResponse(id: string): OrderResponse | null {
-  const item = getLocalShipperOrders().find((x) => String(x.id) === String(id));
-  if (!item) return null;
-
-  const now = new Date().toISOString();
-  const pickup = item.pickupTimeHHmm || "09:00";
-  const dropoff = item.dropoffTimeHHmm || "15:00";
-  return {
-    orderId: -1,
-    status: toOrderStatus(item.status),
-    createdAt: now,
-    updated: now,
-    startAddr: toDetailedAddress(item.from),
-    startPlace: toDetailedAddress(item.from),
-    startType: "당상",
-    startSchedule: withTime(now, pickup),
-    endAddr: toDetailedAddress(item.to),
-    endPlace: toDetailedAddress(item.to),
-    endType: "당착",
-    endSchedule: withTime(now, dropoff),
-    cargoContent: item.cargoSummary,
-    loadMethod: item.loadMethod,
-    workType: item.workTool,
-    tonnage: 0,
-    reqCarType: item.cargoSummary,
-    reqTonnage: "",
-    driveMode: item.dispatchMode || "instant",
-    basePrice: item.priceWon,
-    payMethod: "receipt30",
-    instant: item.dispatchMode === "instant",
-    distance: item.distanceKm,
-    duration: Math.max(30, Math.round(item.distanceKm * 2)),
-    user: {
-      userId: 0,
-      email: "",
-      phone: "010-1234-5678",
-      nickname:
-        item.status === "CONFIRMED" || item.status === "DRIVING" || item.status === "DONE" || item.dispatchMode === "instant"
-          ? "즉시배차기사"
-          : "기사 미배정",
-    },
-  };
-}
-
-function mockShipperOrderToOrderResponse(id: string): OrderResponse | null {
-  const row = MOCK_SHIPPER_ORDERS.find((x) => String(x.id) === String(id));
-  if (!row) return null;
-
-  const now = new Date().toISOString();
-  const toOrderStatus = (s: "MATCHING" | "DISPATCHED" | "DRIVING" | "DONE") => {
-    if (s === "MATCHING") return "REQUESTED" as const;
-    if (s === "DISPATCHED") return "ACCEPTED" as const;
-    if (s === "DRIVING") return "IN_TRANSIT" as const;
-    return "COMPLETED" as const;
-  };
-  const loadMethod = row.loadMethodShort === "혼" ? "혼적" : "독차";
-  const workType =
-    row.workToolShort === "지"
-      ? "지게차"
-      : row.workToolShort === "크"
-        ? "크레인"
-        : row.workToolShort === "호"
-          ? "호이스트"
-          : "수작업";
-  const pickup = row.pickupTimeHHmm || "09:00";
-  const dropoff = row.dropoffTimeHHmm || "15:00";
-
-  return {
-    orderId: -3,
-    status: toOrderStatus(row.status),
-    createdAt: now,
-    updated: now,
-    startAddr: toDetailedAddress(row.from),
-    startPlace: toDetailedAddress(row.from),
-    startType: "당상",
-    startSchedule: withTime(now, pickup),
-    endAddr: toDetailedAddress(row.to),
-    endPlace: toDetailedAddress(row.to),
-    endType: "당착",
-    endSchedule: withTime(now, dropoff),
-    cargoContent: "",
-    loadMethod,
-    workType,
-    tonnage: 0,
-    reqCarType: row.cargoSummary,
-    reqTonnage: "",
-    driveMode: row.isInstantDispatch ? "instant" : "direct",
-    basePrice: row.priceWon,
-    payMethod: "receipt30",
-    instant: Boolean(row.isInstantDispatch),
-    distance: row.distanceKm,
-    duration: Math.max(30, Math.round(row.distanceKm * 2)),
-    user: {
-      userId: 0,
-      email: "",
-      phone: "010-1234-5678",
-      nickname: row.status === "MATCHING" ? "기사 미배정" : "배정 기사",
-    },
-  };
-}
 
 function resolveDriverNickname(order: OrderResponse) {
   const fromUser = order.user?.nickname?.trim();
@@ -196,6 +42,12 @@ type ApplicantDriver = {
   phone: string;
   detail: string;
 };
+
+const APPLICANT_DRIVER_POOL: ApplicantDriver[] = [
+  { id: "d1", name: "박베테랑", phone: "010-2211-3344", detail: "11톤 윙바디 · 무사고 10년" },
+  { id: "d2", name: "김신속", phone: "010-5566-7788", detail: "5톤 카고 · 5km 거리" },
+  { id: "d3", name: "최성실", phone: "010-8899-1100", detail: "3.5톤 윙바디 · 평점 4.8" },
+];
 
 function parseRequestInfo(cargoContent?: string) {
   const raw = (cargoContent ?? "").trim();
@@ -246,6 +98,22 @@ function parseRequestInfo(cargoContent?: string) {
 
   const tags = PRESET_REQUEST_TAGS.filter((tag) => tagsSet.has(tag));
   return { tags, memoText: memoParts.join(" / ") };
+}
+
+function parseContactInfo(cargoContent?: string) {
+  const raw = (cargoContent ?? "").trim();
+  if (!raw) return { startContact: "", endContact: "" };
+  const segments = raw
+    .split("|")
+    .map((x) => x.trim())
+    .filter(Boolean);
+  let startContact = "";
+  let endContact = "";
+  segments.forEach((seg) => {
+    if (seg.startsWith("상차지 연락처:")) startContact = seg.replace("상차지 연락처:", "").trim();
+    if (seg.startsWith("하차지 연락처:")) endContact = seg.replace("하차지 연락처:", "").trim();
+  });
+  return { startContact, endContact };
 }
 
 function toKoreanDateOnly(v?: string) {
@@ -328,6 +196,7 @@ export default function OrderDetailScreen() {
   const [proofLoading, setProofLoading] = useState(false);
   const [openProofModal, setOpenProofModal] = useState(false);
   const [openDriverPicker, setOpenDriverPicker] = useState(false);
+  const [rejectedApplicantIds, setRejectedApplicantIds] = useState<string[]>([]);
   const [selectedDriver, setSelectedDriver] = useState<ApplicantDriver | null>(null);
   const [openRatingModal, setOpenRatingModal] = useState(false);
   const [ratingScore, setRatingScore] = useState(5);
@@ -338,25 +207,8 @@ export default function OrderDetailScreen() {
     let active = true;
     void (async () => {
       try {
-        await hydrateLocalShipperOrders();
         const id = String(resolvedOrderId ?? "");
-        const local = localToOrderResponse(id);
-        if (local) {
-          if (active) setOrder(local);
-          return;
-        }
-
-        const fromMock = mockShipperOrderToOrderResponse(id);
-        if (fromMock) {
-          if (active) setOrder(fromMock);
-          return;
-        }
-
-        const safeApiPromise: Promise<OrderResponse[]> = OrderApi.getAvailableOrders().catch(() => []);
-        const timeoutFallback = new Promise<OrderResponse[]>((resolve) => {
-          setTimeout(() => resolve([]), 5000);
-        });
-        const rows = await Promise.race([safeApiPromise, timeoutFallback]);
+        const rows = await OrderApi.getMyShipperOrders();
         if (!active) return;
         const found = rows.find((x) => String(x.orderId) === id);
         setOrder(found ?? null);
@@ -371,6 +223,10 @@ export default function OrderDetailScreen() {
     return () => {
       active = false;
     };
+  }, [resolvedOrderId]);
+
+  useEffect(() => {
+    setRejectedApplicantIds([]);
   }, [resolvedOrderId]);
 
   if (loading) {
@@ -393,6 +249,7 @@ export default function OrderDetailScreen() {
   }
 
   const requestInfo = parseRequestInfo(order.cargoContent);
+  const contactInfo = parseContactInfo(order.cargoContent);
   const startHHmm = toHHmm(order.startSchedule, "09:00");
   const endHHmm = toHHmm(order.endSchedule, "15:00");
   const isDispatched = order.status === "ACCEPTED";
@@ -401,14 +258,24 @@ export default function OrderDetailScreen() {
   const isDirectDispatch = !order.instant;
   const hasAssignedDriver = ["ACCEPTED", "LOADING", "IN_TRANSIT", "UNLOADING", "COMPLETED"].includes(order.status);
   const hasAssignedDriverNow = hasAssignedDriver || Boolean(selectedDriver);
-  const applicantsCount = Math.max(
+  const applicantsCountRaw = Math.max(
     0,
     Number.parseInt(String(resolvedApplicants ?? (order as any).applicantCount ?? (order as any).applicants ?? 0), 10) || 0
   );
+  const waitingApplicants = APPLICANT_DRIVER_POOL.slice(0, Math.min(applicantsCountRaw, APPLICANT_DRIVER_POOL.length)).filter(
+    (driver) => !rejectedApplicantIds.includes(driver.id)
+  );
+  const applicantsCount = waitingApplicants.length;
   const canSelectDriver = isDirectDispatch && !hasAssignedDriverNow && applicantsCount > 0;
-  const canShowContactActions = !isDirectDispatch || hasAssignedDriverNow;
   const isInstantAutoDispatch = Boolean(order.instant);
+  const isInstantAssigned = isInstantAutoDispatch && hasAssignedDriverNow;
   const isInstantWaiting = isInstantAutoDispatch && !isDispatched && !isInTransit && !isCompleted && !hasAssignedDriverNow;
+  const isDispatchWaiting = !hasAssignedDriverNow && !isDispatched && !isInTransit && !isCompleted;
+  const hasApplicantsInDirectWaiting = isDirectDispatch && isDispatchWaiting && applicantsCount > 0;
+  const canShowContactActions = (!isDirectDispatch || hasAssignedDriverNow) && !isInstantWaiting;
+  // 직접배차는 신청자가 없는 대기 상태에서만 수정/삭제 허용.
+  // 신청자가 있으면 기존처럼 "기사 선택" 흐름을 유지한다.
+  const showWaitingActions = isDispatchWaiting && !hasApplicantsInDirectWaiting;
   const showMainAction = !isInstantAutoDispatch || isInstantWaiting;
   const driverName = selectedDriver?.name ?? resolveDriverNickname(order);
   const driverPhone = selectedDriver?.phone ?? resolveDriverPhone(order);
@@ -419,6 +286,43 @@ export default function OrderDetailScreen() {
     void Linking.openURL(tel).catch(() => {
       Alert.alert("전화 연결 실패", "전화 앱을 열 수 없습니다.");
     });
+  };
+
+  const onPressDeleteOrder = () => {
+    const targetIdNum = Number(String(resolvedOrderId ?? order.orderId));
+    const doDelete = async () => {
+      if (!Number.isFinite(targetIdNum)) {
+        Alert.alert("안내", "잘못된 오더 번호입니다.");
+        return;
+      }
+      await OrderApi.cancelOrder(targetIdNum, "화주 요청으로 취소");
+      router.replace("/(shipper)/(tabs)/orders" as any);
+    };
+
+    if (Platform.OS === "web") {
+      const ok = window.confirm("등록을 취소 하시겠습니까?");
+      if (!ok) return;
+      void doDelete().catch(() => {
+        Alert.alert("안내", "오더 취소에 실패했습니다.");
+      });
+      return;
+    }
+
+    Alert.alert("삭제", "등록을 취소 하시겠습니까?", [
+      { text: "아니요", style: "cancel" },
+      {
+        text: "예",
+        style: "destructive",
+        onPress: () =>
+          void doDelete().catch(() => {
+            Alert.alert("안내", "오더 취소에 실패했습니다.");
+          }),
+      },
+    ]);
+  };
+
+  const onPressEditOrder = () => {
+    Alert.alert("안내", "서버 오더 수정은 준비 중입니다.");
   };
 
   const copyAddress = async (text: string) => {
@@ -459,12 +363,6 @@ export default function OrderDetailScreen() {
     }
   };
 
-  const waitingApplicants: ApplicantDriver[] = [
-    { id: "d1", name: "박베테랑", phone: "010-2211-3344", detail: "11톤 윙바디 · 무사고 10년" },
-    { id: "d2", name: "김신속", phone: "010-5566-7788", detail: "5톤 카고 · 5km 거리" },
-    { id: "d3", name: "최성실", phone: "010-8899-1100", detail: "3.5톤 윙바디 · 평점 4.8" },
-  ];
-
   const mainActionLabel = isCompleted
     ? ratingSubmitted
       ? "평점 등록 완료"
@@ -496,17 +394,19 @@ export default function OrderDetailScreen() {
             <Text style={s.dateText}>{toKoreanDateOnly(order.createdAt)}</Text>
           </View>
 
-          <View style={s.routeRow}>
-            <View style={s.routeSide}>
-              <Text style={s.routeBig}>{compactPlace(order.startAddr)}</Text>
-              <Text style={s.routeSmall}>{order.startPlace || "-"}</Text>
+            <View style={s.routeRow}>
+              <View style={s.routeSide}>
+                <Text style={s.routeBig}>{compactPlace(order.startAddr)}</Text>
+                <Text style={s.routeSmall}>{order.startPlace || "-"}</Text>
+                {contactInfo.startContact ? <Text style={s.routeSmall}>연락처: {contactInfo.startContact}</Text> : null}
+              </View>
+              <Ionicons name="arrow-forward" size={30} color="#CBD5E1" />
+              <View style={[s.routeSide, { alignItems: "flex-end" }]}>
+                <Text style={s.routeBig}>{compactPlace(order.endAddr)}</Text>
+                <Text style={s.routeSmall}>{order.endPlace || "-"}</Text>
+                {contactInfo.endContact ? <Text style={[s.routeSmall, { textAlign: "right" }]}>연락처: {contactInfo.endContact}</Text> : null}
+              </View>
             </View>
-            <Ionicons name="arrow-forward" size={30} color="#CBD5E1" />
-            <View style={[s.routeSide, { alignItems: "flex-end" }]}>
-              <Text style={s.routeBig}>{compactPlace(order.endAddr)}</Text>
-              <Text style={s.routeSmall}>{order.endPlace || "-"}</Text>
-            </View>
-          </View>
 
           <View style={s.infoBar}>
             <View style={s.infoItem}>
@@ -550,6 +450,7 @@ export default function OrderDetailScreen() {
                 <Text style={s.timeText}>오늘 {startHHmm} 상차</Text>
                 <Text style={s.addrTitle}>{order.startAddr || "-"}</Text>
                 {!isSameText(order.startAddr, order.startPlace) ? <Text style={s.addrDesc}>{order.startPlace || "-"}</Text> : null}
+                {contactInfo.startContact ? <Text style={s.addrDesc}>연락처: {contactInfo.startContact}</Text> : null}
                 <Pressable style={s.copyBtn} onPress={() => void copyAddress(order.startAddr || order.startPlace || "")}>
                   <Ionicons name="copy-outline" size={14} color="#475569" />
                   <Text style={s.copyBtnText}>주소복사</Text>
@@ -564,6 +465,7 @@ export default function OrderDetailScreen() {
                 <Text style={[s.timeText, { color: "#4F46E5" }]}>하차 예정</Text>
                 <Text style={s.addrTitle}>{order.endAddr || "-"}</Text>
                 {!isSameText(order.endAddr, order.endPlace) ? <Text style={s.addrDesc}>{order.endPlace || "-"}</Text> : null}
+                {contactInfo.endContact ? <Text style={s.addrDesc}>연락처: {contactInfo.endContact}</Text> : null}
                 <Pressable style={s.copyBtn} onPress={() => void copyAddress(order.endAddr || order.endPlace || "")}>
                   <Ionicons name="copy-outline" size={14} color="#475569" />
                   <Text style={s.copyBtnText}>주소복사</Text>
@@ -604,15 +506,33 @@ export default function OrderDetailScreen() {
       <View style={[s.bottomBar, { paddingBottom: 10 + insets.bottom }]}>
         {canShowContactActions ? (
           <View style={s.iconGroup}>
-            <Pressable style={s.iconBtn} onPress={() => router.push(`/(common)/orders/${chatOrderId}/chat` as any)}>
-              <Ionicons name="chatbubble-ellipses-outline" size={22} color="#334155" />
-            </Pressable>
             <Pressable style={s.iconBtn} onPress={onPressCall}>
               <Ionicons name="call-outline" size={22} color="#334155" />
             </Pressable>
           </View>
         ) : null}
-        {showMainAction ? (
+        {isInstantAssigned ? (
+          <Pressable
+            style={[s.contactDriverBtn, { backgroundColor: c.brand.primary }]}
+            onPress={() => router.push(`/(common)/orders/${chatOrderId}/chat` as any)}
+          >
+            <Ionicons name="chatbubble-ellipses-outline" size={18} color="#FFFFFF" />
+            <Text style={s.contactDriverBtnText}>기사님과 연락</Text>
+          </Pressable>
+        ) : null}
+        {showWaitingActions ? (
+          <View style={s.waitingActionRow}>
+            <Pressable style={[s.waitingActionBtn, { borderColor: c.border.default }]} onPress={onPressEditOrder}>
+              <Ionicons name="create-outline" size={18} color={c.text.primary} />
+              <Text style={[s.waitingActionText, { color: c.text.primary }]}>수정</Text>
+            </Pressable>
+            <Pressable style={[s.waitingActionBtn, { borderColor: "#FECACA", backgroundColor: "#FEF2F2" }]} onPress={onPressDeleteOrder}>
+              <Ionicons name="trash-outline" size={18} color="#DC2626" />
+              <Text style={[s.waitingActionText, { color: "#DC2626" }]}>삭제</Text>
+            </Pressable>
+          </View>
+        ) : null}
+        {showMainAction && !showWaitingActions ? (
           <Pressable
             disabled={mainActionDisabled && !isInstantWaiting}
             onPress={() => {
@@ -648,14 +568,25 @@ export default function OrderDetailScreen() {
               </Pressable>
             </View>
 
-            {waitingApplicants.map((driver) => (
-              <Pressable
-                key={driver.id}
-                onPress={() => {
-                  setSelectedDriver(driver);
-                  setOpenDriverPicker(false);
-                  Alert.alert("배차 확정", `${driver.name} 기사님으로 배차가 확정되었습니다.`);
+            {waitingApplicants.length === 0 ? (
+              <View
+                style={{
+                  borderWidth: 1,
+                  borderColor: c.border.default,
+                  borderRadius: 12,
+                  padding: 12,
+                  backgroundColor: c.bg.surface,
                 }}
+              >
+                <Text style={{ color: c.text.secondary, fontSize: 13, fontWeight: "800" }}>
+                  신청한 기사가 없습니다.
+                </Text>
+              </View>
+            ) : null}
+
+            {waitingApplicants.map((driver) => (
+              <View
+                key={driver.id}
                 style={{
                   borderWidth: 1,
                   borderColor: c.border.default,
@@ -668,7 +599,44 @@ export default function OrderDetailScreen() {
                 <Text style={{ color: c.text.primary, fontSize: 14, fontWeight: "900" }}>{driver.name}</Text>
                 <Text style={{ color: c.text.secondary, fontSize: 12, fontWeight: "700", marginTop: 2 }}>{driver.detail}</Text>
                 <Text style={{ color: c.text.secondary, fontSize: 12, fontWeight: "700", marginTop: 2 }}>{driver.phone}</Text>
-              </Pressable>
+
+                <View style={{ flexDirection: "row", gap: 8, marginTop: 10 }}>
+                  <Pressable
+                    onPress={() => {
+                      setSelectedDriver(driver);
+                      setOpenDriverPicker(false);
+                      Alert.alert("배차 확정", `${driver.name} 기사님으로 배차가 확정되었습니다.`);
+                    }}
+                    style={{
+                      flex: 1,
+                      height: 40,
+                      borderRadius: 10,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      backgroundColor: c.brand.primary,
+                    }}
+                  >
+                    <Text style={{ color: c.text.inverse, fontSize: 13, fontWeight: "900" }}>수락</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => {
+                      setRejectedApplicantIds((prev) => (prev.includes(driver.id) ? prev : [...prev, driver.id]));
+                    }}
+                    style={{
+                      flex: 1,
+                      height: 40,
+                      borderRadius: 10,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      borderWidth: 1,
+                      borderColor: c.border.default,
+                      backgroundColor: c.bg.surface,
+                    }}
+                  >
+                    <Text style={{ color: c.text.secondary, fontSize: 13, fontWeight: "900" }}>거절</Text>
+                  </Pressable>
+                </View>
+              </View>
             ))}
           </View>
         </View>
@@ -906,4 +874,30 @@ const s = StyleSheet.create({
     flexDirection: "row",
   },
   mainBtnText: { color: "#FFF", fontSize: 16, fontWeight: "700", marginLeft: 8 },
+  waitingActionRow: { flex: 1, flexDirection: "row", gap: 8 },
+  waitingActionBtn: {
+    flex: 1,
+    height: 56,
+    borderRadius: 18,
+    borderWidth: 1,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+  },
+  waitingActionText: { fontSize: 15, fontWeight: "800", marginLeft: 6 },
+  contactDriverBtn: {
+    flex: 1,
+    height: 56,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+  },
+  contactDriverBtnText: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "800",
+    marginLeft: 8,
+  },
 });
