@@ -140,7 +140,7 @@ export const OrderApi = {
       // 데이터가 페이징(Page<T>) 형태로 올 경우를 대비해 toOrderList로 필터링
       return toOrderList(res.data);
     } catch (error) {
-      console.error("화주 오더 목록 조회 실패:", error);
+      console.warn("화주 오더 목록 조회 실패(서버 응답):", (error as any)?.response?.status ?? error);
       return [];
     }
   },

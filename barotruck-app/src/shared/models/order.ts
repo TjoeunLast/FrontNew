@@ -111,6 +111,7 @@ export interface OrderResponse {
   payMethod: string;
 
   memo?: string;
+  remark?: string;
   tag?: string[];
   instant: boolean; // 즉시 배차 요청 여부 (true면 빠른 배차 우선 처리)
 

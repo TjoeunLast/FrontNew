@@ -44,6 +44,10 @@ type LiveOrderItem = {
   drivingStageLabel?: "상차 완료" | "배달 중" | "하차 직전";
 };
 
+const FORCE_MOCK_HOME_DATA =
+  ["1", "true", "yes", "on"].includes(String(process.env.EXPO_PUBLIC_USE_SHIPPER_MOCK ?? "").trim().toLowerCase()) ||
+  ["1", "true", "yes", "on"].includes(String(process.env.EXPO_PUBLIC_USE_MOCK ?? "").trim().toLowerCase());
+
 function toLoadMethodShort(v?: string) {
   if (!v) return "-";
   if (v.includes("혼")) return "혼";
@@ -197,6 +201,10 @@ export function ShipperHomeScreen() {
   // 1. 사용자 닉네임 조회
   useFocusEffect(
     React.useCallback(() => {
+      if (FORCE_MOCK_HOME_DATA) {
+        setDisplayName("김화주");
+        return () => {};
+      }
       void (async () => {
         try {
           const me = await UserService.getMyInfo();
@@ -211,6 +219,48 @@ export function ShipperHomeScreen() {
   // 2. 서버에서 실시간 화주 오더 목록 로드 (로컬/Mock 제거 버전)
   useFocusEffect(
     React.useCallback(() => {
+      if (FORCE_MOCK_HOME_DATA) {
+        let active = true;
+        setIsLoading(true);
+        void (async () => {
+          await hydrateLocalShipperOrders();
+          const localRows = getLocalShipperOrders().map((item) => ({
+            id: item.id,
+            status:
+              item.status === "CONFIRMED"
+                ? ("DISPATCHED" as const)
+                : item.status === "MATCHING"
+                  ? ("MATCHING" as const)
+                  : item.status === "DRIVING"
+                    ? ("DRIVING" as const)
+                    : ("DONE" as const),
+            from: item.from,
+            to: item.to,
+            distanceKm: item.distanceKm,
+            cargoSummary: item.cargoSummary,
+            loadMethodShort: item.loadMethod ?? "-",
+            workToolShort: item.workTool ?? "-",
+            priceWon: item.priceWon,
+            updatedAtLabel: item.updatedAtLabel,
+            pickupTypeLabel: item.pickupTypeLabel,
+            dropoffTypeLabel: item.dropoffTypeLabel,
+            pickupTimeHHmm: item.pickupTimeHHmm,
+            dropoffTimeHHmm: item.dropoffTimeHHmm,
+          }));
+          const mockRows = MOCK_SHIPPER_ORDERS.map((item, index) => ({
+            ...item,
+            applicantsCount: item.status === "MATCHING" ? ((index % 2) + 1) * 2 : 0,
+          }));
+          const merged = sortLiveOrdersByLatest([...localRows, ...mockRows] as LiveOrderItem[]);
+          if (active) setLiveOrders(merged);
+          if (active) setIsLoading(false);
+        })();
+
+        return () => {
+          active = false;
+        };
+      }
+
       let active = true;
       setIsLoading(true);
 

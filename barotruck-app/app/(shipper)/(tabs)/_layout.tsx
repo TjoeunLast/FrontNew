@@ -1,7 +1,8 @@
-import React from "react";
+﻿import React from "react";
 import { Tabs } from "expo-router";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 
 export default function ShipperTabsLayout() {
@@ -19,14 +20,14 @@ export default function ShipperTabsLayout() {
           backgroundColor: c.bg.surface,
           borderTopColor: c.border.default,
           borderTopWidth: 1,
-          height: 66 + insets.bottom,
-          paddingTop: 10,
-          paddingBottom: 8 + insets.bottom,
+          height: 58 + insets.bottom,
+          paddingTop: 6,
+          paddingBottom: 6 + insets.bottom,
         },
         tabBarLabelStyle: {
-          fontSize: 12,
+          fontSize: 11,
           fontWeight: "700",
-          marginTop: 4,
+          marginTop: 2,
         },
       }}
     >
@@ -35,11 +36,7 @@ export default function ShipperTabsLayout() {
         options={{
           title: "홈",
           tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons
-              name={focused ? "home" : "home-outline"}
-              color={color}
-              size={size}
-            />
+            <Ionicons name={focused ? "home" : "home-outline"} color={color} size={size} />
           ),
         }}
       />
@@ -49,7 +46,6 @@ export default function ShipperTabsLayout() {
         options={{
           title: "배차관리",
           tabBarIcon: ({ color, size }) => (
-            // ✅ 트럭은 Ionicons에 없어서 MaterialCommunityIcons 사용
             <MaterialCommunityIcons name="truck-outline" color={color} size={size} />
           ),
         }}
@@ -60,11 +56,7 @@ export default function ShipperTabsLayout() {
         options={{
           title: "정산내역",
           tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons
-              name={focused ? "receipt" : "receipt-outline"}
-              color={color}
-              size={size}
-            />
+            <Ionicons name={focused ? "receipt" : "receipt-outline"} color={color} size={size} />
           ),
         }}
       />
@@ -74,12 +66,14 @@ export default function ShipperTabsLayout() {
         options={{
           title: "내 정보",
           tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons
-              name={focused ? "person" : "person-outline"}
-              color={color}
-              size={size}
-            />
+            <Ionicons name={focused ? "person" : "person-outline"} color={color} size={size} />
           ),
+        }}
+      />
+      <Tabs.Screen
+        name="notifications"
+        options={{
+          href: null,
         }}
       />
     </Tabs>

@@ -48,6 +48,10 @@ export const DrOrderCard = (props: OrderResponse) => {
       params: { id: orderId.toString() },
     });
   };
+  const createdDateLabel =
+    typeof createdAt === "string" && createdAt.length >= 10
+      ? createdAt.substring(5, 10).replace("-", ".")
+      : "-";
 
   return (
     <Pressable
@@ -75,7 +79,7 @@ export const DrOrderCard = (props: OrderResponse) => {
           />
         </View>
         <Text style={[s.timeText, { color: c.text.secondary }]}>
-          {createdAt.substring(5, 10).replace("-", ".")}
+          {createdDateLabel}
         </Text>
       </View>
 
