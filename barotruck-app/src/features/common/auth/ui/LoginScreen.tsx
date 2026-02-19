@@ -18,6 +18,7 @@ import { TextField } from "@/shared/ui/form/TextField";
 import { Button } from "@/shared/ui/base/Button";
 import { UserService } from "@/shared/api/userService";
 import { AuthService } from "@/shared/api/authService";
+import { USE_MOCK } from "@/shared/config/mock";
 import { saveCurrentUserSnapshot } from "@/shared/utils/currentUserStorage";
 
 const ROUTES = {
@@ -44,12 +45,11 @@ export default function LoginScreen() {
     else Alert.alert("로그인 실패", msg);
   };
 
-  const onLogin = async () => {
-    if (!canLogin || submitting) return;
-
+  const executeLogin = async (nextEmail: string, nextPw: string) => {
+    if (submitting) return;
     setSubmitting(true);
     try {
-      await AuthService.login(email, pw);
+      await AuthService.login(nextEmail, nextPw);
       const me = await UserService.getMyInfo();
 
       void saveCurrentUserSnapshot({
@@ -71,6 +71,19 @@ export default function LoginScreen() {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const onLogin = async () => {
+    if (!canLogin || submitting) return;
+    await executeLogin(email, pw);
+  };
+
+  const onQuickLoginShipper = async () => {
+    await executeLogin("shipper@mock.local", "mock1234");
+  };
+
+  const onQuickLoginDriver = async () => {
+    await executeLogin("driver@mock.local", "mock1234");
   };
 
   return (
@@ -143,6 +156,30 @@ export default function LoginScreen() {
               style={s.loginBtn}
             />
 
+            {USE_MOCK && (
+              <View style={s.quickWrap}>
+                <Text style={[s.quickTitle, { color: c.text.secondary }]}>목업 빠른 로그인</Text>
+                <View style={s.quickRow}>
+                  <Button
+                    title="화주 자동 로그인"
+                    variant="outline"
+                    size="md"
+                    disabled={submitting}
+                    onPress={onQuickLoginShipper}
+                    style={s.quickBtn}
+                  />
+                  <Button
+                    title="차주 자동 로그인"
+                    variant="outline"
+                    size="md"
+                    disabled={submitting}
+                    onPress={onQuickLoginDriver}
+                    style={s.quickBtn}
+                  />
+                </View>
+              </View>
+            )}
+
             <View style={s.bottom}>
               <Text style={[s.bottomText, { color: c.text.secondary }]}>아직 계정이 없으신가요?</Text>
               <Pressable onPress={() => router.push(ROUTES.signup)} disabled={submitting}>
@@ -213,4 +250,8 @@ const s = StyleSheet.create({
     borderRadius: 18,
     marginTop: 20,
   },
+  quickWrap: { marginTop: 14 },
+  quickTitle: { fontSize: 13, fontWeight: "700", marginBottom: 8 },
+  quickRow: { flexDirection: "row", gap: 8 },
+  quickBtn: { flex: 1, minHeight: 44, borderRadius: 12 },
 });
