@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { useFocusEffect } from "expo-router";
 import { OrderService } from "@/shared/api/orderService";
 import { OrderResponse } from "@/shared/models/order";
 
@@ -22,6 +23,12 @@ export const useDrivingList = () => {
   useEffect(() => {
     fetchMyOrders();
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchMyOrders();
+    }, []),
+  );
 
   return {
     activeTab,

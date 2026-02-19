@@ -7,6 +7,7 @@ import {
   View,
   Dimensions,
   ActivityIndicator,
+  Alert,
 } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 
@@ -14,25 +15,68 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useOrderDetail } from "../model/useOrderDetail";
 import { Badge } from "@/shared/ui/feedback/Badge";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
+import { ReceiptModal } from "@/features/driver/driving/ui/ReceiptModal"; // 🚩 인수증 모달 추가
 
 const { width } = Dimensions.get("window");
 
 export default function OrderDetailScreen() {
   const { colors: c } = useAppTheme();
-  const t = useAppTheme();
 
-  // Model 훅 사용 (로직 분리)
-  const { order, loading, totalPrice, formatAddress, actions, buttonConfig } =
-    useOrderDetail();
+  // Model 훅 사용 (로직 분리) - modalOpen, setModalOpen 포함
+  const {
+    order,
+    loading,
+    totalPrice,
+    formatAddress,
+    actions,
+    buttonConfig,
+    modalOpen,
+    setModalOpen,
+  } = useOrderDetail();
 
-  // 데이터 로딩 전이거나 에러 시 아무것도 보여주지 않음 (혹은 로딩 스피너)
-  if (!order || !buttonConfig) return null;
+  // 1. 상태별 한글 명칭 매핑 (카드 리스트와 4단계 로직 통일)
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case "ACCEPTED":
+        return "배차 확정";
+      case "LOADING":
+        return "상차 중";
+      case "IN_TRANSIT":
+        return "운송 중";
+      case "UNLOADING":
+        return "하차 중";
+      case "COMPLETED":
+        return "운송 완료";
+      default:
+        return status;
+    }
+  };
+
+  // 데이터 로딩 중이거나 데이터가 없는 경우 방어 코드 (타입 오류 방지를 위해 flatten 사용)
+  if (!order || !buttonConfig) {
+    return (
+      <View
+        style={StyleSheet.flatten([
+          s.container,
+          s.center,
+          { backgroundColor: c.bg.canvas },
+        ])}
+      >
+        <ActivityIndicator size="large" color={c.brand.primary} />
+      </View>
+    );
+  }
 
   return (
-    <View style={[s.container, { backgroundColor: c.bg.canvas }]}>
-      {/* 헤더 */}
+    <View
+      style={StyleSheet.flatten([
+        s.container,
+        { backgroundColor: c.bg.canvas },
+      ])}
+    >
+      {/* --- 헤더 --- */}
       <View style={s.header}>
-        <Pressable onPress={actions.goBack} style={s.headerBtn}>
+        <Pressable onPress={actions.goBack} style={s.headerBtn} hitSlop={15}>
           <Ionicons name="arrow-back" size={24} color={c.text.secondary} />
         </Pressable>
         <Text style={[s.headerTitle, { color: c.text.primary }]}>
@@ -45,17 +89,19 @@ export default function OrderDetailScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={s.scrollContent}
       >
-        {/* --- 1. 메인 정보 카드 (경로/금액) --- */}
+        {/* --- 1. 메인 정보 카드 --- */}
         <View style={s.card}>
           <View style={s.cardTop}>
-            <Badge
-              label={order.instant ? "바로배차" : "직접배차"}
-              tone={order.instant ? "urgent" : "direct"}
-            />
+            <View style={{ flexDirection: "row", gap: 6 }}>
+              <Badge
+                label={order.instant ? "바로배차" : "직접배차"}
+                tone={order.instant ? "urgent" : "direct"}
+              />
+              <Badge label={getStatusLabel(order.status)} tone="info" />
+            </View>
             <Text style={s.dateText}>{order.createdAt?.substring(0, 10)}</Text>
           </View>
 
-          {/* 경로 시각화 (화살표) */}
           <View style={s.routeBigRow}>
             <View style={s.addrBox}>
               <Text style={s.addrBig}>
@@ -74,7 +120,6 @@ export default function OrderDetailScreen() {
             </View>
           </View>
 
-          {/* 거리/시간 정보 바 */}
           <View style={s.infoBar}>
             <View style={s.infoItem}>
               <MaterialCommunityIcons
@@ -91,11 +136,13 @@ export default function OrderDetailScreen() {
                 size={16}
                 color="#64748B"
               />
-              <Text style={s.infoText}>예상 4시간 30분</Text>
+              <Text style={s.infoText}>
+                예상 {Math.floor(order.duration / 60)}시간 {order.duration % 60}
+                분
+              </Text>
             </View>
           </View>
 
-          {/* 금액 정보 */}
           <View style={s.priceRow}>
             <Text style={s.priceLabel}>운송료</Text>
             <View style={s.priceRight}>
@@ -105,7 +152,7 @@ export default function OrderDetailScreen() {
                   { color: order.instant ? "#EF4444" : c.brand.primary },
                 ]}
               >
-                {totalPrice.toLocaleString()}
+                {totalPrice.toLocaleString()}원
               </Text>
               <Badge
                 label={order.payMethod}
@@ -125,8 +172,6 @@ export default function OrderDetailScreen() {
           <Text style={s.sectionTitle}>운행 경로</Text>
           <View style={s.timelineContainer}>
             <View style={s.timelineLine} />
-
-            {/* 상차지 */}
             <View style={s.timelineItem}>
               <View style={[s.timelineDot, { backgroundColor: "#1E293B" }]}>
                 <Text style={s.dotText}>출</Text>
@@ -135,17 +180,8 @@ export default function OrderDetailScreen() {
                 <Text style={s.timeLabel}>{order.startSchedule} 상차</Text>
                 <Text style={s.placeTitle}>{order.startAddr}</Text>
                 <Text style={s.placeDetail}>{order.startPlace}</Text>
-                <Pressable
-                  style={s.copyBtn}
-                  onPress={() => actions.copyAddress(order.startAddr)}
-                >
-                  <Ionicons name="copy-outline" size={12} color="#475569" />
-                  <Text style={s.copyText}>주소복사</Text>
-                </Pressable>
               </View>
             </View>
-
-            {/* 하차지 */}
             <View style={[s.timelineItem, { marginTop: 20 }]}>
               <View style={[s.timelineDot, { backgroundColor: "#4F46E5" }]}>
                 <Text style={s.dotText}>도</Text>
@@ -156,19 +192,12 @@ export default function OrderDetailScreen() {
                 </Text>
                 <Text style={s.placeTitle}>{order.endAddr}</Text>
                 <Text style={s.placeDetail}>{order.endPlace}</Text>
-                <Pressable
-                  style={s.copyBtn}
-                  onPress={() => actions.copyAddress(order.endAddr)}
-                >
-                  <Ionicons name="copy-outline" size={12} color="#475569" />
-                  <Text style={s.copyText}>주소복사</Text>
-                </Pressable>
               </View>
             </View>
           </View>
         </View>
 
-        {/* --- 3. 화물 정보 그리드 --- */}
+        {/* --- 3. 화물 정보 --- */}
         <View style={s.sectionCard}>
           <Text style={s.sectionTitle}>화물 정보</Text>
           <View style={s.gridContainer}>
@@ -176,92 +205,73 @@ export default function OrderDetailScreen() {
               label="차종/톤수"
               value={`${order.reqTonnage} ${order.reqCarType}`}
             />
-            <GridItem label="운행구분" value={order.driveMode || "독차"} />
+            <GridItem label="운송방식" value={order.driveMode || "독차"} />
             <GridItem label="화물종류" value={order.cargoContent || "파렛트"} />
             <GridItem
               label="중량"
-              value={order.loadWeight ? `${order.loadWeight}kg` : "정보 없음"}
+              value={order.loadWeight ? `${order.loadWeight}톤` : "미지정"}
             />
           </View>
         </View>
 
-        {/* ******* 데이터 맞춰서 수정해야 됨 ******* */}
-        {/* --- 화주 정보 --- */}
-        <View style={[s.sectionCard, { backgroundColor: c.bg.surface }]}>
+        {/* --- 4. 화주 정보 --- */}
+        <View
+          style={StyleSheet.flatten([
+            s.sectionCard,
+            { backgroundColor: c.bg.surface },
+          ])}
+        >
+          <Text style={s.sectionTitle}>화주 정보</Text>
           <View
-            style={{
-              flexDirection: "row",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: 16,
-            }}
-          >
-            <Text
-              style={[
-                s.sectionTitle,
-                { color: c.text.primary, marginBottom: 0 },
-              ]}
-            >
-              화주 정보
-            </Text>
-          </View>
-
-          <View
-            style={[
+            style={StyleSheet.flatten([
               s.managerBox,
               { backgroundColor: c.bg.canvas, borderColor: c.border.default },
-            ]}
+            ])}
           >
-            {/* 업체명 (목업의 customerName 또는 상호명) */}
             <View style={s.managerRow}>
               <Ionicons
                 name="business-outline"
                 size={18}
                 color={c.text.secondary}
               />
-              <Text style={[s.managerLabel, { color: c.text.secondary }]}>
-                업체명
-              </Text>
-              <Text style={[s.managerValue, { color: c.text.primary }]}>
-                {order.customerName || "개인화주"}
+              <Text style={s.managerLabel}>업체명</Text>
+              <Text style={s.managerValue}>
+                {order.user?.nickname || "개인화주"}
               </Text>
             </View>
-
-            {/* 화주 닉네임 (목업의 nickName) */}
             <View style={[s.managerRow, { marginTop: 12 }]}>
               <Ionicons
                 name="person-circle-outline"
                 size={18}
                 color={c.text.secondary}
               />
-              <Text style={[s.managerLabel, { color: c.text.secondary }]}>
-                화주명
-              </Text>
-              <Text style={[s.managerValue, { color: c.text.primary }]}>
-                {order.nickName || "닉네임 없음"}
+              <Text style={s.managerLabel}>연락처</Text>
+              <Text style={s.managerValue}>
+                {["ACCEPTED", "LOADING", "IN_TRANSIT", "UNLOADING"].includes(
+                  order.status,
+                )
+                  ? order.user?.phone
+                  : "배차 후 공개"}
               </Text>
             </View>
           </View>
         </View>
 
-        {/* --- 4. 요청사항 --- */}
-        {order.remark && (
-          <View style={s.sectionCard}>
-            <Text style={s.sectionTitle}>요청사항</Text>
-            <View style={s.remarkBox}>
-              <Text style={s.remarkText}>{order.remark}</Text>
-            </View>
-          </View>
-        )}
-
-        {/* 하단 여백 */}
         <View style={{ height: 100 }} />
       </ScrollView>
 
-      {/* --- 5. 하단 고정 버튼 바 --- */}
-      <View style={s.bottomBar}>
+      {/* --- 5. 하단 액션 버튼 바 --- */}
+      <View
+        style={StyleSheet.flatten([
+          s.bottomBar,
+          { borderTopColor: c.border.default },
+        ])}
+      >
         <View style={s.iconBtnGroup}>
-          <Pressable style={s.circleBtn}>
+          <Pressable
+            style={s.circleBtn}
+            onPress={() => Alert.alert("알림", "채팅 준비 중")}
+          >
             <Ionicons
               name="chatbubble-ellipses-outline"
               size={24}
@@ -270,25 +280,25 @@ export default function OrderDetailScreen() {
           </Pressable>
           <Pressable
             style={s.circleBtn}
-            onPress={() => actions.callPhone("01000000000")}
+            onPress={() =>
+              order.user?.phone
+                ? actions.callPhone(order.user.phone)
+                : Alert.alert("알림", "배차 후 통화 가능")
+            }
           >
             <Ionicons name="call-outline" size={24} color="#333" />
           </Pressable>
         </View>
 
-        {/* 메인 액션 버튼 */}
         <Pressable
           onPress={loading ? undefined : buttonConfig.onPress}
           style={({ pressed }) => [
             s.mainActionBtn,
             {
-              backgroundColor: buttonConfig.isInstantStyle
-                ? "#EF4444"
-                : buttonConfig.color,
+              backgroundColor: buttonConfig.color,
               opacity: pressed || loading ? 0.7 : 1,
               justifyContent: "center",
               alignItems: "center",
-              flexDirection: "row",
             },
           ]}
         >
@@ -303,18 +313,20 @@ export default function OrderDetailScreen() {
                 size={22}
                 color="#FFF"
               />
-              <Text style={{ color: "#FFF", fontSize: 18, fontWeight: "700" }}>
+              <Text style={{ color: "#FFF", fontSize: 18, fontWeight: "800" }}>
                 {buttonConfig.text}
               </Text>
             </View>
           )}
         </Pressable>
       </View>
+
+      {/* 🚩 6. 하차 완료 시 사진 인증 모달 추가 */}
+      <ReceiptModal visible={modalOpen} onClose={() => setModalOpen(false)} />
     </View>
   );
 }
 
-// 그리드 아이템 (하위 컴포넌트)
 const GridItem = ({ label, value }: { label: string; value: string }) => (
   <View style={s.gridItem}>
     <Text style={s.gridLabel}>{label}</Text>
@@ -324,6 +336,7 @@ const GridItem = ({ label, value }: { label: string; value: string }) => (
 
 const s = StyleSheet.create({
   container: { flex: 1 },
+  center: { justifyContent: "center", alignItems: "center" },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -336,18 +349,12 @@ const s = StyleSheet.create({
   headerBtn: { padding: 8 },
   headerTitle: { fontSize: 16, fontWeight: "700", color: "#1E293B" },
   scrollContent: { padding: 16 },
-
-  // 공통 카드 스타일
   card: {
     backgroundColor: "#FFF",
     borderRadius: 20,
     padding: 20,
     marginBottom: 16,
     elevation: 3,
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 8,
   },
   sectionCard: {
     backgroundColor: "#FFF",
@@ -361,15 +368,12 @@ const s = StyleSheet.create({
     color: "#1E293B",
     marginBottom: 16,
   },
-
-  // 1. 메인 카드
   cardTop: {
     flexDirection: "row",
     justifyContent: "space-between",
     marginBottom: 20,
   },
-  dateText: { fontSize: 12, color: "#94A3B8", marginTop: 6 },
-
+  dateText: { fontSize: 12, color: "#94A3B8" },
   routeBigRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -377,14 +381,8 @@ const s = StyleSheet.create({
     marginBottom: 24,
   },
   addrBox: { flex: 1 },
-  addrBig: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: "#1E293B",
-    marginBottom: 4,
-  },
+  addrBig: { fontSize: 20, fontWeight: "800", color: "#1E293B" },
   addrSmall: { fontSize: 14, color: "#64748B" },
-
   infoBar: {
     flexDirection: "row",
     backgroundColor: "#F8FAFC",
@@ -402,7 +400,6 @@ const s = StyleSheet.create({
     marginHorizontal: 16,
   },
   infoText: { fontSize: 13, color: "#475569", fontWeight: "600" },
-
   priceRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -413,9 +410,7 @@ const s = StyleSheet.create({
   },
   priceLabel: { fontSize: 14, color: "#64748B" },
   priceRight: { flexDirection: "row", alignItems: "center" },
-  priceValue: { fontSize: 22, fontWeight: "900", color: "#1E293B" },
-
-  // 2. 타임라인
+  priceValue: { fontSize: 22, fontWeight: "900" },
   timelineContainer: { position: "relative" },
   timelineLine: {
     position: "absolute",
@@ -442,26 +437,8 @@ const s = StyleSheet.create({
     color: "#6366F1",
     marginBottom: 4,
   },
-  placeTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#1E293B",
-    marginBottom: 4,
-  },
+  placeTitle: { fontSize: 16, fontWeight: "700", color: "#1E293B" },
   placeDetail: { fontSize: 13, color: "#64748B", marginBottom: 8 },
-  copyBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#F1F5F9",
-    alignSelf: "flex-start",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    gap: 4,
-  },
-  copyText: { fontSize: 11, color: "#475569" },
-
-  // 3. 그리드
   gridContainer: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   gridItem: {
     width: (width - 82) / 2,
@@ -469,20 +446,13 @@ const s = StyleSheet.create({
     padding: 16,
     borderRadius: 12,
   },
-  gridLabel: { fontSize: 12, color: "#94A3B8", marginBottom: 4 },
-  gridValue: { fontSize: 15, fontWeight: "700", color: "#334155" },
-
-  // 4. 요청사항
-  remarkBox: {
-    backgroundColor: "#FFFBEB",
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#FEF3C7",
+  gridLabel: {
+    fontSize: 12,
+    color: "#94A3B8",
+    marginBottom: 4,
+    fontWeight: "600",
   },
-  remarkText: { fontSize: 14, color: "#92400E", lineHeight: 20 },
-
-  // 5. 하단 바
+  gridValue: { fontSize: 15, fontWeight: "700", color: "#334155" },
   bottomBar: {
     position: "absolute",
     bottom: 0,
@@ -494,11 +464,8 @@ const s = StyleSheet.create({
     paddingTop: 12,
     flexDirection: "row",
     gap: 12,
-    elevation: 10,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
+    borderTopWidth: 1,
+    borderTopColor: "#EEE",
   },
   iconBtnGroup: { flexDirection: "row", gap: 10 },
   circleBtn: {
@@ -509,36 +476,16 @@ const s = StyleSheet.create({
     borderColor: "#E2E8F0",
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#FFF",
-    elevation: 2,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
   },
-  mainActionBtn: {
-    flex: 1,
-    height: 54, // 높이 고정
-    borderRadius: 16,
-  },
-  managerBox: {
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    gap: 12,
-  },
-  managerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
+  mainActionBtn: { flex: 1, height: 54, borderRadius: 16 },
+  managerBox: { padding: 16, borderRadius: 12, borderWidth: 1, gap: 12 },
+  managerRow: { flexDirection: "row", alignItems: "center" },
   managerLabel: {
     fontSize: 14,
     width: 60,
     marginLeft: 8,
-  },
-  managerValue: {
-    fontSize: 15,
+    color: "#64748B",
     fontWeight: "700",
-    flex: 1,
   },
+  managerValue: { fontSize: 15, fontWeight: "800", flex: 1 },
 });
