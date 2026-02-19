@@ -3,11 +3,50 @@ import { View, Text, StyleSheet, ScrollView } from "react-native";
 import { useRouter } from "expo-router";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import { Button, Card } from "@/shared/ui/base";
+import { tokenStorage } from "@/shared/utils/tokenStorage";
+import { getCurrentUserSnapshot } from "@/shared/utils/currentUserStorage";
 
 export default function Index() {
   const t = useAppTheme(); // 테마 객체 가져오기
   const c = t.colors; // 색상 팔레트 추출
   const router = useRouter(); // Expo Router 네비게이션 도구
+  const [checkingAutoLogin, setCheckingAutoLogin] = React.useState(true);
+
+  React.useEffect(() => {
+    let active = true;
+
+    void (async () => {
+      try {
+        const token = await tokenStorage.getItem("userToken");
+        if (!token) return;
+
+        const snapshot = await getCurrentUserSnapshot();
+        const role = String(snapshot?.role ?? "").toUpperCase();
+
+        if (role === "DRIVER") {
+          router.replace("/(driver)/(tabs)");
+          return;
+        }
+
+        if (role === "SHIPPER") {
+          router.replace("/(shipper)/(tabs)");
+          return;
+        }
+
+        router.replace("/(auth)/login");
+      } finally {
+        if (active) setCheckingAutoLogin(false);
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [router]);
+
+  if (checkingAutoLogin) {
+    return <View style={[s.container, { backgroundColor: c.bg.canvas }]} />;
+  }
 
   return (
     <View style={[s.container, { backgroundColor: c.bg.canvas }]}>
@@ -31,14 +70,14 @@ export default function Index() {
               variant="primary"
               size="lg"
               fullWidth
-              onPress={() => router.push("/(driver)/(tabs)")}
+              onPress={() => router.push("/(auth)/login")}
             />
             <Button
               title="화주(고객) 홈 이동"
               variant="outline"
               size="lg"
               fullWidth
-              onPress={() => router.push("/(shipper)/(tabs)")}
+              onPress={() => router.push("/(auth)/login")}
             />
           </View>
         </Card>

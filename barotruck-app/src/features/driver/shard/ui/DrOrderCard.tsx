@@ -1,9 +1,10 @@
 import React from "react";
-import { View, Text, StyleSheet, Pressable } from "react-native";
+import { View, Text, Pressable } from "react-native";
 import { useRouter } from "expo-router";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import { OrderResponse } from "@/shared/models/order"; //
 import { Badge } from "@/shared/ui/feedback/Badge";
+import { orderCardStyles as s } from "@/shared/ui/business/orderCardStyles";
 
 export const DrOrderCard = (props: OrderResponse) => {
   const {
@@ -47,6 +48,10 @@ export const DrOrderCard = (props: OrderResponse) => {
       params: { id: orderId.toString() },
     });
   };
+  const createdDateLabel =
+    typeof createdAt === "string" && createdAt.length >= 10
+      ? createdAt.substring(5, 10).replace("-", ".")
+      : "-";
 
   return (
     <Pressable
@@ -74,7 +79,7 @@ export const DrOrderCard = (props: OrderResponse) => {
           />
         </View>
         <Text style={[s.timeText, { color: c.text.secondary }]}>
-          {createdAt.substring(5, 10).replace("-", ".")}
+          {createdDateLabel}
         </Text>
       </View>
 
@@ -150,79 +155,3 @@ export const DrOrderCard = (props: OrderResponse) => {
   );
 };
 
-// 스타일 (생략 - 이전과 동일)
-const s = StyleSheet.create({
-  container: {
-    padding: 16,
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: "#F1F5F9",
-    backgroundColor: "#FFFFFF",
-    marginBottom: 12,
-    elevation: 4,
-  },
-  topRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 14,
-  },
-  badgeRow: { flexDirection: "row", alignItems: "center" },
-  timeText: { fontSize: 12, opacity: 0.6 },
-  routeRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 16,
-  },
-  locGroup: { flex: 1.5 },
-  locLabel: { fontSize: 11, color: "#94A3B8", marginBottom: 2 },
-  locName: { fontSize: 19, fontWeight: "900", letterSpacing: -0.5 },
-  placeText: { fontSize: 12, color: "#64748B", marginTop: 2 },
-  arrowArea: { flex: 1, alignItems: "center", paddingHorizontal: 8 },
-  distBadge: {
-    backgroundColor: "#F8FAFC",
-    borderColor: "#F1F5F9",
-    borderWidth: 1,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 8,
-    marginBottom: 6,
-  },
-  distText: { fontSize: 11, fontWeight: "700", color: "#64748B" },
-  line: { width: "100%", height: 1, position: "relative" },
-  arrowHead: {
-    position: "absolute",
-    right: 0,
-    top: -3,
-    width: 7,
-    height: 7,
-    borderTopWidth: 1.5,
-    borderRightWidth: 1.5,
-    transform: [{ rotate: "45deg" }],
-  },
-  bottomRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-end",
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: "#F8FAFC",
-  },
-  infoColumn: { flex: 1.5 },
-  loadDateText: { fontSize: 14, fontWeight: "800", marginBottom: 2 },
-  carText: { fontSize: 12, fontWeight: "500", opacity: 0.8 },
-  priceColumn: { flex: 1.2, alignItems: "flex-end" },
-  priceRow: {
-    flexDirection: "row",
-    alignItems: "baseline",
-    justifyContent: "flex-end",
-  },
-  priceText: { fontSize: 22, fontWeight: "900", letterSpacing: -0.5 },
-  taxLabel: {
-    fontSize: 13,
-    color: "#EF4444",
-    fontWeight: "bold",
-    marginLeft: 4,
-  },
-});

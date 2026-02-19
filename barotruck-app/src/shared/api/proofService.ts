@@ -1,5 +1,6 @@
 import apiClient from './apiClient';
 import { ProofResponse, ProofUploadRequest } from '../models/proof';
+import { USE_MOCK } from "@/shared/config/mock";
 
 export const ProofService = {
   /**
@@ -7,6 +8,7 @@ export const ProofService = {
    * 인수증 사진과 서명을 FormData에 담아 전송합니다.
    */
   uploadProof: async (request: ProofUploadRequest): Promise<boolean> => {
+    if (USE_MOCK) return true;
     const formData = new FormData();
     
     // 파일 데이터 추가 (React Native에서 이미지 전송 시 필요 포맷)
@@ -32,6 +34,14 @@ export const ProofService = {
    * 2. 증빙 내역 조회 (화주/관리자용)
    */
   getProof: async (orderId: number): Promise<ProofResponse> => {
+    if (USE_MOCK) {
+      return {
+        proofId: Number(orderId),
+        receiptImageUrl: "",
+        signatureImageUrl: "",
+        recipientName: "목업 수령인",
+      };
+    }
     const res = await apiClient.get(`/api/proof/${orderId}`);
     return res.data;
   }

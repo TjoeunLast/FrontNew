@@ -1,4 +1,5 @@
 ﻿export type CreateOrderDraft = {
+  editOrderId?: string;
   startSelected: string;
   startAddrDetail: string;
   startContact: string;
@@ -42,4 +43,3 @@ export function getCreateOrderDraft() {
 export function clearCreateOrderDraft() {
   draft = null;
 }
-
