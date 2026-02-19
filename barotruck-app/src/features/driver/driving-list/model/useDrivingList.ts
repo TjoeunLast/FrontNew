@@ -27,7 +27,9 @@ export const useDrivingList = () => {
     activeTab,
     setActiveTab,
     pendingOrders: orders.filter(
-      (o) => o.status === "APPLIED" || o.status === "ACCEPTED",
+      (o) =>
+        o.status === "APPLIED" ||
+        (o.status === "ACCEPTED" && !o.status.includes("CANCELLED")),
     ),
     activeOrders: orders.filter((o) =>
       ["LOADING", "IN_TRANSIT", "UNLOADING"].includes(o.status),

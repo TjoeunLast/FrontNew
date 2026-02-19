@@ -1,16 +1,15 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { OrderResponse } from "@/shared/models/order";
-import { MOCK_ORDERS } from "@/shared/mockData"; // 공통 목업 데이터 파일 연결
+import { OrderService } from "@/shared/api/orderService";
 
-// 홈 화면에서만 쓰이는 수익 요약 데이터 타입 정의
 export interface IncomeSummary {
   month: number;
   amount: number;
-  targetDiff: number; // 목표까지 남은 금액
-  growthRate: number; // 전월 대비 성장률
+  targetDiff: number;
+  growthRate: number;
 }
 
-// 홈 화면 전용 목업 데이터 (수익 현황)
+// 수익 카드는 요청하신 대로 목업 유지
 const MOCK_INCOME: IncomeSummary = {
   month: 2,
   amount: 3540000,
@@ -18,58 +17,56 @@ const MOCK_INCOME: IncomeSummary = {
   growthRate: 8.5,
 };
 
-// 커스텀 훅 정의
 export const useDriverHome = () => {
-  // shared/mockData 10개의 데이터
-  const [orders, setOrders] = useState<OrderResponse[]>(MOCK_ORDERS);
-  const [income, setIncome] = useState<IncomeSummary>(MOCK_INCOME);
+  const [recommendedOrders, setRecommendedOrders] = useState<OrderResponse[]>(
+    [],
+  );
+  const [myOrders, setMyOrders] = useState<OrderResponse[]>([]);
+  const [income] = useState<IncomeSummary>(MOCK_INCOME);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const statusCounts = useMemo(() => {
-    return {
-      // 접수됨 상태 (배차대기)
-      pending: orders.filter((o) => o.status === "REQUESTED").length,
-      // 배차수락 상태 (배차확정)
-      confirmed: orders.filter((o) => o.status === "ACCEPTED").length,
-      // 운행 중 상태 (운송중)
-      shipping: orders.filter((o) => o.status === "IN_TRANSIT").length,
-      // 완료 상태 (운송완료)
-      completed: orders.filter((o) => o.status === "COMPLETED").length,
-    };
-  }, [orders]);
+  const fetchHomeData = useCallback(async () => {
+    try {
+      setIsRefreshing(true);
+      // 1. 맞춤 추천 오더 가져오기 (서버 연동)
+      const recommended = await OrderService.getRecommendedOrders();
+      setRecommendedOrders(recommended);
 
-  // 맞춤 추천용 필터링 (REQUESTED 상태만 골라내기, 바로배차 우선 정렬)
-  const recommendedOrders = useMemo(() => {
-    return orders
-      .filter((o) => o.status === "REQUESTED") // 1. 배차대기만 골라내기
-      .sort((a, b) => {
-        // 2. 바로배차(instant: true)를 맨 위로 올리는 정렬 로직
-        // a가 긴급이고 b가 아니면 a를 앞으로(-1)
-        if (a.instant === true && b.instant !== true) return -1;
-        // b가 긴급이고 a가 아니면 b를 앞으로(1)
-        if (a.instant !== true && b.instant === true) return 1;
-        // 둘 다 같으면 순서 유지(0)
-        return 0;
-      });
-  }, [orders]);
-
-  // 실제 api 호출 시 (Pull to Refresh 로직)
-  const onRefresh = useCallback(async () => {
-    setIsRefreshing(true);
-
-    // 가상의 네트워크 지연 시간 (1초)
-    setTimeout(() => {
-      // 나중에 API 연동 시 실제 데이터를 setOrders(newData)로 갱신하면 됩니다.
+      // 2. 내 전체 운송 목록 가져오기 (상태 카운트용)
+      const drivingOrders = await OrderService.getMyDrivingOrders();
+      setMyOrders(drivingOrders);
+    } catch (error) {
+      console.error("데이터 로드 실패:", error);
+    } finally {
       setIsRefreshing(false);
-    }, 1000);
+    }
   }, []);
 
+  useEffect(() => {
+    fetchHomeData();
+  }, [fetchHomeData]);
+
+  // 요청하신 상태값 기준 필터링 로직
+  const statusCounts = useMemo(() => {
+    return {
+      // 승인대기: APPLIED
+      pending: myOrders.filter((o) => o.status === "APPLIED").length,
+      // 배차확정: ACCEPTED
+      confirmed: myOrders.filter((o) => o.status === "ACCEPTED").length,
+      // 운송중: LOADING, IN_TRANSIT, UNLOADING
+      shipping: myOrders.filter((o) =>
+        ["LOADING", "IN_TRANSIT", "UNLOADING"].includes(o.status),
+      ).length,
+      // 운송완료: COMPLETED
+      completed: myOrders.filter((o) => o.status === "COMPLETED").length,
+    };
+  }, [myOrders]);
+
   return {
-    orders,
     recommendedOrders,
     income,
     statusCounts,
     isRefreshing,
-    onRefresh,
+    onRefresh: fetchHomeData,
   };
 };

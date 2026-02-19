@@ -10,36 +10,32 @@ import {
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 
-// 프로젝트 공통 UI 및 API 서비스, 타입 임포트
 import { DrOrderCard } from "@/features/driver/shard/ui/DrOrderCard";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
-
-// 분리한 로직(Model) 임포트
 import { useDriverHome } from "../model/useDriverHome";
 
 export default function DriverHomeScreen() {
-  // 1. 테마 및 라우터 설정
   const t = useAppTheme();
   const c = t.colors;
   const router = useRouter();
 
-  // 2. 커스텀 훅에서 데이터와 기능 가져오기
-  const {
-    orders,
-    recommendedOrders,
-    income,
-    statusCounts,
-    isRefreshing,
-    onRefresh,
-  } = useDriverHome();
+  const { recommendedOrders, income, statusCounts, isRefreshing, onRefresh } =
+    useDriverHome();
+
+  // [수정] 운송 현황 클릭 시 이동 처리 로직
+  const handleStatusPress = (tabName: "READY" | "ONGOING" | "DONE") => {
+    router.push({
+      // 경로 에러 방지를 위해 실제 파일 경로인 driving으로 설정
+      pathname: "/(driver)/(tabs)/driving",
+      params: { initialTab: tabName },
+    });
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: c.bg.canvas }]}>
-      {/* --- 상단 헤더 영역 --- */}
       <View style={styles.header}>
         <Text style={styles.logoText}>BARO</Text>
         <View style={styles.headerIcons}>
-          {/* 3. 채팅 아이콘 클릭 시 이동 로직 추가 */}
           <Pressable onPress={() => router.push("/(chat)")}>
             <Ionicons
               name="chatbubble-outline"
@@ -47,7 +43,6 @@ export default function DriverHomeScreen() {
               color={c.text.primary}
             />
           </Pressable>
-          
           <Pressable onPress={() => console.log("알림 이동")}>
             <Ionicons
               name="notifications-outline"
@@ -58,7 +53,6 @@ export default function DriverHomeScreen() {
         </View>
       </View>
 
-      {/* --- 스크롤 가능한 메인 콘텐츠 영역 --- */}
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
@@ -66,7 +60,6 @@ export default function DriverHomeScreen() {
           <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />
         }
       >
-        {/* 수익 요약 카드 (클릭 시 정산 탭으로 이동) */}
         <Pressable
           onPress={() => router.push("/(driver)/(tabs)/sales")}
           style={[
@@ -98,7 +91,6 @@ export default function DriverHomeScreen() {
           </View>
         </Pressable>
 
-        {/* --- 운송 현황 대시보드 --- */}
         <View style={styles.dashboardContainer}>
           <Text
             style={[
@@ -109,21 +101,26 @@ export default function DriverHomeScreen() {
             운송 현황
           </Text>
           <View style={styles.statsGrid}>
-            {/* 1. 배차대기 */}
-            <View style={[styles.statItem, { backgroundColor: c.bg.surface }]}>
+            {/* 1. 승인대기 & 2. 배차확정 -> READY 탭으로 연결 */}
+            <Pressable
+              onPress={() => handleStatusPress("READY")}
+              style={[styles.statItem, { backgroundColor: c.bg.surface }]}
+            >
               <View style={[styles.iconCircle, { backgroundColor: "#E0E7FF" }]}>
                 <Ionicons name="cube" size={20} color="#3730A3" />
               </View>
               <Text style={[styles.statLabel, { color: "#3730A3" }]}>
-                배차대기
+                승인대기
               </Text>
               <Text style={[styles.statValue, { color: "#3730A3" }]}>
                 {statusCounts.pending}
               </Text>
-            </View>
+            </Pressable>
 
-            {/* 2. 배차확정  */}
-            <View style={[styles.statItem, { backgroundColor: c.bg.surface }]}>
+            <Pressable
+              onPress={() => handleStatusPress("READY")}
+              style={[styles.statItem, { backgroundColor: c.bg.surface }]}
+            >
               <View style={[styles.iconCircle, { backgroundColor: "#DCFCE7" }]}>
                 <Ionicons name="clipboard-outline" size={20} color="#166534" />
                 {statusCounts.confirmed > 0 && <View style={styles.redDot} />}
@@ -134,10 +131,13 @@ export default function DriverHomeScreen() {
               <Text style={[styles.statValue, { color: "#166534" }]}>
                 {statusCounts.confirmed}
               </Text>
-            </View>
+            </Pressable>
 
-            {/* 3. 운송중 */}
-            <View style={[styles.statItem, { backgroundColor: c.bg.surface }]}>
+            {/* 3. 운송중 -> ONGOING 탭으로 연결 */}
+            <Pressable
+              onPress={() => handleStatusPress("ONGOING")}
+              style={[styles.statItem, { backgroundColor: c.bg.surface }]}
+            >
               <View style={[styles.iconCircle, { backgroundColor: "#E0F2FE" }]}>
                 <MaterialCommunityIcons
                   name="truck-delivery"
@@ -151,10 +151,13 @@ export default function DriverHomeScreen() {
               <Text style={[styles.statValue, { color: "#075985" }]}>
                 {statusCounts.shipping}
               </Text>
-            </View>
+            </Pressable>
 
-            {/* 4. 운송완료 */}
-            <View style={[styles.statItem, { backgroundColor: c.bg.surface }]}>
+            {/* 4. 운송완료 -> DONE 탭으로 연결 */}
+            <Pressable
+              onPress={() => handleStatusPress("DONE")}
+              style={[styles.statItem, { backgroundColor: c.bg.surface }]}
+            >
               <View style={[styles.iconCircle, { backgroundColor: "#F1F5F9" }]}>
                 <Ionicons name="checkmark-circle" size={20} color="#334155" />
               </View>
@@ -162,26 +165,25 @@ export default function DriverHomeScreen() {
               <Text style={[styles.statValue, { color: "#334155" }]}>
                 {statusCounts.completed}
               </Text>
-            </View>
+            </Pressable>
           </View>
         </View>
 
-        {/* --- 추천 오더 리스트 영역 --- */}
         <View style={styles.orderList}>
           <View style={styles.listHeader}>
             <Text style={[styles.sectionTitle, { color: c.text.primary }]}>
               맞춤 추천 오더
             </Text>
-            <Pressable
-              onPress={() => router.push("/(driver)/(tabs)/orders")}
-            ></Pressable>
+            {/* 전체보기 클릭 시 추천 리스트 탭으로 이동 */}
+            <Pressable onPress={() => router.push("/(driver)/(tabs)/orders")}>
+              <Text style={{ color: "#94A3B8" }}>전체보기 &gt;</Text>
+            </Pressable>
           </View>
 
-          {/* 맞춤 추천 오더 데이터 렌더링*/}
           {recommendedOrders.map((order) => (
             <DrOrderCard key={order.orderId} {...(order as any)} />
           ))}
-          {/* 추천 오더가 없을 경우 */}
+
           {recommendedOrders.length === 0 && (
             <Text
               style={{ textAlign: "center", color: "#94A3B8", marginTop: 20 }}
@@ -189,22 +191,14 @@ export default function DriverHomeScreen() {
               현재 대기 중인 추천 오더가 없습니다.
             </Text>
           )}
-
-          {/* Model에서 가져온 오더 데이터 렌더링 */}
-          {/* {orders.map((order) => (
-            <DrOrderCard key={order.orderId} {...(order as any)} />
-          ))} */}
         </View>
       </ScrollView>
     </View>
   );
 }
 
-// 스타일 정의
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
+  container: { flex: 1 },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -214,19 +208,9 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
     backgroundColor: "#fff",
   },
-  logoText: {
-    fontSize: 22,
-    fontWeight: "900",
-    color: "#4E46E5",
-  },
-  headerIcons: {
-    flexDirection: "row",
-    gap: 15,
-  },
-  bgPatternContainer: {
-    ...StyleSheet.absoluteFillObject,
-    zIndex: 0,
-  },
+  logoText: { fontSize: 22, fontWeight: "900", color: "#4E46E5" },
+  headerIcons: { flexDirection: "row", gap: 15 },
+  bgPatternContainer: { ...StyleSheet.absoluteFillObject, zIndex: 0 },
   bgShape: {
     position: "absolute",
     backgroundColor: "rgba(255, 255, 255, 0.08)",
@@ -244,7 +228,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     bottom: -30,
     left: -20,
-    transform: [{ rotate: "35deg" }], // 35도 회전
+    transform: [{ rotate: "35deg" }],
   },
   shapeCircleSmall: {
     width: 60,
@@ -252,12 +236,9 @@ const styles = StyleSheet.create({
     borderRadius: 30,
     top: "40%",
     right: 20,
-    backgroundColor: "rgba(255, 255, 255, 0.05)", // 더 연하게
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
   },
-  scrollContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 30,
-  },
+  scrollContent: { paddingHorizontal: 20, paddingBottom: 30 },
   incomeCard: {
     padding: 24,
     borderRadius: 24,
@@ -274,23 +255,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 16,
   },
-  incomeTitle: {
-    color: "#FFF",
-    opacity: 0.9,
-    fontSize: 14,
-    fontWeight: "500",
-  },
+  incomeTitle: { color: "#FFF", opacity: 0.9, fontSize: 14, fontWeight: "500" },
   incomeBadge: {
     backgroundColor: "rgba(255, 255, 255, 0.2)",
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
   },
-  incomeBadgeText: {
-    color: "#FFF",
-    fontSize: 13,
-    fontWeight: "700",
-  },
+  incomeBadgeText: { color: "#FFF", fontSize: 13, fontWeight: "700" },
   incomeAmount: {
     color: "#FFF",
     fontSize: 32,
@@ -306,25 +278,13 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    // marginBottom: 16,
   },
-  orderList: {
-    gap: 16,
-  },
-  dashboardContainer: {
-    marginBottom: 24,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-  },
-  statsGrid: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    gap: 8,
-  },
+  orderList: { gap: 16 },
+  dashboardContainer: { marginBottom: 24 },
+  sectionTitle: { fontSize: 18, fontWeight: "700" },
+  statsGrid: { flexDirection: "row", justifyContent: "space-between", gap: 8 },
   statItem: {
-    flex: 1, // 모든 카드가 동일한 너비를 가집니다.
+    flex: 1,
     paddingVertical: 16,
     paddingHorizontal: 4,
     borderRadius: 20,
@@ -352,10 +312,7 @@ const styles = StyleSheet.create({
     color: "#64748B",
     marginBottom: 4,
   },
-  statValue: {
-    fontSize: 18,
-    fontWeight: "800",
-  },
+  statValue: { fontSize: 18, fontWeight: "800" },
   redDot: {
     position: "absolute",
     top: 0,
