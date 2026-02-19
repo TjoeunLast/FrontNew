@@ -4,27 +4,17 @@ import { Ionicons } from "@expo/vector-icons";
 import { Badge } from "@/shared/ui/feedback/Badge";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 
-interface DoneOrderCardProps {
-  order: any;
-  onDetail: (id: string) => void;
-}
-
-export const DoneOrderCard = ({ order, onDetail }: DoneOrderCardProps) => {
+export const DoneOrderCard = ({ order, onDetail }: any) => {
   const { colors: c } = useAppTheme();
-
-  // [1] 정산 상태 체크 (DB 데이터에 따라 'COMPLETED' 혹은 'Y' 등으로 매칭)
   const isSettled = order.settlementStatus === "COMPLETED";
-
-  // [2] 주소 포맷팅 함수 (에러 방지를 위해 Optional Chaining 사용)
-  const getShortAddr = (addr: string) => {
-    if (!addr) return "주소 정보 없음";
-    const parts = addr.split(" ");
-    return `${parts[0]} ${parts[1] || ""}`;
-  };
+  const getShortAddr = (addr: string) =>
+    addr ? `${addr.split(" ")[0]} ${addr.split(" ")[1] || ""}` : "";
 
   return (
-    <View style={s.container}>
-      {/* --- 상단부: 정산 상태 및 상세보기 --- */}
+    <Pressable
+      style={s.container}
+      onPress={() => onDetail(Number(order.orderId))}
+    >
       <View style={s.topRow}>
         <View style={s.badgeRow}>
           <Badge
@@ -32,63 +22,74 @@ export const DoneOrderCard = ({ order, onDetail }: DoneOrderCardProps) => {
             tone={isSettled ? "success" : "warning"}
           />
           <View style={s.receiptBadge}>
-            <Ionicons name="document-text-outline" size={12} color="#64748B" />
             <Text style={s.receiptText}>인수증 확인됨</Text>
           </View>
         </View>
-
-        <Pressable
-          style={s.detailLink}
-          onPress={() => onDetail(order.orderId?.toString())}
-        >
+        <View style={s.detailLink}>
           <Text style={s.detailText}>상세보기</Text>
           <Ionicons name="chevron-forward" size={14} color="#94A3B8" />
-        </Pressable>
+        </View>
       </View>
 
-      {/* --- 중단부: 운행 경로 요약 --- */}
       <View style={s.routeRow}>
         <View style={s.locGroup}>
-          <Text style={s.locName}>{getShortAddr(order.startAddr)}</Text>
-          {/* DB 데이터의 startSchedule 활용 */}
-          <Text style={s.dateText}>{order.startSchedule || "00:00"} 상차</Text>
+          <Text style={s.locLabel}>상차지</Text>
+          <Text
+            style={[s.locName, { color: c.text.primary }]}
+            numberOfLines={1}
+          >
+            {getShortAddr(order.startAddr)}
+          </Text>
+          <Text style={s.placeText} numberOfLines={1}>
+            {order.startPlace}
+          </Text>
         </View>
-
-        <Ionicons
-          name="arrow-forward"
-          size={16}
-          color="#CBD5E1"
-          style={s.arrow}
-        />
-
+        <View style={s.arrowArea}>
+          <View style={s.distBadge}>
+            <Text style={s.distText}>{order.distance}km</Text>
+          </View>
+          <View style={s.line}>
+            <View style={s.arrowHead} />
+          </View>
+        </View>
         <View style={[s.locGroup, { alignItems: "flex-end" }]}>
-          <Text style={[s.locName, { textAlign: "right" }]}>
+          <Text style={s.locLabel}>하차지</Text>
+          <Text
+            style={[s.locName, { color: c.text.primary, textAlign: "right" }]}
+            numberOfLines={1}
+          >
             {getShortAddr(order.endAddr)}
           </Text>
-          {/* 하차 완료 시간 표시 (데이터가 없을 경우 하드코딩 대체) */}
-          <Text style={s.dateText}>하차 완료</Text>
+          <Text style={[s.placeText, { textAlign: "right" }]} numberOfLines={1}>
+            {order.endPlace}
+          </Text>
         </View>
       </View>
 
-      {/* --- 하단부: 금액 및 결제 수단 --- */}
-      <View style={s.priceRow}>
-        <View>
-          <Text style={s.payMethodText}>
-            {order.payMethod || "결제 수단 미지정"}
+      <View style={s.bottomRow}>
+        <View style={s.infoColumn}>
+          <Text style={[s.loadDateText, { color: c.text.primary }]}>
+            운송 완료
           </Text>
-          <Text style={s.carInfoText}>
-            {order.reqTonnage} {order.reqCarType}
+          <Text style={[s.carText, { color: c.text.secondary }]}>
+            {order.reqTonnage} {order.reqCarType} •{" "}
+            {order.cargoContent || "일반짐"}
           </Text>
         </View>
-
-        <View style={s.amountGroup}>
-          <Text style={[s.priceText, isSettled && { color: "#10B981" }]}>
-            {order.basePrice?.toLocaleString() ?? "0"}원
+        <View style={s.priceColumn}>
+          <Text
+            style={[s.priceText, { color: isSettled ? "#10B981" : "#0F172A" }]}
+          >
+            {order.basePrice?.toLocaleString()}
           </Text>
-          <Text style={s.vatText}>(VAT 포함)</Text>
+          <Badge
+            label={order.payMethod === "PREPAID" ? "현금/선불" : "인수증/후불"}
+            tone={order.payMethod === "PREPAID" ? "payPrepaid" : "payDeferred"}
+            style={{ marginTop: 6, alignSelf: "flex-end" }}
+          />
         </View>
       </View>
-    </View>
+    </Pressable>
   );
 };
 
@@ -96,15 +97,11 @@ const s = StyleSheet.create({
   container: {
     padding: 20,
     borderRadius: 24,
-    backgroundColor: "#FFFFFF",
-    marginBottom: 16,
     borderWidth: 1,
     borderColor: "#F1F5F9",
+    backgroundColor: "#FFFFFF",
+    marginBottom: 16,
     elevation: 2,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
   },
   topRow: {
     flexDirection: "row",
@@ -112,53 +109,66 @@ const s = StyleSheet.create({
     alignItems: "center",
     marginBottom: 16,
   },
-  badgeRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  badgeRow: { flexDirection: "row", alignItems: "center" },
   receiptBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 3,
     backgroundColor: "#F1F5F9",
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 8,
+    marginLeft: 8,
   },
   receiptText: { fontSize: 11, color: "#64748B", fontWeight: "600" },
-  detailLink: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 4,
-  },
+  detailLink: { flexDirection: "row", alignItems: "center" },
   detailText: { fontSize: 13, color: "#94A3B8", marginRight: 2 },
   routeRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 20,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#F8FAFC",
+    justifyContent: "space-between",
+    marginBottom: 16,
   },
-  locGroup: { flex: 1 },
-  locName: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#334155",
-    marginBottom: 4,
+  locGroup: { flex: 1.5 },
+  locLabel: { fontSize: 11, color: "#94A3B8", marginBottom: 2 },
+  locName: { fontSize: 19, fontWeight: "900", letterSpacing: -0.5 },
+  placeText: { fontSize: 12, color: "#64748B", marginTop: 2 },
+  arrowArea: { flex: 1, alignItems: "center", paddingHorizontal: 8 },
+  distBadge: {
+    backgroundColor: "#F8FAFC",
+    borderColor: "#F1F5F9",
+    borderWidth: 1,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 8,
+    marginBottom: 6,
   },
-  dateText: { fontSize: 12, color: "#94A3B8" },
-  arrow: { marginHorizontal: 10 },
-  priceRow: {
+  distText: { fontSize: 11, fontWeight: "700", color: "#64748B" },
+  line: {
+    width: "100%",
+    height: 1,
+    backgroundColor: "#E2E8F0",
+    position: "relative",
+  },
+  arrowHead: {
+    position: "absolute",
+    right: 0,
+    top: -3,
+    width: 7,
+    height: 7,
+    borderTopWidth: 1.5,
+    borderRightWidth: 1.5,
+    borderColor: "#CBD5E1",
+    transform: [{ rotate: "45deg" }],
+  },
+  bottomRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-end",
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#F8FAFC",
   },
-  payMethodText: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#4E46E5",
-    marginBottom: 2,
-  },
-  carInfoText: { fontSize: 12, color: "#94A3B8" },
-  amountGroup: { alignItems: "flex-end" },
-  priceText: { fontSize: 20, fontWeight: "900", color: "#0F172A" },
-  vatText: { fontSize: 10, color: "#CBD5E1", marginTop: 2 },
+  infoColumn: { flex: 1.5 },
+  loadDateText: { fontSize: 14, fontWeight: "800", marginBottom: 2 },
+  carText: { fontSize: 12, fontWeight: "500", opacity: 0.8 },
+  priceColumn: { flex: 1.2, alignItems: "flex-end" },
+  priceText: { fontSize: 22, fontWeight: "900", letterSpacing: -0.5 },
 });
