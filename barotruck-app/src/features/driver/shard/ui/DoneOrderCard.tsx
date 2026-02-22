@@ -33,7 +33,7 @@ export const DoneOrderCard = ({ order, onDetail }: any) => {
         </View>
         <View style={s.detailLink}>
           <Text style={[s.detailText, { color: c.text.secondary }]}>
-            상세보기
+            #{order.orderId}
           </Text>
           <Ionicons name="chevron-forward" size={14} color={c.text.secondary} />
         </View>

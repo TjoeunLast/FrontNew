@@ -53,11 +53,11 @@ export default function OrderDetailScreen() {
       case "ACCEPTED":
         return { label: "배차 확정", tone: "info" as const };
       case "LOADING":
-        return { label: "상차 작업 중", tone: "ongoing" as const };
+        return { label: "상차 작업 중", tone: "neutral" as const };
       case "IN_TRANSIT":
-        return { label: "운송 이동 중", tone: "ongoing" as const };
+        return { label: "운송 이동 중", tone: "neutral" as const };
       case "UNLOADING":
-        return { label: "하차 작업 중", tone: "ongoing" as const };
+        return { label: "하차 작업 중", tone: "neutral" as const };
       case "COMPLETED":
         return { label: "운송 완료", tone: "neutral" as const };
       default:
