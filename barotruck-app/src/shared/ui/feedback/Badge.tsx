@@ -9,21 +9,19 @@ import {
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 
 export type BadgeTone =
-  | "success"
-  | "warning"
-  | "danger"
-  | "info"
-  | "neutral"
-  | "request"
-  | "ongoing"
-  | "complete"
-  | "cancel"
-  | "roundTrip"
-  | "oneWay"
-  | "urgent"
-  | "direct"
-  | "payPrepaid"
-  | "payDeferred";
+  | "success" // 완료, 성공 (status.success)
+  | "warning" // 하차 대기, 주의 (status.warning)
+  | "danger" // 오류, 긴급 (status.danger)
+  | "info" // 안내, 배차 확정 (status.info)
+  | "neutral" // 일반 정보 (bg.muted)
+  | "request" // 배차 신청 (badge.requestBg)
+  | "ongoing" // 운송 중 (badge.ongoingBg)
+  | "complete" // 최종 완료/정산 (badge.completeBg)
+  | "cancel" // 취소됨 (badge.cancelBg)
+  | "urgent" // 긴급/바로배차 (badge.urgentBg)
+  | "direct" // 직접배차/브랜드 (brand.primary)
+  | "payPrepaid" // 선착불 결제 (badge.payPrepaid)
+  | "payDeferred"; // 인수증/후불 결제 (badge.payDeferred)
 
 export type BadgeProps = {
   label: string;
@@ -38,47 +36,89 @@ export const Badge = memo(function Badge({
   style,
   textStyle,
 }: BadgeProps) {
-  const t = useAppTheme();
-  const c = t.colors;
+  const { colors: c } = useAppTheme();
+
+  // 텍스트 기반 자동 톤 설정 로직
   const resolvedTone = useMemo<BadgeTone>(() => {
-    if (label.trim() === "배차 완료") return "success";
-    if (label.trim() === "완료") return "complete";
+    const trimmed = label.trim();
+    if (trimmed === "배차 완료" || trimmed === "운송 완료") return "success";
+    if (trimmed === "완료") return "complete";
     return tone;
   }, [label, tone]);
 
+  // 테마 변수 매핑 로직
   const tset = useMemo(() => {
     switch (resolvedTone) {
       case "success":
-        return { bg: "#DCFCE7", fg: "#166534", border: "#BBF7D0" };
+        return {
+          bg: c.status.successSoft,
+          fg: c.status.success,
+          border: c.status.success,
+        };
       case "warning":
-        return { bg: "#FEF9C3", fg: "#854D0E", border: "#FEF08A" };
+        return {
+          bg: c.status.warningSoft,
+          fg: c.status.warning,
+          border: c.status.warning,
+        };
       case "danger":
-        return { bg: "#FEE2E2", fg: "#991B1B", border: "#FECACA" };
-      case "info":
-        return { bg: "#E0F2FE", fg: "#075985", border: "#BAE6FD" };
-      case "request":
-        return { bg: "#F3E8FF", fg: "#6B21A8", border: "#E9D5FF" };
-      case "ongoing":
-        return { bg: "#E0E7FF", fg: "#3730A3", border: "#C7D2FE" };
-      case "complete":
-        return { bg: "#F1F5F9", fg: "#334155", border: "#E2E8F0" };
       case "cancel":
-        return { bg: "#FFF1F2", fg: "#9F1239", border: "#FFE4E6" };
+        return {
+          bg: c.badge.cancelBg,
+          fg: c.badge.cancelText,
+          border: c.badge.cancelText,
+        };
+      case "info":
+        return {
+          bg: c.status.infoSoft,
+          fg: c.status.info,
+          border: c.status.info,
+        };
+      case "ongoing":
+        return {
+          bg: c.badge.ongoingBg,
+          fg: c.badge.ongoingText,
+          border: "transparent",
+        };
+      case "request":
+        return {
+          bg: c.badge.requestBg,
+          fg: c.badge.requestText,
+          border: "transparent",
+        };
       case "urgent":
-        return { bg: "#DC2626", fg: "#FFFFFF", border: "#DC2626" };
+        return {
+          bg: c.badge.urgentBg,
+          fg: c.badge.urgentText,
+          border: c.badge.urgentBg,
+        };
       case "direct":
-        return { bg: "#4E46E5", fg: "#F3F4F6", border: "#647fa4" };
-      case "roundTrip":
-        return { bg: "#EEF2FF", fg: "#4338CA", border: "transparent" };
-      case "oneWay":
-        return { bg: "#F0F9FF", fg: "#0369A1", border: "transparent" };
+        return {
+          bg: c.brand.primary,
+          fg: c.text.inverse,
+          border: "primary",
+        };
       case "payPrepaid":
-        return { bg: "transparent", fg: "#15803D", border: "#15803D" };
+        return {
+          bg: "transparent",
+          fg: c.badge.payPrepaid,
+          border: c.badge.payPrepaid,
+        };
       case "payDeferred":
-        return { bg: "transparent", fg: "#647fa4", border: "#647fa4" };
+        return {
+          bg: "transparent",
+          fg: c.badge.payDeferred,
+          border: c.badge.payDeferred,
+        };
+      case "complete":
+        return {
+          bg: c.badge.completeBg,
+          fg: c.badge.completeText,
+          border: c.border.default,
+        };
       case "neutral":
       default:
-        return { bg: c.bg.muted, fg: c.text.secondary, border: c.bg.muted };
+        return { bg: c.bg.muted, fg: c.text.secondary, border: "transparent" };
     }
   }, [resolvedTone, c]);
 
@@ -86,10 +126,7 @@ export const Badge = memo(function Badge({
     <View
       style={[
         s.badge,
-        {
-          backgroundColor: tset.bg,
-          borderColor: tset.border ?? tset.bg,
-        },
+        { backgroundColor: tset.bg, borderColor: tset.border },
         style,
       ]}
     >
@@ -103,15 +140,12 @@ export const Badge = memo(function Badge({
 const s = StyleSheet.create({
   badge: {
     paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingVertical: 3,
     borderRadius: 6,
     borderWidth: 1,
     alignSelf: "flex-start",
     justifyContent: "center",
     alignItems: "center",
   },
-  text: {
-    fontSize: 11,
-    fontWeight: "700",
-  },
+  text: { fontSize: 11, fontWeight: "800" },
 });
