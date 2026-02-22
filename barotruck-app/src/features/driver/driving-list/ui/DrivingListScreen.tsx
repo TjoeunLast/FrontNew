@@ -51,7 +51,6 @@ export default function DrivingListScreen() {
   // [추가] 외부 파라미터 수신 시 탭 자동 전환 로직
   useEffect(() => {
     if (params.initialTab) {
-      // 홈 화면의 상태값(READY, ONGOING, DONE)을 이 화면의 탭 ID(READY, ING, DONE)로 매핑
       const tabMapping: Record<string, string> = {
         READY: "READY",
         ONGOING: "ING",
@@ -66,12 +65,21 @@ export default function DrivingListScreen() {
   }, [params.initialTab]);
 
   // [3] 데이터 분리 및 정렬 로직
-  // 배차 탭 내에서 확정(ACCEPTED)과 대기(APPLIED) 섹션을 나누어 표시하기 위해 분리
   const orders = useMemo(() => {
+    // 배차 탭 분리
     const accepted = pendingOrders.filter((o) => o.status === "ACCEPTED");
     const applied = pendingOrders.filter((o) => o.status === "APPLIED");
-    return { accepted, applied };
-  }, [pendingOrders]);
+
+    // 완료 탭 분리 (정산 완료 vs 정산 대기)
+    const settled = completedOrders.filter(
+      (o) => o.settlementStatus === "COMPLETED",
+    );
+    const waiting = completedOrders.filter(
+      (o) => o.settlementStatus !== "COMPLETED",
+    );
+
+    return { accepted, applied, settled, waiting };
+  }, [pendingOrders, completedOrders]);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#F8FAFC" }}>
@@ -82,7 +90,7 @@ export default function DrivingListScreen() {
         <Text style={s.headerTitle}>운행 관리</Text>
       </View>
 
-      {/* 탭 메뉴: 배차, 운송 중, 완료 */}
+      {/* 탭 메뉴 */}
       <View style={[s.tabHeader, { borderBottomColor: c.border.default }]}>
         {[
           { id: "READY", label: "배차", count: pendingOrders.length },
@@ -116,17 +124,16 @@ export default function DrivingListScreen() {
         </View>
       ) : (
         <ScrollView contentContainerStyle={{ padding: 20 }}>
-          {/* 1. 배차 탭: 확정된 운행과 승인 대기 섹션 구분 */}
+          {/* 1. 배차 탭 */}
           {activeTab === "READY" && (
             <>
-              {/* 배차 확정 섹션 (ACCEPTED) */}
               {orders.accepted.length > 0 && (
                 <View style={s.section}>
                   <View style={s.sectionHeader}>
                     <View
-                      style={[s.indicator, { backgroundColor: "#1A2F4B" }]}
+                      style={[s.indicator, { backgroundColor: c.status.info }]}
                     />
-                    <Text style={s.sectionTitle}>
+                    <Text style={[s.sectionTitle, { color: c.status.info }]}>
                       확정된 운행 ({orders.accepted.length})
                     </Text>
                   </View>
@@ -143,14 +150,16 @@ export default function DrivingListScreen() {
                 </View>
               )}
 
-              {/* 승인 대기 섹션 (APPLIED) */}
               {orders.applied.length > 0 && (
                 <View style={[s.section, { marginTop: 24 }]}>
                   <View style={s.sectionHeader}>
                     <View
-                      style={[s.indicator, { backgroundColor: "#94A3B8" }]}
+                      style={[
+                        s.indicator,
+                        { backgroundColor: c.status.warning },
+                      ]}
                     />
-                    <Text style={[s.sectionTitle, { color: "#64748B" }]}>
+                    <Text style={[s.sectionTitle, { color: c.status.warning }]}>
                       승인 대기 중 ({orders.applied.length})
                     </Text>
                   </View>
@@ -166,14 +175,13 @@ export default function DrivingListScreen() {
                   ))}
                 </View>
               )}
-
               {pendingOrders.length === 0 && (
                 <EmptyState text="배차 대기 중인 오더가 없습니다." />
               )}
             </>
           )}
 
-          {/* 2. 운송 중 탭 (ING) */}
+          {/* 2. 운송 중 탭 */}
           {activeTab === "ING" &&
             (activeOrders.length > 0 ? (
               activeOrders.map((order) => (
@@ -193,31 +201,79 @@ export default function DrivingListScreen() {
               <EmptyState text="현재 진행 중인 운송이 없습니다." />
             ))}
 
-          {/* 3. 완료 탭 (DONE) */}
-          {activeTab === "DONE" &&
-            (completedOrders.length > 0 ? (
-              completedOrders.map((order) => (
-                <DoneOrderCard
-                  key={order.orderId}
-                  order={order}
-                  onDetail={(id: number) =>
-                    router.push(`/(driver)/order-detail/${id}`)
-                  }
-                />
-              ))
-            ) : (
-              <EmptyState text="최근 완료된 운송 내역이 없습니다." />
-            ))}
+          {/* 3. 완료 탭 (섹션 분리 구조) */}
+          {activeTab === "DONE" && (
+            <>
+              {/* 정산 대기 섹션 */}
+              {orders.waiting.length > 0 && (
+                <View style={s.section}>
+                  <View style={s.sectionHeader}>
+                    <View
+                      style={[
+                        s.indicator,
+                        { backgroundColor: c.status.warning },
+                      ]}
+                    />
+                    <Text style={[s.sectionTitle, { color: c.status.warning }]}>
+                      정산 대기 중 ({orders.waiting.length})
+                    </Text>
+                  </View>
+                  {orders.waiting.map((order) => (
+                    <DoneOrderCard
+                      key={order.orderId}
+                      order={order}
+                      onDetail={(id: number) =>
+                        router.push(`/(driver)/order-detail/${id}`)
+                      }
+                    />
+                  ))}
+                </View>
+              )}
+
+              {/* 정산 완료 섹션 */}
+              {orders.settled.length > 0 && (
+                <View
+                  style={[
+                    s.section,
+                    orders.waiting.length > 0 && { marginTop: 24 },
+                  ]}
+                >
+                  <View style={s.sectionHeader}>
+                    <View
+                      style={[
+                        s.indicator,
+                        { backgroundColor: c.status.success },
+                      ]}
+                    />
+                    <Text style={[s.sectionTitle, { color: c.status.success }]}>
+                      정산 완료 ({orders.settled.length})
+                    </Text>
+                  </View>
+                  {orders.settled.map((order) => (
+                    <DoneOrderCard
+                      key={order.orderId}
+                      order={order}
+                      onDetail={(id: number) =>
+                        router.push(`/(driver)/order-detail/${id}`)
+                      }
+                    />
+                  ))}
+                </View>
+              )}
+
+              {completedOrders.length === 0 && (
+                <EmptyState text="최근 완료된 운송 내역이 없습니다." />
+              )}
+            </>
+          )}
         </ScrollView>
       )}
 
-      {/* 완료 상태 변경 시 노출되는 인수증 업로드 모달 */}
       <ReceiptModal visible={modalOpen} onClose={() => setModalOpen(false)} />
     </SafeAreaView>
   );
 }
 
-// 데이터가 없을 때 표시할 공통 UI
 const EmptyState = ({ text }: { text: string }) => (
   <View style={s.emptyContainer}>
     <Ionicons name="document-text-outline" size={48} color="#CBD5E1" />
@@ -256,7 +312,6 @@ const s = StyleSheet.create({
   sectionTitle: {
     fontSize: 15,
     fontWeight: "800",
-    color: "#1A2F4B",
   },
   tabItem: { flex: 1, justifyContent: "center", alignItems: "center" },
   activeTab: { borderBottomWidth: 2, borderBottomColor: "#1A2F4B" },

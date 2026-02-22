@@ -11,18 +11,17 @@ import {
 } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 
-// 분리한 Model 훅 및 공통 UI 임포트
+// [컴포넌트 & 훅 임포트]
 import { useOrderDetail } from "../model/useOrderDetail";
 import { Badge } from "@/shared/ui/feedback/Badge";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
-import { ReceiptModal } from "@/features/driver/driving/ui/ReceiptModal"; // 🚩 인수증 모달 추가
+import { ReceiptModal } from "@/features/driver/driving/ui/ReceiptModal";
 
 const { width } = Dimensions.get("window");
 
 export default function OrderDetailScreen() {
   const { colors: c } = useAppTheme();
 
-  // Model 훅 사용 (로직 분리) - modalOpen, setModalOpen 포함
   const {
     order,
     loading,
@@ -34,48 +33,53 @@ export default function OrderDetailScreen() {
     setModalOpen,
   } = useOrderDetail();
 
-  // 1. 상태별 한글 명칭 매핑 (카드 리스트와 4단계 로직 통일)
-  const getStatusLabel = (status: string) => {
-    switch (status) {
-      case "ACCEPTED":
-        return "배차 확정";
-      case "LOADING":
-        return "상차 중";
-      case "IN_TRANSIT":
-        return "운송 중";
-      case "UNLOADING":
-        return "하차 중";
-      case "COMPLETED":
-        return "운송 완료";
-      default:
-        return status;
-    }
-  };
-
-  // 데이터 로딩 중이거나 데이터가 없는 경우 방어 코드 (타입 오류 방지를 위해 flatten 사용)
+  // [방어 코드: 데이터 로딩 중 처리]
   if (!order || !buttonConfig) {
     return (
-      <View
-        style={StyleSheet.flatten([
-          s.container,
-          s.center,
-          { backgroundColor: c.bg.canvas },
-        ])}
-      >
+      <View style={[s.container, s.center, { backgroundColor: c.bg.canvas }]}>
         <ActivityIndicator size="large" color={c.brand.primary} />
       </View>
     );
   }
 
+  // [비즈니스 로직: 상태 및 정산 정보]
+  const isCompleted = order.status === "COMPLETED";
+  const isSettled = order.settlementStatus === "COMPLETED";
+
+  const getStatusInfo = (status: string) => {
+    switch (status) {
+      case "APPLIED":
+        return { label: "승인 대기", tone: "warning" as const };
+      case "ACCEPTED":
+        return { label: "배차 확정", tone: "info" as const };
+      case "LOADING":
+        return { label: "상차 작업 중", tone: "ongoing" as const };
+      case "IN_TRANSIT":
+        return { label: "운송 이동 중", tone: "ongoing" as const };
+      case "UNLOADING":
+        return { label: "하차 작업 중", tone: "ongoing" as const };
+      case "COMPLETED":
+        return { label: "운송 완료", tone: "neutral" as const };
+      default:
+        return { label: status, tone: "neutral" as const };
+    }
+  };
+
+  const statusInfo = getStatusInfo(order.status);
+
   return (
-    <View
-      style={StyleSheet.flatten([
-        s.container,
-        { backgroundColor: c.bg.canvas },
-      ])}
-    >
-      {/* --- 헤더 --- */}
-      <View style={s.header}>
+    <View style={[s.container, { backgroundColor: c.bg.canvas }]}>
+      {/* SECTION 1: 헤더 영역 */}
+      <View
+        style={[
+          s.header,
+          {
+            backgroundColor: c.bg.surface,
+            borderBottomWidth: isCompleted ? 0 : 1,
+            borderBottomColor: c.border.default,
+          },
+        ]}
+      >
         <Pressable onPress={actions.goBack} style={s.headerBtn} hitSlop={15}>
           <Ionicons name="arrow-back" size={24} color={c.text.secondary} />
         </Pressable>
@@ -85,121 +89,230 @@ export default function OrderDetailScreen() {
         <View style={{ width: 40 }} />
       </View>
 
+      {/* SECTION 2: 정산 상태 알림바 (운송 완료 시 노출) */}
+      {isCompleted && (
+        <View
+          style={[
+            s.statusHeader,
+            {
+              backgroundColor: isSettled
+                ? c.status.successSoft
+                : c.status.warningSoft,
+            },
+          ]}
+        >
+          <View style={s.statusHeaderRow}>
+            <Ionicons
+              name={isSettled ? "cash-outline" : "time-outline"}
+              size={18}
+              color={isSettled ? c.status.success : c.status.warning}
+            />
+            <Text
+              style={[
+                s.statusHeaderText,
+                { color: isSettled ? c.status.success : c.status.warning },
+              ]}
+            >
+              {isSettled
+                ? "운송료 정산이 완료되었습니다"
+                : "운송은 종료되었으며, 정산 대기 중입니다"}
+            </Text>
+          </View>
+        </View>
+      )}
+
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={s.scrollContent}
+        contentContainerStyle={[
+          s.scrollContent,
+          isCompleted && { paddingTop: 10 },
+        ]}
       >
-        {/* --- 1. 메인 정보 카드 --- */}
-        <View style={s.card}>
+        {/* SECTION 3: 메인 정보 카드 */}
+        <View
+          style={[
+            s.card,
+            {
+              backgroundColor: c.bg.surface,
+              borderColor: c.border.default,
+              borderWidth: 1,
+            },
+          ]}
+        >
           <View style={s.cardTop}>
-            <View style={{ flexDirection: "row", gap: 6 }}>
-              <Badge
-                label={order.instant ? "바로배차" : "직접배차"}
-                tone={order.instant ? "urgent" : "direct"}
-              />
-              <Badge label={getStatusLabel(order.status)} tone="info" />
+            <View style={s.badgeGroup}>
+              {isCompleted ? (
+                <Badge
+                  label={isSettled ? "정산완료" : "정산대기"}
+                  tone={isSettled ? "success" : "warning"}
+                  style={s.unifiedBadge}
+                />
+              ) : (
+                <>
+                  <Badge
+                    label={statusInfo.label}
+                    tone={statusInfo.tone}
+                    style={s.unifiedBadge}
+                  />
+                  <Badge
+                    label={order.instant ? "바로배차" : "직접배차"}
+                    tone={order.instant ? "urgent" : "direct"}
+                    style={s.unifiedBadge}
+                  />
+                </>
+              )}
             </View>
-            <Text style={s.dateText}>{order.createdAt?.substring(0, 10)}</Text>
+            <Text style={[s.dateText, { color: c.text.secondary }]}>
+              {order.createdAt?.substring(0, 10)}
+            </Text>
           </View>
 
+          {/* 주소 정보 */}
           <View style={s.routeBigRow}>
             <View style={s.addrBox}>
-              <Text style={s.addrBig}>
+              <Text style={[s.addrBig, { color: c.text.primary }]}>
                 {formatAddress.big(order.startAddr)}
               </Text>
-              <Text style={s.addrSmall}>
+              <Text style={[s.addrSmall, { color: c.text.secondary }]}>
                 {formatAddress.small(order.startAddr)}
               </Text>
             </View>
-            <Ionicons name="arrow-forward" size={24} color="#CBD5E1" />
+            <Ionicons name="arrow-forward" size={24} color={c.border.default} />
             <View style={[s.addrBox, { alignItems: "flex-end" }]}>
-              <Text style={s.addrBig}>{formatAddress.big(order.endAddr)}</Text>
-              <Text style={s.addrSmall}>
+              <Text
+                style={[
+                  s.addrBig,
+                  { color: c.text.primary, textAlign: "right" },
+                ]}
+              >
+                {formatAddress.big(order.endAddr)}
+              </Text>
+              <Text
+                style={[
+                  s.addrSmall,
+                  { color: c.text.secondary, textAlign: "right" },
+                ]}
+              >
                 {formatAddress.small(order.endAddr)}
               </Text>
             </View>
           </View>
 
-          <View style={s.infoBar}>
+          {/* 인포 바 (거리/시간) */}
+          <View style={[s.infoBar, { backgroundColor: c.bg.canvas }]}>
             <View style={s.infoItem}>
               <MaterialCommunityIcons
                 name="map-marker-distance"
                 size={16}
-                color="#64748B"
+                color={c.text.secondary}
               />
-              <Text style={s.infoText}>{order.distance}km</Text>
+              <Text style={[s.infoText, { color: c.text.primary }]}>
+                {order.distance}km
+              </Text>
             </View>
-            <View style={s.divider} />
+            <View style={[s.divider, { backgroundColor: c.border.default }]} />
             <View style={s.infoItem}>
               <MaterialCommunityIcons
                 name="clock-outline"
                 size={16}
-                color="#64748B"
+                color={c.text.secondary}
               />
-              <Text style={s.infoText}>
+              <Text style={[s.infoText, { color: c.text.primary }]}>
                 예상 {Math.floor(order.duration / 60)}시간 {order.duration % 60}
                 분
               </Text>
             </View>
           </View>
 
-          <View style={s.priceRow}>
-            <Text style={s.priceLabel}>운송료</Text>
+          {/* 운송료 정보 */}
+          <View style={[s.priceRow, { borderTopColor: c.bg.canvas }]}>
+            <Text style={[s.priceLabel, { color: c.text.secondary }]}>
+              최종 운송료
+            </Text>
             <View style={s.priceRight}>
               <Text
                 style={[
                   s.priceValue,
-                  { color: order.instant ? "#EF4444" : c.brand.primary },
+                  { color: isSettled ? c.status.success : c.text.primary },
                 ]}
               >
                 {totalPrice.toLocaleString()}원
               </Text>
-              <Badge
-                label={order.payMethod}
-                tone={
-                  order.payMethod.includes("선착불")
-                    ? "payPrepaid"
-                    : "payDeferred"
-                }
-                style={{ marginLeft: 6 }}
-              />
             </View>
+          </View>
+
+          <View style={s.payMethodRow}>
+            <Badge
+              label={
+                order.payMethod.includes("선착불") ? "현금/선불" : "인수증/후불"
+              }
+              tone={
+                order.payMethod.includes("선착불")
+                  ? "payPrepaid"
+                  : "payDeferred"
+              }
+            />
+            <Text style={[s.payMethodText, { color: c.text.secondary }]}>
+              {isSettled
+                ? "정산계좌로 입금이 완료되었습니다"
+                : "화주 확인 후 정산 일정에 따라 입금됩니다"}
+            </Text>
           </View>
         </View>
 
-        {/* --- 2. 운행 경로 타임라인 --- */}
-        <View style={s.sectionCard}>
-          <Text style={s.sectionTitle}>운행 경로</Text>
+        {/* SECTION 4: 운행 경로 타임라인 */}
+        <View style={[s.sectionCard, { backgroundColor: c.bg.surface }]}>
+          <Text style={[s.sectionTitle, { color: c.text.primary }]}>
+            운행 경로
+          </Text>
           <View style={s.timelineContainer}>
-            <View style={s.timelineLine} />
+            <View
+              style={[s.timelineLine, { backgroundColor: c.border.default }]}
+            />
             <View style={s.timelineItem}>
-              <View style={[s.timelineDot, { backgroundColor: "#1E293B" }]}>
+              <View
+                style={[s.timelineDot, { backgroundColor: c.brand.primary }]}
+              >
                 <Text style={s.dotText}>출</Text>
               </View>
               <View style={s.timelineContent}>
-                <Text style={s.timeLabel}>{order.startSchedule} 상차</Text>
-                <Text style={s.placeTitle}>{order.startAddr}</Text>
-                <Text style={s.placeDetail}>{order.startPlace}</Text>
+                <Text style={[s.timeLabel, { color: c.brand.primary }]}>
+                  {order.startSchedule} 상차
+                </Text>
+                <Text style={[s.placeTitle, { color: c.text.primary }]}>
+                  {order.startAddr}
+                </Text>
+                <Text style={[s.placeDetail, { color: c.text.secondary }]}>
+                  {order.startPlace}
+                </Text>
               </View>
             </View>
-            <View style={[s.timelineItem, { marginTop: 20 }]}>
-              <View style={[s.timelineDot, { backgroundColor: "#4F46E5" }]}>
+            <View style={[s.timelineItem, { marginTop: 24 }]}>
+              <View
+                style={[s.timelineDot, { backgroundColor: c.brand.primary }]}
+              >
                 <Text style={s.dotText}>도</Text>
               </View>
               <View style={s.timelineContent}>
-                <Text style={[s.timeLabel, { color: "#4F46E5" }]}>
-                  하차 예정
+                <Text style={[s.timeLabel, { color: c.brand.primary }]}>
+                  하차
                 </Text>
-                <Text style={s.placeTitle}>{order.endAddr}</Text>
-                <Text style={s.placeDetail}>{order.endPlace}</Text>
+                <Text style={[s.placeTitle, { color: c.text.primary }]}>
+                  {order.endAddr}
+                </Text>
+                <Text style={[s.placeDetail, { color: c.text.secondary }]}>
+                  {order.endPlace}
+                </Text>
               </View>
             </View>
           </View>
         </View>
 
-        {/* --- 3. 화물 정보 --- */}
-        <View style={s.sectionCard}>
-          <Text style={s.sectionTitle}>화물 정보</Text>
+        {/* SECTION 5: 화물 정보 */}
+        <View style={[s.sectionCard, { backgroundColor: c.bg.surface }]}>
+          <Text style={[s.sectionTitle, { color: c.text.primary }]}>
+            화물 정보
+          </Text>
           <View style={s.gridContainer}>
             <GridItem
               label="차종/톤수"
@@ -214,19 +327,16 @@ export default function OrderDetailScreen() {
           </View>
         </View>
 
-        {/* --- 4. 화주 정보 --- */}
-        <View
-          style={StyleSheet.flatten([
-            s.sectionCard,
-            { backgroundColor: c.bg.surface },
-          ])}
-        >
-          <Text style={s.sectionTitle}>화주 정보</Text>
+        {/* SECTION 6: 화주 정보 */}
+        <View style={[s.sectionCard, { backgroundColor: c.bg.surface }]}>
+          <Text style={[s.sectionTitle, { color: c.text.primary }]}>
+            화주 정보
+          </Text>
           <View
-            style={StyleSheet.flatten([
+            style={[
               s.managerBox,
               { backgroundColor: c.bg.canvas, borderColor: c.border.default },
-            ])}
+            ]}
           >
             <View style={s.managerRow}>
               <Ionicons
@@ -234,8 +344,10 @@ export default function OrderDetailScreen() {
                 size={18}
                 color={c.text.secondary}
               />
-              <Text style={s.managerLabel}>업체명</Text>
-              <Text style={s.managerValue}>
+              <Text style={[s.managerLabel, { color: c.text.secondary }]}>
+                업체명
+              </Text>
+              <Text style={[s.managerValue, { color: c.text.primary }]}>
                 {order.user?.nickname || "개인화주"}
               </Text>
             </View>
@@ -245,94 +357,100 @@ export default function OrderDetailScreen() {
                 size={18}
                 color={c.text.secondary}
               />
-              <Text style={s.managerLabel}>연락처</Text>
-              <Text style={s.managerValue}>
-                {["ACCEPTED", "LOADING", "IN_TRANSIT", "UNLOADING"].includes(
-                  order.status,
-                )
-                  ? order.user?.phone
-                  : "배차 후 공개"}
+              <Text style={[s.managerLabel, { color: c.text.secondary }]}>
+                연락처
+              </Text>
+              <Text style={[s.managerValue, { color: c.text.primary }]}>
+                {order.user?.phone || "-"}
               </Text>
             </View>
           </View>
         </View>
 
-        <View style={{ height: 100 }} />
+        <View style={{ height: 120 }} />
       </ScrollView>
 
-      {/* --- 5. 하단 액션 버튼 바 --- */}
+      {/* SECTION 7: 하단 고정 액션바 */}
       <View
-        style={StyleSheet.flatten([
+        style={[
           s.bottomBar,
-          { borderTopColor: c.border.default },
-        ])}
+          { backgroundColor: c.bg.surface, borderTopColor: c.border.default },
+        ]}
       >
-        <View style={s.iconBtnGroup}>
-          <Pressable
-            style={s.circleBtn}
-            onPress={() => Alert.alert("알림", "채팅 준비 중")}
-          >
-            <Ionicons
-              name="chatbubble-ellipses-outline"
-              size={24}
-              color="#333"
-            />
-          </Pressable>
-          <Pressable
-            style={s.circleBtn}
-            onPress={() =>
-              order.user?.phone
-                ? actions.callPhone(order.user.phone)
-                : Alert.alert("알림", "배차 후 통화 가능")
-            }
-          >
-            <Ionicons name="call-outline" size={24} color="#333" />
-          </Pressable>
-        </View>
-
-        <Pressable
-          onPress={loading ? undefined : buttonConfig.onPress}
-          style={({ pressed }) => [
-            s.mainActionBtn,
-            {
-              backgroundColor: buttonConfig.color,
-              opacity: pressed || loading ? 0.7 : 1,
-              justifyContent: "center",
-              alignItems: "center",
-            },
-          ]}
-        >
-          {loading ? (
-            <ActivityIndicator color="#FFF" />
-          ) : (
-            <View
-              style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
-            >
-              <Ionicons
-                name={buttonConfig.icon as any}
-                size={22}
-                color="#FFF"
-              />
-              <Text style={{ color: "#FFF", fontSize: 18, fontWeight: "800" }}>
-                {buttonConfig.text}
-              </Text>
+        {!isCompleted ? (
+          <>
+            <View style={s.iconBtnGroup}>
+              <Pressable
+                style={[s.circleBtn, { borderColor: c.border.default }]}
+              >
+                <Ionicons
+                  name="chatbubble-ellipses-outline"
+                  size={24}
+                  color={c.text.primary}
+                />
+              </Pressable>
+              <Pressable
+                style={[s.circleBtn, { borderColor: c.border.default }]}
+                onPress={() =>
+                  order.user?.phone
+                    ? actions.callPhone(order.user.phone)
+                    : Alert.alert("알림", "통화 불가")
+                }
+              >
+                <Ionicons
+                  name="call-outline"
+                  size={24}
+                  color={c.text.primary}
+                />
+              </Pressable>
             </View>
-          )}
-        </Pressable>
+            <Pressable
+              onPress={loading ? undefined : buttonConfig.onPress}
+              style={({ pressed }) => [
+                s.mainActionBtn,
+                {
+                  backgroundColor: buttonConfig.color,
+                  opacity: pressed || loading ? 0.7 : 1,
+                },
+              ]}
+            >
+              <View style={s.btnContent}>
+                <Ionicons
+                  name={buttonConfig.icon as any}
+                  size={22}
+                  color="#FFF"
+                />
+                <Text style={s.mainActionText}>{buttonConfig.text}</Text>
+              </View>
+            </Pressable>
+          </>
+        ) : (
+          <Pressable
+            style={[
+              s.mainActionBtn,
+              { backgroundColor: c.text.primary, flex: 1, height: 56 },
+            ]}
+            onPress={actions.goBack}
+          >
+            <Text style={s.mainActionText}>목록으로</Text>
+          </Pressable>
+        )}
       </View>
 
-      {/* 🚩 6. 하차 완료 시 사진 인증 모달 추가 */}
       <ReceiptModal visible={modalOpen} onClose={() => setModalOpen(false)} />
     </View>
   );
 }
 
-const GridItem = ({ label, value }: { label: string; value: string }) => (
-  <View style={s.gridItem}>
-    <Text style={s.gridLabel}>{label}</Text>
-    <Text style={s.gridValue}>{value}</Text>
-  </View>
-);
+const GridItem = ({ label, value }: { label: string; value: string }) => {
+  const { colors: c } = useAppTheme();
+  return (
+    <View style={[s.gridItem, { backgroundColor: c.bg.canvas }]}>
+      <Text style={[s.gridLabel, { color: c.text.secondary }]}>{label}</Text>
+      <Text style={[s.gridValue, { color: c.text.primary }]}>{value}</Text>
+    </View>
+  );
+};
 
 const s = StyleSheet.create({
   container: { flex: 1 },
@@ -343,37 +461,26 @@ const s = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 16,
     paddingTop: 60,
-    paddingBottom: 10,
-    backgroundColor: "#fff",
+    paddingBottom: 15,
   },
   headerBtn: { padding: 8 },
-  headerTitle: { fontSize: 16, fontWeight: "700", color: "#1E293B" },
+  headerTitle: { fontSize: 16, fontWeight: "800" },
+  statusHeader: { margin: 16, marginBottom: 0, padding: 14, borderRadius: 16 },
+  statusHeaderRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  statusHeaderText: { fontSize: 14, fontWeight: "700", flex: 1 },
   scrollContent: { padding: 16 },
-  card: {
-    backgroundColor: "#FFF",
-    borderRadius: 20,
-    padding: 20,
-    marginBottom: 16,
-    elevation: 3,
-  },
-  sectionCard: {
-    backgroundColor: "#FFF",
-    borderRadius: 20,
-    padding: 20,
-    marginBottom: 16,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#1E293B",
-    marginBottom: 16,
-  },
+  card: { borderRadius: 24, padding: 20, marginBottom: 16 },
+  sectionCard: { borderRadius: 24, padding: 20, marginBottom: 16 },
+  sectionTitle: { fontSize: 16, fontWeight: "800", marginBottom: 16 },
   cardTop: {
     flexDirection: "row",
     justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 20,
   },
-  dateText: { fontSize: 12, color: "#94A3B8" },
+  badgeGroup: { flexDirection: "row", gap: 6, flexWrap: "wrap", flex: 1 },
+  unifiedBadge: { alignItems: "center" },
+  dateText: { fontSize: 12 },
   routeBigRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -381,36 +488,36 @@ const s = StyleSheet.create({
     marginBottom: 24,
   },
   addrBox: { flex: 1 },
-  addrBig: { fontSize: 20, fontWeight: "800", color: "#1E293B" },
-  addrSmall: { fontSize: 14, color: "#64748B" },
+  addrBig: { fontSize: 22, fontWeight: "900", letterSpacing: -0.5 },
+  addrSmall: { fontSize: 14, marginTop: 2 },
   infoBar: {
     flexDirection: "row",
-    backgroundColor: "#F8FAFC",
-    padding: 12,
-    borderRadius: 12,
+    padding: 14,
+    borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 20,
   },
   infoItem: { flexDirection: "row", alignItems: "center", gap: 6 },
-  divider: {
-    width: 1,
-    height: 12,
-    backgroundColor: "#CBD5E1",
-    marginHorizontal: 16,
-  },
-  infoText: { fontSize: 13, color: "#475569", fontWeight: "600" },
+  divider: { width: 1, height: 12, marginHorizontal: 16 },
+  infoText: { fontSize: 13, fontWeight: "700" },
   priceRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingTop: 16,
+    paddingTop: 18,
     borderTopWidth: 1,
-    borderTopColor: "#F1F5F9",
   },
-  priceLabel: { fontSize: 14, color: "#64748B" },
+  priceLabel: { fontSize: 14, fontWeight: "600" },
   priceRight: { flexDirection: "row", alignItems: "center" },
-  priceValue: { fontSize: 22, fontWeight: "900" },
+  priceValue: { fontSize: 24, fontWeight: "900" },
+  payMethodRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 12,
+    gap: 8,
+  },
+  payMethodText: { fontSize: 12, fontWeight: "500" },
   timelineContainer: { position: "relative" },
   timelineLine: {
     position: "absolute",
@@ -418,7 +525,6 @@ const s = StyleSheet.create({
     top: 24,
     bottom: 24,
     width: 2,
-    backgroundColor: "#E2E8F0",
   },
   timelineItem: { flexDirection: "row", gap: 16 },
   timelineDot: {
@@ -429,63 +535,47 @@ const s = StyleSheet.create({
     alignItems: "center",
     zIndex: 1,
   },
-  dotText: { color: "#FFF", fontSize: 12, fontWeight: "800" },
+  dotText: { fontSize: 12, fontWeight: "900", color: "#FFF" },
   timelineContent: { flex: 1 },
-  timeLabel: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#6366F1",
-    marginBottom: 4,
-  },
-  placeTitle: { fontSize: 16, fontWeight: "700", color: "#1E293B" },
-  placeDetail: { fontSize: 13, color: "#64748B", marginBottom: 8 },
+  timeLabel: { fontSize: 13, fontWeight: "800", marginBottom: 4 },
+  placeTitle: { fontSize: 16, fontWeight: "800" },
+  placeDetail: { fontSize: 13, marginTop: 2 },
   gridContainer: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
-  gridItem: {
-    width: (width - 82) / 2,
-    backgroundColor: "#F8FAFC",
-    padding: 16,
-    borderRadius: 12,
-  },
-  gridLabel: {
-    fontSize: 12,
-    color: "#94A3B8",
-    marginBottom: 4,
-    fontWeight: "600",
-  },
-  gridValue: { fontSize: 15, fontWeight: "700", color: "#334155" },
+  gridItem: { width: (width - 82) / 2, padding: 16, borderRadius: 16 },
+  gridLabel: { fontSize: 12, marginBottom: 4, fontWeight: "700" },
+  gridValue: { fontSize: 15, fontWeight: "800" },
   bottomBar: {
     position: "absolute",
     bottom: 0,
     left: 0,
     right: 0,
     height: 100,
-    backgroundColor: "#fff",
     paddingHorizontal: 16,
     paddingTop: 12,
     flexDirection: "row",
     gap: 12,
     borderTopWidth: 1,
-    borderTopColor: "#EEE",
   },
   iconBtnGroup: { flexDirection: "row", gap: 10 },
   circleBtn: {
     width: 54,
     height: 54,
-    borderRadius: 16,
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
     justifyContent: "center",
     alignItems: "center",
   },
-  mainActionBtn: { flex: 1, height: 54, borderRadius: 16 },
+  mainActionBtn: {
+    flex: 1,
+    height: 54,
+    borderRadius: 18,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  btnContent: { flexDirection: "row", alignItems: "center", gap: 8 },
+  mainActionText: { color: "#FFF", fontSize: 17, fontWeight: "800" },
   managerBox: { padding: 16, borderRadius: 12, borderWidth: 1, gap: 12 },
   managerRow: { flexDirection: "row", alignItems: "center" },
-  managerLabel: {
-    fontSize: 14,
-    width: 60,
-    marginLeft: 8,
-    color: "#64748B",
-    fontWeight: "700",
-  },
+  managerLabel: { fontSize: 14, width: 60, marginLeft: 8, fontWeight: "700" },
   managerValue: { fontSize: 15, fontWeight: "800", flex: 1 },
 });

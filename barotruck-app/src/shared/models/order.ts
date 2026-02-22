@@ -81,7 +81,10 @@ export interface OrderRequest {
 export interface OrderResponse {
   orderId: number;
   status: OrderStatus;
-  createdAt: string; //
+
+  settlementStatus?: "READY" | "COMPLETED"; // 정산 상태
+
+  createdAt: string;
   updated?: string;
   // OrderSnapshot 대응 데이터
 
