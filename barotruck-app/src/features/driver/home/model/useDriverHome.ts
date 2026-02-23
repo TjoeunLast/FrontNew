@@ -30,7 +30,11 @@ export const useDriverHome = () => {
       setIsRefreshing(true);
       // 1. 맞춤 추천 오더 가져오기 (서버 연동)
       const recommended = await OrderService.getRecommendedOrders();
-      setRecommendedOrders(recommended);
+      // 아직 기사가 배정되지 않은 '배차 대기' 상태인 오더만 홈에 노출
+      const filteredRecommended = recommended.filter(
+        (o) => o.status === "REQUESTED",
+      );
+      setRecommendedOrders(filteredRecommended);
 
       // 2. 내 전체 운송 목록 가져오기 (상태 카운트용)
       const drivingOrders = await OrderService.getMyDrivingOrders();

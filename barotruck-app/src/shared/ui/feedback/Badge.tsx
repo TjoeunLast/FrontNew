@@ -96,7 +96,7 @@ export const Badge = memo(function Badge({
         return {
           bg: c.brand.primary,
           fg: c.text.inverse,
-          border: "primary",
+          border: c.brand.primary,
         };
       case "payPrepaid":
         return {

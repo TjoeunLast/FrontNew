@@ -149,11 +149,13 @@ export default function OrderDetailScreen() {
                 />
               ) : (
                 <>
-                  <Badge
-                    label={statusInfo.label}
-                    tone={statusInfo.tone}
-                    style={s.unifiedBadge}
-                  />
+                  {order.status !== "REQUESTED" && (
+                    <Badge
+                      label={statusInfo.label}
+                      tone={statusInfo.tone}
+                      style={s.unifiedBadge}
+                    />
+                  )}
                   <Badge
                     label={order.instant ? "바로배차" : "직접배차"}
                     tone={order.instant ? "urgent" : "direct"}
@@ -175,6 +177,7 @@ export default function OrderDetailScreen() {
               </Text>
               <Text style={[s.addrSmall, { color: c.text.secondary }]}>
                 {formatAddress.small(order.startAddr)}
+                {order.startPlace}
               </Text>
             </View>
             <Ionicons name="arrow-forward" size={24} color={c.border.default} />
@@ -194,6 +197,7 @@ export default function OrderDetailScreen() {
                 ]}
               >
                 {formatAddress.small(order.endAddr)}
+                {order.endPlace}
               </Text>
             </View>
           </View>

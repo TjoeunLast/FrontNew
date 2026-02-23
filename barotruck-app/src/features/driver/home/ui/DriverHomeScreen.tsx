@@ -22,10 +22,12 @@ export default function DriverHomeScreen() {
   const { recommendedOrders, income, statusCounts, isRefreshing, onRefresh } =
     useDriverHome();
 
-  // [수정] 운송 현황 클릭 시 이동 처리 로직
+  /**
+   * [함수] 운송 현황 클릭 시 해당 탭으로 이동
+   * @param tabName - READY(배차), ONGOING(운송중), DONE(완료)
+   */
   const handleStatusPress = (tabName: "READY" | "ONGOING" | "DONE") => {
     router.push({
-      // 경로 에러 방지를 위해 실제 파일 경로인 driving으로 설정
       pathname: "/(driver)/(tabs)/driving",
       params: { initialTab: tabName },
     });
@@ -33,8 +35,9 @@ export default function DriverHomeScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: c.bg.canvas }]}>
-      <View style={styles.header}>
-        <Text style={styles.logoText}>BARO</Text>
+      {/* SECTION 1: 상단 헤더 (로고 및 알림/채팅) */}
+      <View style={[styles.header, { backgroundColor: c.bg.surface }]}>
+        <Text style={[styles.logoText, { color: c.brand.primary }]}>BARO</Text>
         <View style={styles.headerIcons}>
           <Pressable onPress={() => router.push("/(chat)")}>
             <Ionicons
@@ -60,6 +63,7 @@ export default function DriverHomeScreen() {
           <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />
         }
       >
+        {/* SECTION 2: 예상 수익 카드 (목업 데이터 기반) */}
         <Pressable
           onPress={() => router.push("/(driver)/(tabs)/sales")}
           style={[
@@ -67,30 +71,45 @@ export default function DriverHomeScreen() {
             { backgroundColor: c.brand.primary, overflow: "hidden" },
           ]}
         >
+          {/* 카드 배경 장식 패턴 */}
           <View style={styles.bgPatternContainer}>
-            <View style={[styles.bgShape, styles.shapeCircleBig]} />
-            <View style={[styles.bgShape, styles.shapeSquareRotated]} />
-            <View style={[styles.bgShape, styles.shapeCircleSmall]} />
+            <View style={(styles.bgShape, styles.shapeCircleBig)} />
+            <View style={(styles.bgShape, styles.shapeSquareRotated)} />
+            <View style={(styles.bgShape, styles.shapeCircleSmall)} />
           </View>
+
           <View style={{ zIndex: 1 }}>
             <View style={styles.incomeHeader}>
               <Text style={styles.incomeTitle}>{income.month}월 예상 수익</Text>
-              <View style={styles.incomeBadge}>
-                <Text style={styles.incomeBadgeText}>
+              <View
+                style={[
+                  styles.incomeBadge,
+                  { backgroundColor: "rgba(255, 255, 255, 0.2)" },
+                ]}
+              >
+                <Text
+                  style={[styles.incomeBadgeText, { color: c.text.inverse }]}
+                >
                   +{income.growthRate}%
                 </Text>
               </View>
             </View>
 
-            <Text style={styles.incomeAmount}>
+            <Text style={[styles.incomeAmount, { color: c.text.inverse }]}>
               {income.amount.toLocaleString()}원
             </Text>
-            <Text style={styles.incomeSub}>
+            <Text
+              style={[
+                styles.incomeSub,
+                { color: c.text.inverse, opacity: 0.9 },
+              ]}
+            >
               목표 달성까지 {income.targetDiff.toLocaleString()}원 남았어요!
             </Text>
           </View>
         </Pressable>
 
+        {/* SECTION 3: 대시보드 (운송 단계별 현황 카운트) */}
         <View style={styles.dashboardContainer}>
           <Text
             style={[
@@ -101,92 +120,166 @@ export default function DriverHomeScreen() {
             운송 현황
           </Text>
           <View style={styles.statsGrid}>
-            {/* 1. 승인대기 & 2. 배차확정 -> READY 탭으로 연결 */}
+            {/* 승인대기 */}
             <Pressable
               onPress={() => handleStatusPress("READY")}
-              style={[styles.statItem, { backgroundColor: c.bg.surface }]}
+              style={[
+                styles.statItem,
+                {
+                  backgroundColor: c.bg.surface,
+                  borderColor: c.border.default,
+                },
+              ]}
             >
-              <View style={[styles.iconCircle, { backgroundColor: "#E0E7FF" }]}>
-                <Ionicons name="cube" size={20} color="#3730A3" />
+              <View
+                style={[
+                  styles.iconCircle,
+                  { backgroundColor: c.status.warningSoft },
+                ]}
+              >
+                <Ionicons name="cube" size={20} color={c.status.warning} />
               </View>
-              <Text style={[styles.statLabel, { color: "#3730A3" }]}>
+              <Text style={[styles.statLabel, { color: c.status.warning }]}>
                 승인대기
               </Text>
-              <Text style={[styles.statValue, { color: "#3730A3" }]}>
+              <Text style={[styles.statValue, { color: c.status.warning }]}>
                 {statusCounts.pending}
               </Text>
             </Pressable>
 
+            {/* 배차확정 */}
             <Pressable
               onPress={() => handleStatusPress("READY")}
-              style={[styles.statItem, { backgroundColor: c.bg.surface }]}
+              style={[
+                styles.statItem,
+                {
+                  backgroundColor: c.bg.surface,
+                  borderColor: c.border.default,
+                },
+              ]}
             >
-              <View style={[styles.iconCircle, { backgroundColor: "#DCFCE7" }]}>
-                <Ionicons name="clipboard-outline" size={20} color="#166534" />
-                {statusCounts.confirmed > 0 && <View style={styles.redDot} />}
+              <View
+                style={[
+                  styles.iconCircle,
+                  { backgroundColor: c.brand.primarySoft },
+                ]}
+              >
+                <Ionicons
+                  name="clipboard-outline"
+                  size={20}
+                  color={c.brand.primary}
+                />
+                {statusCounts.confirmed > 0 && (
+                  <View
+                    style={[
+                      styles.redDot,
+                      {
+                        backgroundColor: c.status.danger,
+                        borderColor: c.bg.surface,
+                      },
+                    ]}
+                  />
+                )}
               </View>
-              <Text style={[styles.statLabel, { color: "#166534" }]}>
+              <Text style={[styles.statLabel, { color: c.brand.primary }]}>
                 배차확정
               </Text>
-              <Text style={[styles.statValue, { color: "#166534" }]}>
+              <Text style={[styles.statValue, { color: c.brand.primary }]}>
                 {statusCounts.confirmed}
               </Text>
             </Pressable>
 
-            {/* 3. 운송중 -> ONGOING 탭으로 연결 */}
+            {/* 운송중 */}
             <Pressable
               onPress={() => handleStatusPress("ONGOING")}
-              style={[styles.statItem, { backgroundColor: c.bg.surface }]}
+              style={[
+                styles.statItem,
+                {
+                  backgroundColor: c.bg.surface,
+                  borderColor: c.border.default,
+                },
+              ]}
             >
-              <View style={[styles.iconCircle, { backgroundColor: "#E0F2FE" }]}>
+              <View
+                style={[
+                  styles.iconCircle,
+                  { backgroundColor: c.status.successSoft },
+                ]}
+              >
                 <MaterialCommunityIcons
                   name="truck-delivery"
                   size={20}
-                  color="#075985"
+                  color={c.status.success}
                 />
               </View>
-              <Text style={[styles.statLabel, { color: "#075985" }]}>
+              <Text style={[styles.statLabel, { color: c.status.success }]}>
                 운송중
               </Text>
-              <Text style={[styles.statValue, { color: "#075985" }]}>
+              <Text style={[styles.statValue, { color: c.status.success }]}>
                 {statusCounts.shipping}
               </Text>
             </Pressable>
 
-            {/* 4. 운송완료 -> DONE 탭으로 연결 */}
+            {/* 운송완료 */}
             <Pressable
               onPress={() => handleStatusPress("DONE")}
-              style={[styles.statItem, { backgroundColor: c.bg.surface }]}
+              style={[
+                styles.statItem,
+                {
+                  backgroundColor: c.bg.surface,
+                  borderColor: c.border.default,
+                },
+              ]}
             >
-              <View style={[styles.iconCircle, { backgroundColor: "#F1F5F9" }]}>
-                <Ionicons name="checkmark-circle" size={20} color="#334155" />
+              <View
+                style={[styles.iconCircle, { backgroundColor: c.bg.canvas }]}
+              >
+                <Ionicons
+                  name="checkmark-circle"
+                  size={20}
+                  color={c.text.secondary}
+                />
               </View>
-              <Text style={styles.statLabel}>운송완료</Text>
-              <Text style={[styles.statValue, { color: "#334155" }]}>
+              <Text style={[styles.statLabel, { color: c.text.secondary }]}>
+                운송완료
+              </Text>
+              <Text style={[styles.statValue, { color: c.text.secondary }]}>
                 {statusCounts.completed}
               </Text>
             </Pressable>
           </View>
         </View>
 
+        {/* SECTION 4: 맞춤 추천 오더 리스트 (상태: REQUESTED) */}
         <View style={styles.orderList}>
           <View style={styles.listHeader}>
             <Text style={[styles.sectionTitle, { color: c.text.primary }]}>
               맞춤 추천 오더
             </Text>
-            {/* 전체보기 클릭 시 추천 리스트 탭으로 이동 */}
             <Pressable onPress={() => router.push("/(driver)/(tabs)/orders")}>
-              <Text style={{ color: "#94A3B8" }}>전체보기 &gt;</Text>
+              <Text style={{ color: c.text.secondary }}>전체보기 &gt;</Text>
             </Pressable>
           </View>
 
           {recommendedOrders.map((order) => (
-            <DrOrderCard key={order.orderId} {...(order as any)} />
+            <Pressable
+              key={order.orderId}
+              onPress={() =>
+                router.push(`/(driver)/order-detail/${order.orderId}`)
+              }
+            >
+              <DrOrderCard {...(order as any)} />
+            </Pressable>
           ))}
 
+          {/* 데이터 부재 시 예외 처리 */}
           {recommendedOrders.length === 0 && (
             <Text
-              style={{ textAlign: "center", color: "#94A3B8", marginTop: 20 }}
+              style={{
+                textAlign: "center",
+                color: c.text.secondary,
+                marginTop: 40,
+              }}
             >
               현재 대기 중인 추천 오더가 없습니다.
             </Text>
@@ -206,9 +299,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 60,
     paddingBottom: 20,
-    backgroundColor: "#fff",
   },
-  logoText: { fontSize: 22, fontWeight: "900", color: "#4E46E5" },
+  logoText: { fontSize: 22, fontWeight: "900" },
   headerIcons: { flexDirection: "row", gap: 15 },
   bgPatternContainer: { ...StyleSheet.absoluteFillObject, zIndex: 0 },
   bgShape: {
@@ -244,7 +336,6 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     marginBottom: 24,
     elevation: 8,
-    shadowColor: "#4E46E5",
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.25,
     shadowRadius: 20,
@@ -255,22 +346,19 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 16,
   },
-  incomeTitle: { color: "#FFF", opacity: 0.9, fontSize: 14, fontWeight: "500" },
+  incomeTitle: { opacity: 0.9, fontSize: 14, fontWeight: "500" },
   incomeBadge: {
-    backgroundColor: "rgba(255, 255, 255, 0.2)",
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
   },
-  incomeBadgeText: { color: "#FFF", fontSize: 13, fontWeight: "700" },
+  incomeBadgeText: { fontSize: 13, fontWeight: "700" },
   incomeAmount: {
-    color: "#FFF",
     fontSize: 32,
     fontWeight: "800",
     marginBottom: 4,
   },
   incomeSub: {
-    color: "rgba(255, 255, 255, 0.9)",
     fontSize: 13,
     fontWeight: "500",
   },
@@ -278,6 +366,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+    marginBottom: 16,
   },
   orderList: { gap: 16 },
   dashboardContainer: { marginBottom: 24 },
@@ -289,7 +378,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: "#F1F5F9",
     alignItems: "center",
     elevation: 2,
     shadowColor: "#000",
@@ -309,7 +397,6 @@ const styles = StyleSheet.create({
   statLabel: {
     fontSize: 11,
     fontWeight: "600",
-    color: "#64748B",
     marginBottom: 4,
   },
   statValue: { fontSize: 18, fontWeight: "800" },
@@ -320,8 +407,6 @@ const styles = StyleSheet.create({
     width: 7,
     height: 7,
     borderRadius: 3.5,
-    backgroundColor: "#EF4444",
     borderWidth: 1.5,
-    borderColor: "#FFF",
   },
 });
