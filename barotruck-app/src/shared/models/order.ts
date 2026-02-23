@@ -173,3 +173,11 @@ export interface AssignedDriverInfoResponse {
   accountNum?: string; // 정산용 계좌번호
   type?: string; // 개별/용달/법인 구분
 }
+
+
+export interface MyRevenueResponse {
+  totalAmount: number;    // 이번 달 총 수익
+  receivedAmount: number; // 정산 완료 금액
+  pendingAmount: number;  // 정산 예정 금액
+  orders: OrderResponse[]; // 이번 달 오더 상세 목록
+}
