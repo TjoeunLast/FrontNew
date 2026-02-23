@@ -28,6 +28,9 @@ export interface OrderRequest {
   // 상차 예정 시간 (예: "2024-05-20 14:00" 또는 "오전 중")
   // 상차지 광역 자치단체명 (예: 서울, 경기, 부산) - 지역별 오더 필터링용
 
+  startLat?: number;
+  startLng?: number;
+
   endAddr: string;
   endPlace: string;
   endType: string;
@@ -94,6 +97,9 @@ export interface OrderResponse {
   endPlace: string;
   endType: string;
   endSchedule?: string;
+
+  startLat?: number;
+  startLng?: number;
 
   cargoContent: string;
   loadMethod?: string;

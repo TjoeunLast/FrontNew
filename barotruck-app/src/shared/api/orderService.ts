@@ -274,6 +274,8 @@ export const OrderApi = {
         startPlace: data.startPlace,
         startType: data.startType,
         startSchedule: data.startSchedule,
+        startLat: data.startLat,
+        startLng: data.startLng,
         endAddr: data.endAddr,
         endPlace: data.endPlace,
         endType: data.endType,
