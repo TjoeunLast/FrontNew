@@ -22,6 +22,7 @@ import { ReviewService } from "@/shared/api/reviewService";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import type { AssignedDriverInfoResponse, OrderResponse } from "@/shared/models/order";
 import { Badge } from "@/shared/ui/feedback/Badge";
+import ShipperScreenHeader from "@/shared/ui/layout/ShipperScreenHeader";
 
 const { width } = Dimensions.get("window");
 
@@ -36,6 +37,12 @@ function formatAddressSmall(addr?: string) {
   const parts = String(addr ?? "").trim().split(/\s+/).filter(Boolean);
   if (parts.length <= 2) return "-";
   return parts.slice(2).join(" ");
+}
+
+function formatDetailSubText(addr?: string, place?: string) {
+  const placeText = String(place ?? "").trim();
+  if (placeText) return placeText;
+  return formatAddressSmall(addr);
 }
 
 function formatYmd(dateStr?: string) {
@@ -64,6 +71,64 @@ function formatSchedule(v?: string) {
     return `오늘 ${hh}:${mm} 상차`;
   }
   return `${v} 상차`;
+}
+
+function parseCargoAndRequests(raw?: string) {
+  const text = String(raw ?? "").trim();
+  if (!text) return { cargo: "", requests: [] as string[], pickupContact: "", tags: [] as string[] };
+
+  const parts = text.split(" | ").map((x) => x.trim()).filter(Boolean);
+  if (parts.length <= 1) return { cargo: text, requests: [] as string[], pickupContact: "", tags: [] as string[] };
+
+  let cargo = "";
+  const requests: string[] = [];
+  let pickupContact = "";
+  const tags: string[] = [];
+
+  for (const part of parts) {
+    if (part.startsWith("화물:")) {
+      cargo = part.replace(/^화물:/, "").trim();
+      continue;
+    }
+    if (part.startsWith("요청태그:")) {
+      const rawTags = part.replace(/^요청태그:/, "").trim();
+      rawTags
+        .split(",")
+        .map((x) => x.trim())
+        .filter(Boolean)
+        .forEach((t) => tags.push(t));
+      continue;
+    }
+    if (part.startsWith("직접입력:")) {
+      requests.push(`직접 요청: ${part.replace(/^직접입력:/, "").trim()}`);
+      continue;
+    }
+    if (part.startsWith("추가메모:")) {
+      requests.push(`추가 메모: ${part.replace(/^추가메모:/, "").trim()}`);
+      continue;
+    }
+    if (part.startsWith("상차지 연락처:")) {
+      pickupContact = part.replace(/^상차지 연락처:/, "").trim();
+      continue;
+    }
+    if (part.startsWith("하차지 연락처:")) {
+      continue;
+    }
+    if (part.startsWith("상하차방식:")) {
+      requests.push(`상하차 방식: ${part.replace(/^상하차방식:/, "").trim()}`);
+      continue;
+    }
+    if (part.startsWith("포장:")) {
+      requests.push(`포장: ${part.replace(/^포장:/, "").trim()}`);
+      continue;
+    }
+  }
+
+  if (!cargo) {
+    cargo = parts.find((x) => !x.includes(":")) ?? "";
+  }
+
+  return { cargo, requests, pickupContact, tags };
 }
 
 type ActionButtonConfig = {
@@ -165,6 +230,26 @@ export default function OrderDetailScreen() {
       Number(order.insuranceFee ?? 0)
     );
   }, [order]);
+  const parsedCargo = useMemo(() => parseCargoAndRequests(order?.cargoContent), [order?.cargoContent]);
+  const requestSummary = useMemo(() => {
+    const rows = [
+      ...parsedCargo.requests,
+      String(order?.remark ?? "").trim(),
+      String(order?.memo ?? "").trim(),
+    ].filter(Boolean);
+    return rows.join("\n");
+  }, [order?.memo, order?.remark, parsedCargo.requests]);
+  const shipperInfo = useMemo(() => {
+    const userAny = order?.user as any;
+    const businessName = String(
+      userAny?.companyName ?? userAny?.businessName ?? userAny?.bizName ?? userAny?.corpName ?? ""
+    ).trim();
+    const isBusiness = businessName.length > 0;
+    const label = isBusiness ? "업체명" : "화주명";
+    const name = isBusiness ? businessName : String(order?.user?.nickname ?? "").trim() || "닉네임 없음";
+    const phone = parsedCargo.pickupContact || "-";
+    return { label, name, phone };
+  }, [order?.user, parsedCargo.pickupContact]);
 
   const buttonConfig = useMemo<ActionButtonConfig | null>(() => {
     if (!order) return null;
@@ -235,8 +320,10 @@ export default function OrderDetailScreen() {
     }
   }, [isWaiting, order?.orderId, hasApplicants]);
 
-  const handleCopyAddress = async (text?: string) => {
-    const value = String(text ?? "").trim();
+  const handleCopyAddress = async (baseAddr?: string, detailAddr?: string) => {
+    const base = String(baseAddr ?? "").trim();
+    const detail = String(detailAddr ?? "").trim();
+    const value = [base, detail].filter(Boolean).join(" ");
     if (!value) return;
     await Clipboard.setStringAsync(value);
     Alert.alert("알림", "주소가 복사되었습니다.");
@@ -328,15 +415,16 @@ export default function OrderDetailScreen() {
 
   return (
     <View style={[s.container, { backgroundColor: c.bg.canvas }]}>
-      <View style={[s.header, { paddingTop: insets.top + 10 }]}>
-        <Pressable onPress={() => router.back()} style={s.headerBtn}>
-          <Ionicons name="arrow-back" size={24} color={c.text.secondary} />
-        </Pressable>
-        <Text style={[s.headerTitle, { color: c.text.primary }]}>
-          {order ? `오더 #${order.orderId}` : "오더 상세"}
-        </Text>
-        <View style={{ width: 40 }} />
-      </View>
+      <ShipperScreenHeader
+        title={order ? `오더 #${order.orderId}` : "오더 상세"}
+        onPressBack={() => {
+          if (router.canGoBack()) {
+            router.back();
+            return;
+          }
+          router.replace("/(shipper)/(tabs)/orders" as any);
+        }}
+      />
 
       {loading ? (
         <View style={s.loadingWrap}>
@@ -369,12 +457,16 @@ export default function OrderDetailScreen() {
               <View style={s.routeBigRow}>
                 <View style={s.addrBox}>
                   <Text style={s.addrBig}>{formatAddressBig(order.startAddr)}</Text>
-                  <Text style={s.addrSmall}>{formatAddressSmall(order.startAddr)}</Text>
+                  <Text style={s.addrSmall}>
+                    {formatDetailSubText(order.startAddr, order.startPlace)}
+                  </Text>
                 </View>
                 <Ionicons name="arrow-forward" size={24} color="#CBD5E1" />
                 <View style={[s.addrBox, { alignItems: "flex-end" }]}>
                   <Text style={s.addrBig}>{formatAddressBig(order.endAddr)}</Text>
-                  <Text style={s.addrSmall}>{formatAddressSmall(order.endAddr)}</Text>
+                  <Text style={s.addrSmall}>
+                    {formatDetailSubText(order.endAddr, order.endPlace)}
+                  </Text>
                 </View>
               </View>
 
@@ -418,7 +510,7 @@ export default function OrderDetailScreen() {
                         ? "payPrepaid"
                         : "payDeferred"
                     }
-                    style={{ marginLeft: 6 }}
+                    style={{ marginLeft: 6, marginTop: 3 }}
                   />
                 </View>
               </View>
@@ -439,7 +531,9 @@ export default function OrderDetailScreen() {
                     <Text style={s.placeDetail}>{order.startPlace || "-"}</Text>
                     <Pressable
                       style={s.copyBtn}
-                      onPress={() => void handleCopyAddress(order.startAddr)}
+                      onPress={() =>
+                        void handleCopyAddress(order.startAddr, order.startPlace)
+                      }
                     >
                       <Ionicons name="copy-outline" size={12} color="#475569" />
                       <Text style={s.copyText}>주소복사</Text>
@@ -457,7 +551,9 @@ export default function OrderDetailScreen() {
                     <Text style={s.placeDetail}>{order.endPlace || "-"}</Text>
                     <Pressable
                       style={s.copyBtn}
-                      onPress={() => void handleCopyAddress(order.endAddr)}
+                      onPress={() =>
+                        void handleCopyAddress(order.endAddr, order.endPlace)
+                      }
                     >
                       <Ionicons name="copy-outline" size={12} color="#475569" />
                       <Text style={s.copyText}>주소복사</Text>
@@ -477,7 +573,7 @@ export default function OrderDetailScreen() {
                 <GridItem label="운행구분" value={order.driveMode || "독차"} />
                 <GridItem
                   label="화물종류"
-                  value={order.cargoContent || order.memo || "-"}
+                  value={parsedCargo.cargo || "-"}
                 />
                 <GridItem
                   label="중량"
@@ -496,35 +592,46 @@ export default function OrderDetailScreen() {
               >
                 <View style={s.managerRow}>
                   <Ionicons
-                    name="business-outline"
+                    name={shipperInfo.label === "업체명" ? "business-outline" : "person-circle-outline"}
                     size={18}
                     color={c.text.secondary}
                   />
-                  <Text style={[s.managerLabel, { color: c.text.secondary }]}>업체명</Text>
-                  <Text style={[s.managerValue, { color: c.text.primary }]}>개인화주</Text>
+                  <Text style={[s.managerLabel, { color: c.text.secondary }]}>{shipperInfo.label}</Text>
+                  <Text style={[s.managerValue, { color: c.text.primary }]}>{shipperInfo.name}</Text>
                 </View>
 
                 <View style={[s.managerRow, { marginTop: 12 }]}>
                   <Ionicons
-                    name="person-circle-outline"
+                    name="call-outline"
                     size={18}
                     color={c.text.secondary}
                   />
-                  <Text style={[s.managerLabel, { color: c.text.secondary }]}>화주명</Text>
-                  <Text style={[s.managerValue, { color: c.text.primary }]}>
-                    {order.user?.nickname || "닉네임 없음"}
-                  </Text>
+                  <Text style={[s.managerLabel, { color: c.text.secondary }]}>전화번호</Text>
+                  <Text style={[s.managerValue, { color: c.text.primary }]}>{shipperInfo.phone}</Text>
                 </View>
               </View>
             </View>
 
             <View style={s.sectionCard}>
               <Text style={s.sectionTitle}>요청사항</Text>
-              <View style={s.remarkBox}>
-                <Text style={s.remarkText}>
-                  {order.remark?.trim() || order.memo?.trim() || "요청사항 없음"}
-                </Text>
-              </View>
+              {parsedCargo.tags.length > 0 ? (
+                <View style={s.requestTagWrap}>
+                  {parsedCargo.tags.map((tag, idx) => (
+                    <View key={`${tag}-${idx}`} style={s.requestTagChip}>
+                      <Text style={s.requestTagText}>#{tag}</Text>
+                    </View>
+                  ))}
+                </View>
+              ) : null}
+              {requestSummary ? (
+                <View style={[s.remarkBox, parsedCargo.tags.length > 0 && { marginTop: 10 }]}>
+                  <Text style={s.remarkText}>{requestSummary}</Text>
+                </View>
+              ) : parsedCargo.tags.length === 0 ? (
+                <View style={s.remarkBox}>
+                  <Text style={s.remarkText}>요청사항 없음</Text>
+                </View>
+              ) : null}
             </View>
           </ScrollView>
 
@@ -862,6 +969,24 @@ const s = StyleSheet.create({
     borderColor: "#FEF3C7",
   },
   remarkText: { fontSize: 14, color: "#92400E", lineHeight: 20 },
+  requestTagWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  requestTagChip: {
+    backgroundColor: "#FEF3C7",
+    borderWidth: 1,
+    borderColor: "#FCD34D",
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  requestTagText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#92400E",
+  },
   bottomBar: {
     position: "absolute",
     bottom: 0,

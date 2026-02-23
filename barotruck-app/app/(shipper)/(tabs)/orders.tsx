@@ -1,4 +1,4 @@
-﻿import ShipperOrdersScreen from "@/features/shipper/orders/ui/ShipperOrdersScreen";
+﻿import ShipperOrdersScreen from "@/features/shipper/order/ui/ShipperOrdersScreen";
 
 export default function Screen() {
   return <ShipperOrdersScreen />;

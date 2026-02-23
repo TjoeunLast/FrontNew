@@ -23,6 +23,7 @@ import apiClient from "@/shared/api/apiClient";
 import { UserService } from "@/shared/api/userService";
 import { USE_MOCK } from "@/shared/config/mock";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
+import ShipperScreenHeader from "@/shared/ui/layout/ShipperScreenHeader";
 import { withAlpha } from "@/shared/utils/color";
 import {
   clearCurrentUserSnapshot,
@@ -134,10 +135,9 @@ export default function ShipperMyScreen() {
 
   const s = useMemo(() => {
     return StyleSheet.create({
-      wrap: { flex: 1, padding: 20, paddingTop: 28, backgroundColor: c.bg.canvas } as ViewStyle,
-      title: { fontSize: 26, fontWeight: "900", color: c.text.primary } as TextStyle,
+      page: { flex: 1, backgroundColor: c.bg.canvas } as ViewStyle,
+      content: { padding: 20, paddingTop: 14, paddingBottom: 30 } as ViewStyle,
       profileCard: {
-        marginTop: 18,
         padding: 16,
         borderRadius: 20,
         backgroundColor: c.bg.surface,
@@ -155,9 +155,19 @@ export default function ShipperMyScreen() {
         backgroundColor: withAlpha(c.brand.primary, 0.12),
       } as ViewStyle,
       profileImage: { width: "100%", height: "100%" } as ImageStyle,
-      profileInfo: { flex: 1, gap: 2 } as ViewStyle,
-      profileName: { fontSize: 20, fontWeight: "900", color: c.text.primary } as TextStyle,
-      profileSub: { fontSize: 12, fontWeight: "700", color: c.text.secondary } as TextStyle,
+      profileInfo: { flex: 1, flexDirection: "row", alignItems: "center", gap: 8 } as ViewStyle,
+      profileName: { fontSize: 18, fontWeight: "800", color: c.text.primary } as TextStyle,
+      shipperTypeBadge: {
+        paddingHorizontal: 10,
+        height: 26,
+        borderRadius: 13,
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: "#EEF2FF",
+        borderWidth: 1,
+        borderColor: "#C7D2FE",
+      } as ViewStyle,
+      shipperTypeBadgeText: { fontSize: 12, fontWeight: "800", color: "#3730A3" } as TextStyle,
       arrowCircle: {
         width: 36,
         height: 36,
@@ -243,98 +253,99 @@ export default function ShipperMyScreen() {
   };
 
   return (
-    <ScrollView style={s.wrap} contentContainerStyle={{ paddingBottom: 30 }} showsVerticalScrollIndicator={false}>
-      <Text style={s.title}>내 정보</Text>
+    <View style={s.page}>
+      <ShipperScreenHeader title="내 정보" hideBackButton />
+      <ScrollView contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
+        <Pressable style={s.profileCard} onPress={() => router.push("/(common)/settings/profile" as any)}>
+          <View style={s.profileIcon}>
+            {profileImageUrl ? (
+              <Image source={{ uri: profileImageUrl }} style={s.profileImage} resizeMode="cover" />
+            ) : (
+              <MaterialCommunityIcons name="warehouse" size={28} color={c.brand.primary} />
+            )}
+          </View>
+          <View style={s.profileInfo}>
+            <Text style={s.profileName}>{profile.nickname === "-" ? "화주님" : `${profile.nickname}님`}</Text>
+            {profile.shipperType !== "-" ? (
+              <View style={s.shipperTypeBadge}>
+                <Text style={s.shipperTypeBadgeText}>{profile.shipperType}</Text>
+              </View>
+            ) : null}
+          </View>
+          <View style={s.arrowCircle}>
+            <Ionicons name="chevron-forward" size={20} color={c.text.secondary} />
+          </View>
+        </Pressable>
 
-      <Pressable style={s.profileCard} onPress={() => router.push("/(common)/settings/profile" as any)}>
-        <View style={s.profileIcon}>
-          {profileImageUrl ? (
-            <Image source={{ uri: profileImageUrl }} style={s.profileImage} resizeMode="cover" />
-          ) : (
-            <MaterialCommunityIcons name="warehouse" size={28} color={c.brand.primary} />
-          )}
+        <Text style={s.sectionTitle}>화주 관리</Text>
+        <View style={s.sectionCard}>
+          <Pressable style={s.row} onPress={() => router.push("/(common)/settings/shipper/payment" as any)}>
+            <View style={[s.rowIconWrap, { backgroundColor: withAlpha(c.brand.primary, 0.12) }]}>
+              <Ionicons name="card-outline" size={18} color={c.brand.primary} />
+            </View>
+            <Text style={s.rowLabel}>결제 수단 관리</Text>
+            <Text style={[s.rowValue, s.rowValueActive]}>신한카드</Text>
+            <Ionicons name="chevron-forward" size={20} color={c.text.secondary} />
+          </Pressable>
+          <View style={s.divider} />
+          <Pressable style={s.row} onPress={() => router.push("/(common)/settings/shipper/addresses" as any)}>
+            <View style={[s.rowIconWrap, { backgroundColor: withAlpha(c.status.success, 0.16) }]}>
+              <Ionicons name="location-outline" size={18} color={c.status.success} />
+            </View>
+            <Text style={s.rowLabel}>자주 쓰는 주소지</Text>
+            <Text style={s.rowValue}>3곳</Text>
+            <Ionicons name="chevron-forward" size={20} color={c.text.secondary} />
+          </Pressable>
+          <View style={s.divider} />
+          <Pressable style={s.row} onPress={() => router.push("/(common)/settings/shipper/business" as any)}>
+            <View style={[s.rowIconWrap, { backgroundColor: withAlpha(c.text.secondary, 0.16) }]}>
+              <Ionicons name="document-text-outline" size={18} color={c.text.secondary} />
+            </View>
+            <Text style={s.rowLabel}>세금계산서 관리</Text>
+            <Ionicons name="chevron-forward" size={20} color={c.text.secondary} />
+          </Pressable>
         </View>
-        <View style={s.profileInfo}>
-          <Text style={s.profileName}>{profile.name === "-" ? "화주 님" : `${profile.name} 님`}</Text>
-          <Text style={s.profileSub}>{profile.email}</Text>
-          <Text style={s.profileSub}>닉네임: {profile.nickname}</Text>
-          <Text style={s.profileSub}>
-            {profile.role} · {profile.shipperType}
-          </Text>
+
+        <Text style={s.sectionTitle}>고객 지원</Text>
+        <View style={s.sectionCard}>
+          <Pressable style={s.row} onPress={() => router.push("/(common)/settings/account" as any)}>
+            <View style={[s.rowIconWrap, { backgroundColor: withAlpha(c.text.secondary, 0.12) }]}>
+              <Ionicons name="headset-outline" size={18} color={c.text.secondary} />
+            </View>
+            <Text style={s.rowLabel}>1:1 문의하기</Text>
+            <Ionicons name="chevron-forward" size={20} color={c.text.secondary} />
+          </Pressable>
         </View>
-        <View style={s.arrowCircle}>
-          <Ionicons name="chevron-forward" size={20} color={c.text.secondary} />
+
+        <Text style={s.sectionTitle}>앱 설정</Text>
+        <View style={s.sectionCard}>
+          <View style={s.row}>
+            <View style={[s.rowIconWrap, { backgroundColor: withAlpha(c.text.secondary, 0.12) }]}>
+              <Ionicons name="notifications-outline" size={18} color={c.text.secondary} />
+            </View>
+            <Text style={s.rowLabel}>배차 알림 받기</Text>
+            <Switch
+              value={receiveDispatchAlert}
+              onValueChange={setReceiveDispatchAlert}
+              trackColor={{ false: withAlpha(c.text.secondary, 0.24), true: withAlpha(c.brand.primary, 0.45) }}
+              thumbColor={receiveDispatchAlert ? c.brand.primary : c.bg.surface}
+            />
+          </View>
+          <View style={s.divider} />
+          <Pressable style={s.row} onPress={() => router.push("/(common)/settings/index" as any)}>
+            <View style={[s.rowIconWrap, { backgroundColor: withAlpha(c.text.secondary, 0.12) }]}>
+              <Ionicons name="document-text-outline" size={18} color={c.text.secondary} />
+            </View>
+            <Text style={s.rowLabel}>이용약관 및 정책</Text>
+            <Ionicons name="chevron-forward" size={20} color={c.text.secondary} />
+          </Pressable>
         </View>
-      </Pressable>
 
-      <Text style={s.sectionTitle}>화주 관리</Text>
-      <View style={s.sectionCard}>
-        <Pressable style={s.row} onPress={() => router.push("/(common)/settings/shipper/payment" as any)}>
-          <View style={[s.rowIconWrap, { backgroundColor: withAlpha(c.brand.primary, 0.12) }]}>
-            <Ionicons name="card-outline" size={18} color={c.brand.primary} />
-          </View>
-          <Text style={s.rowLabel}>결제 수단 관리</Text>
-          <Text style={[s.rowValue, s.rowValueActive]}>신한카드</Text>
-          <Ionicons name="chevron-forward" size={20} color={c.text.secondary} />
+        <Pressable style={s.logoutRow} onPress={onLogout} disabled={loading}>
+          <Text style={s.logoutText}>{loading ? "로그아웃 중..." : "로그아웃"}</Text>
         </Pressable>
-        <View style={s.divider} />
-        <Pressable style={s.row} onPress={() => router.push("/(common)/settings/shipper/addresses" as any)}>
-          <View style={[s.rowIconWrap, { backgroundColor: withAlpha(c.status.success, 0.16) }]}>
-            <Ionicons name="location-outline" size={18} color={c.status.success} />
-          </View>
-          <Text style={s.rowLabel}>자주 쓰는 주소지</Text>
-          <Text style={s.rowValue}>3곳</Text>
-          <Ionicons name="chevron-forward" size={20} color={c.text.secondary} />
-        </Pressable>
-        <View style={s.divider} />
-        <Pressable style={s.row} onPress={() => router.push("/(common)/settings/shipper/business" as any)}>
-          <View style={[s.rowIconWrap, { backgroundColor: withAlpha(c.text.secondary, 0.16) }]}>
-            <Ionicons name="document-text-outline" size={18} color={c.text.secondary} />
-          </View>
-          <Text style={s.rowLabel}>세금계산서 관리</Text>
-          <Ionicons name="chevron-forward" size={20} color={c.text.secondary} />
-        </Pressable>
-      </View>
-
-      <Text style={s.sectionTitle}>고객 지원</Text>
-      <View style={s.sectionCard}>
-        <Pressable style={s.row} onPress={() => router.push("/(common)/settings/account" as any)}>
-          <View style={[s.rowIconWrap, { backgroundColor: withAlpha(c.text.secondary, 0.12) }]}>
-            <Ionicons name="headset-outline" size={18} color={c.text.secondary} />
-          </View>
-          <Text style={s.rowLabel}>1:1 문의하기</Text>
-          <Ionicons name="chevron-forward" size={20} color={c.text.secondary} />
-        </Pressable>
-      </View>
-
-      <Text style={s.sectionTitle}>앱 설정</Text>
-      <View style={s.sectionCard}>
-        <View style={s.row}>
-          <View style={[s.rowIconWrap, { backgroundColor: withAlpha(c.text.secondary, 0.12) }]}>
-            <Ionicons name="notifications-outline" size={18} color={c.text.secondary} />
-          </View>
-          <Text style={s.rowLabel}>배차 알림 받기</Text>
-          <Switch
-            value={receiveDispatchAlert}
-            onValueChange={setReceiveDispatchAlert}
-            trackColor={{ false: withAlpha(c.text.secondary, 0.24), true: withAlpha(c.brand.primary, 0.45) }}
-            thumbColor={receiveDispatchAlert ? c.brand.primary : c.bg.surface}
-          />
-        </View>
-        <View style={s.divider} />
-        <Pressable style={s.row} onPress={() => router.push("/(common)/settings/index" as any)}>
-          <View style={[s.rowIconWrap, { backgroundColor: withAlpha(c.text.secondary, 0.12) }]}>
-            <Ionicons name="document-text-outline" size={18} color={c.text.secondary} />
-          </View>
-          <Text style={s.rowLabel}>이용약관 및 정책</Text>
-          <Ionicons name="chevron-forward" size={20} color={c.text.secondary} />
-        </Pressable>
-      </View>
-
-      <Pressable style={s.logoutRow} onPress={onLogout} disabled={loading}>
-        <Text style={s.logoutText}>{loading ? "로그아웃 중..." : "로그아웃"}</Text>
-      </Pressable>
-      <Text style={s.versionText}>현재 버전 1.0.2</Text>
-    </ScrollView>
+        <Text style={s.versionText}>현재 버전 1.0.2</Text>
+      </ScrollView>
+    </View>
   );
 }

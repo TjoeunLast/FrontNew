@@ -1,4 +1,5 @@
 import { ImageInfo } from "./ImageInfo";
+import type { SettlementStatus as PaymentSettlementStatus } from "./Settlement";
 
 // @/shared/models/order.
 
@@ -81,6 +82,7 @@ export interface OrderRequest {
 export interface OrderResponse {
   orderId: number;
   status: OrderStatus;
+  settlementStatus?: PaymentSettlementStatus;
   createdAt?: string; //
   updated?: string;
   // OrderSnapshot 대응 데이터

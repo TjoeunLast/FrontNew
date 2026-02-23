@@ -10,6 +10,7 @@ import { AddressApi } from "@/shared/api/addressService";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import { Button } from "@/shared/ui/base/Button";
 import { Card } from "@/shared/ui/base/Card";
+import ShipperScreenHeader from "@/shared/ui/layout/ShipperScreenHeader";
 
 // 기존 import들 사이에 추가!
 import AddressSearch from "@/shared/utils/AddressSearch";
@@ -19,7 +20,6 @@ import { SearchableAddressField } from "./createOrderStep1.components"; // Inlin
 import {
   Chip,
   ChoiceCard,
-  CreateOrderTopBar,
   InlineDropdownField,
   PaymentTile,
   SectionTitle,
@@ -346,7 +346,16 @@ export function ShipperCreateOrderStep1Screen() {
 
   return (
     <View style={[s.page, { backgroundColor: c.bg.canvas }]}>
-      <CreateOrderTopBar onBack={() => router.back()} />
+      <ShipperScreenHeader
+        title="화물 등록"
+        onPressBack={() => {
+          if (router.canGoBack()) {
+            router.back();
+            return;
+          }
+          router.replace("/(shipper)/(tabs)" as any);
+        }}
+      />
 
       <ScrollView
         contentContainerStyle={s.content}

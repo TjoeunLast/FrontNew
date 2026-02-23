@@ -15,6 +15,7 @@ import type { OrderRequest } from "@/shared/models/order";
 import { Button } from "@/shared/ui/base/Button";
 import { Card } from "@/shared/ui/base/Card";
 import { Chip as FormChip } from "@/shared/ui/form/Chip";
+import ShipperScreenHeader from "@/shared/ui/layout/ShipperScreenHeader";
 
 import { Chip as RequestChip } from "./createOrderStep1.components";
 import { s as step1Styles } from "./createOrderStep1.styles";
@@ -113,6 +114,7 @@ export function ShipperCreateOrderStep2CargoScreen() {
   const submitFinal = async () => {
     setLoading(true);
     try {
+      const isEditMode = Boolean(draft.editOrderId);
       const request: OrderRequest = {
         startAddr: draft.startSelected,
         startPlace: draft.startAddrDetail || draft.startSelected,
@@ -151,17 +153,33 @@ export function ShipperCreateOrderStep2CargoScreen() {
         duration: Math.max(30, Math.round(draft.distanceKm * 2)),
       };
 
-      await OrderApi.createOrder(request);
+      if (isEditMode) {
+        const editId = Number(draft.editOrderId);
+        if (!Number.isFinite(editId)) {
+          throw new Error("invalid_edit_order_id");
+        }
+        await OrderApi.updateOrder(editId, request);
+      } else {
+        await OrderApi.createOrder(request);
+      }
 
       clearCreateOrderDraft();
       Alert.alert(
-        "등록 완료",
-        "서버에 화물이 등록되었습니다.",
+        isEditMode ? "수정 완료" : "등록 완료",
+        isEditMode ? "오더 정보가 수정되었습니다." : "서버에 화물이 등록되었습니다.",
         [{ text: "확인", onPress: () => router.replace("/(shipper)/(tabs)") }]
       );
     } catch (e: any) {
-      const msg = e?.response?.data?.message ?? "등록 중 오류가 발생했습니다.";
-      Alert.alert("등록 실패", msg);
+      const isEditMode = Boolean(draft.editOrderId);
+      const status = Number(e?.response?.status ?? 0);
+      const msg =
+        e?.response?.data?.message
+        ?? (isEditMode && (status === 404 || status === 405)
+          ? "서버에서 오더 수정 엔드포인트를 찾지 못했습니다. 백엔드 수정 API 확인이 필요합니다."
+          : isEditMode
+            ? "수정 중 오류가 발생했습니다."
+            : "등록 중 오류가 발생했습니다.");
+      Alert.alert(isEditMode ? "수정 실패" : "등록 실패", msg);
     } finally {
       setLoading(false);
     }
@@ -169,28 +187,16 @@ export function ShipperCreateOrderStep2CargoScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: c.bg.canvas }}>
-      <View
-        style={{
-          height: 52 + insets.top + 6,
-          paddingTop: insets.top + 6,
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-between",
-          paddingHorizontal: 16,
-          borderBottomWidth: 1,
-          borderBottomColor: c.border.default,
-          backgroundColor: c.bg.canvas,
+      <ShipperScreenHeader
+        title="화물 등록"
+        onPressBack={() => {
+          if (router.canGoBack()) {
+            router.back();
+            return;
+          }
+          router.replace("/(shipper)/(tabs)" as any);
         }}
-      >
-        <Pressable
-          onPress={() => router.back()}
-          style={{ width: 40, height: 40, alignItems: "center", justifyContent: "center" }}
-        >
-          <Ionicons name="chevron-back" size={22} color={c.text.primary} />
-        </Pressable>
-        <Text style={{ fontSize: 16, fontWeight: "900", color: c.text.primary }}>화물 등록</Text>
-        <View style={{ width: 40 }} />
-      </View>
+      />
 
       <ScrollView
         contentContainerStyle={{ padding: 16, paddingBottom: 200 + insets.bottom }}

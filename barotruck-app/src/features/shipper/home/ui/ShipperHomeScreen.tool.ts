@@ -119,6 +119,15 @@ export function mapOrderToLiveItem(o: OrderResponse): LiveOrderItem {
     return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
   };
 
+  const drivingStageLabel =
+    o.status === "LOADING"
+      ? "상차 완료"
+      : o.status === "IN_TRANSIT"
+        ? "배달 중"
+        : o.status === "UNLOADING"
+          ? "하차 직전"
+          : undefined;
+
   return {
     id: String(o.orderId),
     status: mapStatus(o.status),
@@ -139,8 +148,7 @@ export function mapOrderToLiveItem(o: OrderResponse): LiveOrderItem {
     updatedAtMs: toTimestampMs(updatedIso),
     pickupTimeHHmm: toHHmm(o.startSchedule),
     dropoffTimeHHmm: toHHmm(o.endSchedule),
-    drivingStageLabel:
-      o.status === "LOADING" ? "상차 완료" : o.status === "UNLOADING" ? "하차 직전" : "배달 중",
+    drivingStageLabel,
   };
 }
 
