@@ -1,14 +1,30 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { OrderResponse } from "@/shared/models/order";
 import { OrderService } from "@/shared/api/orderService";
+import * as Location from "expo-location";
 
 export type SortType = "LATEST" | "PRICE_HIGH" | "NEARBY";
+
+// [거리 계산 함수] 하버사인 공식
+function getDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const R = 6371; // 지구 반지름 (km)
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * (Math.PI / 180)) *
+      Math.cos(lat2 * (Math.PI / 180)) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
 
 export const useOrderList = () => {
   const [orders, setOrders] = useState<OrderResponse[]>([]);
   const [recommendedOrders, setRecommendedOrders] = useState<OrderResponse[]>(
     [],
-  ); // 🚩 홈 화면 추천 오더 저장용
+  );
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -21,16 +37,74 @@ export const useOrderList = () => {
 
   const [sortBy, setSortBy] = useState<SortType>("LATEST");
 
-  /** [함수] 홈 화면 추천 데이터와 전체 오더 데이터를 동시에 가져옴 */
+  // 1. 기사님 현재 위치 상태
+  const [myLocation, setMyLocation] = useState<{
+    lat: number;
+    lng: number;
+  } | null>(null);
+
+  // 2. 테스트용 가짜 데이터
+  const MOCK_ORDERS: any[] = [
+    {
+      orderId: 101,
+      startAddr: "강남역",
+      startLat: 37.4979,
+      startLng: 127.0276,
+      status: "REQUESTED",
+      basePrice: 50000,
+      createdAt: new Date().toISOString(),
+    },
+    {
+      orderId: 102,
+      startAddr: "서울역",
+      startLat: 37.5546,
+      startLng: 126.9706,
+      status: "REQUESTED",
+      basePrice: 60000,
+      createdAt: new Date().toISOString(),
+    },
+    {
+      orderId: 103,
+      startAddr: "평택역",
+      startLat: 36.9922,
+      startLng: 127.0851,
+      status: "REQUESTED",
+      basePrice: 80000,
+      createdAt: new Date().toISOString(),
+    },
+  ];
+
+  /** [함수] 내 위치 가져오기 */
+  const getMyLocation = useCallback(async () => {
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") {
+        console.log("위치 권한 거부됨");
+        return;
+      }
+
+      const location = await Location.getCurrentPositionAsync({});
+      const coords = {
+        lat: location.coords.latitude,
+        lng: location.coords.longitude,
+      };
+
+      setMyLocation(coords);
+      console.log("📍 내 현재 위치 획득 성공:", coords);
+    } catch (error) {
+      console.error("위치 가져오기 실패:", error);
+    }
+  }, []);
+
+  /** [함수] 오더 데이터 패칭 */
   const fetchOrders = useCallback(async () => {
     try {
       setLoading(true);
-      // 1. 홈 화면과 동일한 추천 오더 호출
-      const recommended = await OrderService.getRecommendedOrders();
+      const [recommended, allOrders] = await Promise.all([
+        OrderService.getRecommendedOrders(),
+        OrderService.getAvailableOrders(),
+      ]);
       setRecommendedOrders(recommended.filter((o) => o.status === "REQUESTED"));
-
-      // 2. 전체 배차 대기 오더 호출
-      const allOrders = await OrderService.getAvailableOrders();
       setOrders(allOrders);
     } catch (error) {
       console.error("오더 로드 실패:", error);
@@ -40,38 +114,61 @@ export const useOrderList = () => {
     }
   }, []);
 
+  // 초기 로드 시 실행
   useEffect(() => {
     fetchOrders();
-  }, [fetchOrders]);
+    getMyLocation(); // 🚩 위치 정보도 함께 가져옴
+  }, [fetchOrders, getMyLocation]);
 
-  /** 추천 탭 선택 시 홈 화면 데이터(`recommendedOrders`)를 사용 */
+  /** [로직] 필터링 및 정렬 */
   const filteredAndSortedOrders = useMemo(() => {
-    let sourceData = [...orders];
+    // 🚩 '가까운 순' 테스트 중일 때는 가짜 데이터를 사용하거나,
+    // 실제 데이터에 좌표가 없을 경우를 대비해 MOCK을 섞어 쓸 수 있습니다.
+    let sourceData = sortBy === "NEARBY" ? [...MOCK_ORDERS] : [...orders];
 
-    // 추천 탭인 경우 홈 화면의 로직을 그대로 가져온 리스트를 소스로 사용
     if (filter.dispatchType === "RECOMMENDED") {
       sourceData = [...recommendedOrders];
     }
 
     let result = sourceData.filter((o) => {
       if (o.status !== "REQUESTED") return false;
-
-      // 배차 방식 필터 (전체/추천 외의 탭일 때)
       if (filter.dispatchType === "INSTANT") return o.instant === true;
       if (filter.dispatchType === "DIRECT") return o.instant === false;
-
       return true;
     });
 
-    // 정렬 로직 (최신순, 단가순, 가까운순)
     result.sort((a, b) => {
       const getFullPrice = (o: any) =>
-        o.basePrice + (o.laborFee || 0) + (o.packagingPrice || 0);
+        (o.basePrice || 0) + (o.laborFee || 0) + (o.packagingPrice || 0);
+
       switch (sortBy) {
         case "PRICE_HIGH":
           return getFullPrice(b) - getFullPrice(a);
+
         case "NEARBY":
-          return (a.distance || 0) - (b.distance || 0);
+          if (
+            myLocation &&
+            a.startLat &&
+            a.startLng &&
+            b.startLat &&
+            b.startLng
+          ) {
+            const distA = getDistance(
+              myLocation.lat,
+              myLocation.lng,
+              a.startLat,
+              a.startLng,
+            );
+            const distB = getDistance(
+              myLocation.lat,
+              myLocation.lng,
+              b.startLat,
+              b.startLng,
+            );
+            return distA - distB; // 가까운 순 정렬
+          }
+          return 0;
+
         default:
           return (
             new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
@@ -80,7 +177,7 @@ export const useOrderList = () => {
     });
 
     return result;
-  }, [orders, recommendedOrders, filter.dispatchType, sortBy]);
+  }, [orders, recommendedOrders, filter.dispatchType, sortBy, myLocation]);
 
   return {
     filteredOrders: filteredAndSortedOrders,
@@ -89,10 +186,12 @@ export const useOrderList = () => {
     onRefresh: () => {
       setRefreshing(true);
       fetchOrders();
+      getMyLocation();
     },
     filter,
     setFilter,
     sortBy,
     setSortBy,
+    myLocation, // 필요 시 현재 위치 정보를 UI에 띄울 수 있음
   };
 };
