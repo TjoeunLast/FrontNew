@@ -4,7 +4,7 @@ import { useRouter } from "expo-router";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import { OrderResponse } from "@/shared/models/order";
 import { Badge } from "@/shared/ui/feedback/Badge";
-import { orderCardStyles as s } from "@/shared/ui/business/orderCardStyles";
+import { StyleSheet } from "react-native";
 
 export const DrOrderCard = ({ order }: { order: OrderResponse }) => {
   const {
