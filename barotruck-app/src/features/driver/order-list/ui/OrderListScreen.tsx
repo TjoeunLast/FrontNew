@@ -27,6 +27,7 @@ export default function OrderListScreen() {
     setFilter,
     sortBy,
     setSortBy,
+    myLocation,
   } = useOrderList();
 
   return (
@@ -106,7 +107,10 @@ export default function OrderListScreen() {
       ) : (
         <FlatList
           data={filteredOrders}
-          renderItem={({ item }) => <DrOrderCard order={item} />}
+          // 🚩 renderItem 수정: item과 함께 myLocation을 넘겨줍니다.
+          renderItem={({ item }) => (
+            <DrOrderCard order={item} myLocation={myLocation} />
+          )}
           keyExtractor={(item) => item.orderId.toString()}
           contentContainerStyle={s.listPadding}
           refreshControl={

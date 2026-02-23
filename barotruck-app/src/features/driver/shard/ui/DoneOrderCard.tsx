@@ -129,10 +129,6 @@ const s = StyleSheet.create({
     borderWidth: 1,
     marginBottom: 16,
     elevation: 2,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
   },
   topRow: {
     flexDirection: "row",

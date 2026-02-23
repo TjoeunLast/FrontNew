@@ -31,6 +31,11 @@ export default function OrderDetailScreen() {
     buttonConfig,
     modalOpen,
     setModalOpen,
+    myLocation,
+    startType,
+    endType,
+    payMethodLabel,
+    payMethodTone,
   } = useOrderDetail();
 
   // [방어 코드: 데이터 로딩 중 처리]
@@ -42,7 +47,24 @@ export default function OrderDetailScreen() {
     );
   }
 
-  // [비즈니스 로직: 상태 및 정산 정보]
+  // [거리 계산 함수]
+  const getDist = (lat: number, lng: number) => {
+    if (!myLocation || !lat || !lng) return null;
+    const R = 6371;
+    const dLat = (lat - myLocation.lat) * (Math.PI / 180);
+    const dLon = (lng - myLocation.lng) * (Math.PI / 180);
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(myLocation.lat * (Math.PI / 180)) *
+        Math.cos(lat * (Math.PI / 180)) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
+    const cVal = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return (R * cVal).toFixed(1);
+  };
+
+  const distFromMe = order ? getDist(order.startLat, order.startLng) : null;
+
   const isCompleted = order.status === "COMPLETED";
   const isSettled = order.settlementStatus === "COMPLETED";
 
@@ -89,7 +111,7 @@ export default function OrderDetailScreen() {
         <View style={{ width: 40 }} />
       </View>
 
-      {/* SECTION 2: 정산 상태 알림바 (운송 완료 시 노출) */}
+      {/* SECTION 2: 정산 알림바 */}
       {isCompleted && (
         <View
           style={[
@@ -128,7 +150,7 @@ export default function OrderDetailScreen() {
           isCompleted && { paddingTop: 10 },
         ]}
       >
-        {/* SECTION 3: 메인 정보 카드 */}
+        {/* SECTION 3: 메인 카드 */}
         <View
           style={[
             s.card,
@@ -169,15 +191,13 @@ export default function OrderDetailScreen() {
             </Text>
           </View>
 
-          {/* 주소 정보 */}
           <View style={s.routeBigRow}>
             <View style={s.addrBox}>
               <Text style={[s.addrBig, { color: c.text.primary }]}>
                 {formatAddress.big(order.startAddr)}
               </Text>
               <Text style={[s.addrSmall, { color: c.text.secondary }]}>
-                {formatAddress.small(order.startAddr)}
-                {order.startPlace}
+                {formatAddress.small(order.startAddr)} {order.startPlace}
               </Text>
             </View>
             <Ionicons name="arrow-forward" size={24} color={c.border.default} />
@@ -196,14 +216,23 @@ export default function OrderDetailScreen() {
                   { color: c.text.secondary, textAlign: "right" },
                 ]}
               >
-                {formatAddress.small(order.endAddr)}
-                {order.endPlace}
+                {formatAddress.small(order.endAddr)} {order.endPlace}
               </Text>
             </View>
           </View>
 
-          {/* 인포 바 (거리/시간) */}
           <View style={[s.infoBar, { backgroundColor: c.bg.canvas }]}>
+            <View style={s.infoItem}>
+              <MaterialCommunityIcons
+                name="navigation-variant-outline"
+                size={16}
+                color={c.brand.primary}
+              />
+              <Text style={[s.infoText, { color: c.brand.primary }]}>
+                내 위치에서 {distFromMe ? `${distFromMe}km` : "계산 중..."}
+              </Text>
+            </View>
+            <View style={[s.divider, { backgroundColor: c.border.default }]} />
             <View style={s.infoItem}>
               <MaterialCommunityIcons
                 name="map-marker-distance"
@@ -211,51 +240,28 @@ export default function OrderDetailScreen() {
                 color={c.text.secondary}
               />
               <Text style={[s.infoText, { color: c.text.primary }]}>
-                {order.distance}km
-              </Text>
-            </View>
-            <View style={[s.divider, { backgroundColor: c.border.default }]} />
-            <View style={s.infoItem}>
-              <MaterialCommunityIcons
-                name="clock-outline"
-                size={16}
-                color={c.text.secondary}
-              />
-              <Text style={[s.infoText, { color: c.text.primary }]}>
-                예상 {Math.floor(order.duration / 60)}시간 {order.duration % 60}
-                분
+                {order.distance}km (운송)
               </Text>
             </View>
           </View>
 
-          {/* 운송료 정보 */}
           <View style={[s.priceRow, { borderTopColor: c.bg.canvas }]}>
             <Text style={[s.priceLabel, { color: c.text.secondary }]}>
               최종 운송료
             </Text>
-            <View style={s.priceRight}>
-              <Text
-                style={[
-                  s.priceValue,
-                  { color: isSettled ? c.status.success : c.text.primary },
-                ]}
-              >
-                {totalPrice.toLocaleString()}원
-              </Text>
-            </View>
+            <Text
+              style={[
+                s.priceValue,
+                { color: isSettled ? c.status.success : c.text.primary },
+              ]}
+            >
+              {totalPrice.toLocaleString()}원
+            </Text>
           </View>
 
           <View style={s.payMethodRow}>
-            <Badge
-              label={
-                order.payMethod.includes("선착불") ? "현금/선불" : "인수증/후불"
-              }
-              tone={
-                order.payMethod.includes("선착불")
-                  ? "payPrepaid"
-                  : "payDeferred"
-              }
-            />
+            {/* 🚩 DrOrderCard와 동일한 로직의 배지 적용 */}
+            <Badge label={payMethodLabel} />
             <Text style={[s.payMethodText, { color: c.text.secondary }]}>
               {isSettled
                 ? "정산계좌로 입금이 완료되었습니다"
@@ -280,9 +286,14 @@ export default function OrderDetailScreen() {
                 <Text style={s.dotText}>출</Text>
               </View>
               <View style={s.timelineContent}>
-                <Text style={[s.timeLabel, { color: c.brand.primary }]}>
-                  {order.startSchedule} 상차
-                </Text>
+                <View
+                  style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
+                >
+                  {/* 🚩 당상(startType) 정보 추가 */}
+                  <Text style={[s.timeLabel, { color: c.brand.primary }]}>
+                    {order.startSchedule} {startType} 상차
+                  </Text>
+                </View>
                 <Text style={[s.placeTitle, { color: c.text.primary }]}>
                   {order.startAddr}
                 </Text>
@@ -298,8 +309,9 @@ export default function OrderDetailScreen() {
                 <Text style={s.dotText}>도</Text>
               </View>
               <View style={s.timelineContent}>
+                {/* 🚩 당착(endType) 정보 추가 */}
                 <Text style={[s.timeLabel, { color: c.brand.primary }]}>
-                  하차
+                  {order.endSchedule || "시간 미정"} {endType} 하차
                 </Text>
                 <Text style={[s.placeTitle, { color: c.text.primary }]}>
                   {order.endAddr}
@@ -370,11 +382,10 @@ export default function OrderDetailScreen() {
             </View>
           </View>
         </View>
-
         <View style={{ height: 120 }} />
       </ScrollView>
 
-      {/* SECTION 7: 하단 고정 액션바 */}
+      {/* SECTION 7: 액션바 */}
       <View
         style={[
           s.bottomBar,
@@ -440,7 +451,6 @@ export default function OrderDetailScreen() {
           </Pressable>
         )}
       </View>
-
       <ReceiptModal visible={modalOpen} onClose={() => setModalOpen(false)} />
     </View>
   );

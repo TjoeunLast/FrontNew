@@ -1,12 +1,33 @@
-import React from "react";
-import { View, Text, Pressable } from "react-native";
+import React, { useMemo } from "react";
+import { View, Text, StyleSheet, Pressable } from "react-native";
 import { useRouter } from "expo-router";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import { OrderResponse } from "@/shared/models/order";
 import { Badge } from "@/shared/ui/feedback/Badge";
-import { StyleSheet } from "react-native";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 
-export const DrOrderCard = ({ order }: { order: OrderResponse }) => {
+// [유틸] 거리 계산 함수 (하버사인)
+function getDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * (Math.PI / 180)) *
+      Math.cos(lat2 * (Math.PI / 180)) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+export const DrOrderCard = ({
+  order,
+  myLocation,
+}: {
+  order: OrderResponse;
+  myLocation?: any;
+}) => {
   const {
     orderId,
     createdAt,
@@ -26,28 +47,40 @@ export const DrOrderCard = ({ order }: { order: OrderResponse }) => {
     instant,
     payMethod,
     startType,
+    endType,
+    startLat,
+    startLng,
   } = order;
 
   const { colors: c } = useAppTheme();
   const router = useRouter();
 
-  // 1. 비즈니스 로직: 총 금액 합산 (기본료 + 수수료 + 포장비)
+  // 1. 비즈니스 로직: 총 금액 합산
   const totalPrice = basePrice + (laborFee || 0) + (packagingPrice || 0);
 
-  // 2. 비즈니스 로직: 주소 요약 (시/도 + 시/군/구만 추출)
+  // 2. 비즈니스 로직: 주소 요약
   const getShortAddr = (addr: string) => {
     if (!addr) return "";
     const parts = addr.split(" ");
     return `${parts[0]} ${parts[1] || ""}`;
   };
 
-  // 3. 내비게이션: 오더 상세 페이지 이동
+  // 3. 실시간 거리 계산
+  const distanceText = useMemo(() => {
+    if (myLocation && startLat && startLng) {
+      const d = getDistance(myLocation.lat, myLocation.lng, startLat, startLng);
+      return `${d.toFixed(1)}km`;
+    }
+    return null;
+  }, [myLocation, startLat, startLng]);
+
   const handlePress = () => {
     router.push({
       pathname: "/(driver)/order-detail/[id]",
       params: { id: orderId.toString() },
     });
   };
+
   const createdDateLabel =
     typeof createdAt === "string" && createdAt.length >= 10
       ? createdAt.substring(5, 10).replace("-", ".")
@@ -59,15 +92,28 @@ export const DrOrderCard = ({ order }: { order: OrderResponse }) => {
       style={[
         s.container,
         { borderColor: c.border.default, backgroundColor: c.bg.surface },
-        // 강조 상태: 바로배차(instant)일 때 별도 스타일 적용
         instant && {
-          borderColor: c.badge.urgentBorder,
-          backgroundColor: c.status.dangerSoft,
-          elevation: 6,
+          borderColor: c.status.danger,
+          borderWidth: 2,
+          elevation: 8,
         },
       ]}
     >
-      {/* SECTION: 상단 헤더 (배차유형, 편도/왕복, 등록일자) */}
+      {/* 내 위치 거리 표시 (상단 중앙 유지) */}
+      {distanceText && (
+        <View style={s.centerDistance}>
+          <MaterialCommunityIcons
+            name="navigation-variant"
+            size={14}
+            color={c.brand.primary}
+          />
+          <Text style={[s.distanceText, { color: c.brand.primary }]}>
+            내 위치에서 {distanceText}
+          </Text>
+        </View>
+      )}
+
+      {/* SECTION: 상단 헤더 */}
       <View style={s.topRow}>
         <View style={s.badgeRow}>
           <Badge
@@ -77,7 +123,7 @@ export const DrOrderCard = ({ order }: { order: OrderResponse }) => {
           />
           <Badge
             label={driveMode === "왕복" ? "왕복" : "편도"}
-            tone={driveMode === "왕복" ? "neutral" : "neutral"}
+            tone="neutral"
           />
         </View>
         <Text style={[s.timeText, { color: c.text.secondary }]}>
@@ -85,9 +131,8 @@ export const DrOrderCard = ({ order }: { order: OrderResponse }) => {
         </Text>
       </View>
 
-      {/* SECTION: 운송 경로 (상차지 → 거리 → 하차지 시각화) */}
+      {/* SECTION: 운송 경로 */}
       <View style={s.routeRow}>
-        {/* 상차지 정보 */}
         <View style={s.locGroup}>
           <Text style={s.locLabel}>상차지</Text>
           <Text
@@ -104,7 +149,6 @@ export const DrOrderCard = ({ order }: { order: OrderResponse }) => {
           </Text>
         </View>
 
-        {/* 경로 구분선 및 거리 배지 */}
         <View style={s.arrowArea}>
           <View
             style={[
@@ -121,7 +165,6 @@ export const DrOrderCard = ({ order }: { order: OrderResponse }) => {
           </View>
         </View>
 
-        {/* 하차지 정보 */}
         <View style={[s.locGroup, { alignItems: "flex-end" }]}>
           <Text style={s.locLabel}>하차지</Text>
           <Text
@@ -142,9 +185,8 @@ export const DrOrderCard = ({ order }: { order: OrderResponse }) => {
         </View>
       </View>
 
-      {/* SECTION: 하단 정보 (상차 일정, 차량/화물 특성, 운송료) */}
+      {/* SECTION: 하단 정보 */}
       <View style={[s.bottomRow, { borderTopColor: c.bg.canvas }]}>
-        {/* 좌측: 작업 상세 정보 */}
         <View style={s.infoColumn}>
           <Text style={[s.loadDateText, { color: c.text.primary }]}>
             {startSchedule} 상차
@@ -154,7 +196,6 @@ export const DrOrderCard = ({ order }: { order: OrderResponse }) => {
           </Text>
         </View>
 
-        {/* 우측: 가격 및 결제 방식 */}
         <View style={s.priceColumn}>
           <View style={s.priceRow}>
             <Text
@@ -165,13 +206,6 @@ export const DrOrderCard = ({ order }: { order: OrderResponse }) => {
             >
               {totalPrice.toLocaleString()}원
             </Text>
-            {/* 수수료 발생 여부 표시 */}
-            {laborFee && laborFee > 0 && (
-              <Text style={[s.taxLabel, { color: c.status.danger }]}>
-                {" "}
-                (수)
-              </Text>
-            )}
           </View>
           <Badge
             label={payMethod}
@@ -192,6 +226,14 @@ const s = StyleSheet.create({
     marginBottom: 12,
     elevation: 4,
   },
+  centerDistance: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 8,
+    gap: 4,
+  },
+  distanceText: { fontSize: 13, fontWeight: "800" },
   topRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -247,8 +289,4 @@ const s = StyleSheet.create({
     justifyContent: "flex-end",
   },
   priceText: { fontSize: 22, fontWeight: "900", letterSpacing: -0.5 },
-  taxLabel: {
-    fontSize: 13,
-    fontWeight: "bold",
-  },
 });
