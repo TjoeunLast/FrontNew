@@ -59,10 +59,11 @@ function roleToKorean(role: string) {
 }
 
 function toShipperTypeLabel(raw?: string) {
+  if (typeof raw === "boolean") return raw ? "사업자" : "개인";
   const v = String(raw ?? "").trim().toUpperCase();
   if (!v) return "-";
-  if (v === "Y" || v === "CORPORATE" || v === "BUSINESS" || v === "BIZ" || v === "사업자") return "사업자";
-  if (v === "N" || v === "PERSONAL" || v === "INDIVIDUAL" || v === "개인") return "개인";
+  if (v === "Y" || v === "TRUE" || v === "1" || v === "T" || v === "CORPORATE" || v === "BUSINESS" || v === "BIZ" || v === "사업자") return "사업자";
+  if (v === "N" || v === "FALSE" || v === "0" || v === "F" || v === "PERSONAL" || v === "INDIVIDUAL" || v === "개인") return "개인";
   return "-";
 }
 
@@ -116,6 +117,9 @@ async function fetchShipperTypeFromServer(baseMe: any) {
     if (role !== "SHIPPER") return "-";
     const res = await apiClient.get("/api/v1/shippers/me");
     const shipperPayload =
+      res.data?.shipper ??
+      res.data?.shipperInfo ??
+      res.data?.shipperDto ??
       res.data?.data ??
       res.data?.user ??
       res.data?.result ??

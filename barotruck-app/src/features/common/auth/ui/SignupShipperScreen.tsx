@@ -201,6 +201,7 @@ export default function SignupShipperScreen() {
                 bizRegNum: bizNoDigits,
                 representative: ceoName.trim(),
                 bizAddress: "",
+                isCorporate: "Y",
               }
             : undefined,
       };
