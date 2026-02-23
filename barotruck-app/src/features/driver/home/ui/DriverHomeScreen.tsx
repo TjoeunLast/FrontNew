@@ -268,7 +268,7 @@ export default function DriverHomeScreen() {
                 router.push(`/(driver)/order-detail/${order.orderId}`)
               }
             >
-              <DrOrderCard {...(order as any)} />
+              <DrOrderCard order={order} />
             </Pressable>
           ))}
 
@@ -366,7 +366,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 16,
   },
   orderList: { gap: 16 },
   dashboardContainer: { marginBottom: 24 },

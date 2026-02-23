@@ -5,7 +5,7 @@ import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import { OrderResponse } from "@/shared/models/order";
 import { Badge } from "@/shared/ui/feedback/Badge";
 
-export const DrOrderCard = (props: OrderResponse) => {
+export const DrOrderCard = ({ order }: { order: OrderResponse }) => {
   const {
     orderId,
     createdAt,
@@ -25,7 +25,7 @@ export const DrOrderCard = (props: OrderResponse) => {
     instant,
     payMethod,
     startType,
-  } = props;
+  } = order;
 
   const { colors: c } = useAppTheme();
   const router = useRouter();
