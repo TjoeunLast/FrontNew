@@ -15,34 +15,66 @@ export const useOrderDetail = () => {
 
   const [order, setOrder] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const orderId = useMemo(() => {
+    if (Array.isArray(id)) return String(id[0] ?? "");
+    return String(id ?? "");
+  }, [id]);
 
   /**
    * SECTION 1: 데이터 패칭 및 동기화
    * - 상세 페이지 진입 시 및 상태 업데이트 후 호출하여 데이터를 리프레시함
    */
   const fetchDetail = useCallback(async () => {
+    if (!orderId) {
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
-      // 내 운행 목록에서 먼저 조회
-      const myOrders = await OrderService.getMyDrivingOrders();
-      let found = myOrders.find((o) => o.orderId.toString() === id);
+      let found: any = null;
 
-      // 내 목록에 없으면 전체 배차 목록에서 조회 (상세 진입 대응)
+      // 1) 내 운행 목록 조회 (실패해도 다음 조회 계속)
+      try {
+        const myOrders = await OrderService.getMyDrivingOrders();
+        found = myOrders.find((o) => String(o.orderId) === orderId);
+      } catch (error: any) {
+        console.warn("내 운행 목록 조회 실패(상세 fallback 진행):", error?.response?.status ?? error?.message);
+      }
+
+      // 2) 배차 대기 목록 조회
       if (!found) {
-        const available = await OrderService.getAvailableOrders();
-        found = available.find((o) => o.orderId.toString() === id);
+        try {
+          const available = await OrderService.getAvailableOrders();
+          found = available.find((o) => String(o.orderId) === orderId);
+        } catch (error: any) {
+          console.warn("배차 가능 목록 조회 실패(상세 fallback 진행):", error?.response?.status ?? error?.message);
+        }
+      }
+
+      // 3) 추천 목록 조회
+      if (!found) {
+        try {
+          const recommended = await OrderService.getRecommendedOrders();
+          found = recommended.find((o) => String(o.orderId) === orderId);
+        } catch (error: any) {
+          console.warn("추천 목록 조회 실패:", error?.response?.status ?? error?.message);
+        }
       }
 
       if (found) {
         setOrder({ ...found });
         console.log("✅ 데이터 동기화 완료 (현재 상태):", found.status);
+      } else {
+        setOrder(null);
+        console.warn(`상세 오더를 찾지 못했습니다. orderId=${orderId}`);
       }
     } catch (error) {
       console.error("데이터 매칭 실패:", error);
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [orderId]);
 
   /**
    * SECTION 2: 물류 운행 프로세스 훅 연결
@@ -57,8 +89,8 @@ export const useOrderDetail = () => {
   } = useDrivingProcess(fetchDetail); // 액션 성공 시 fetchDetail 실행
 
   useEffect(() => {
-    if (id) fetchDetail();
-  }, [id, fetchDetail]);
+    if (orderId) fetchDetail();
+  }, [orderId, fetchDetail]);
 
   /**
    * SECTION 3: 하단 액션 버튼 설정 (UI 매핑)

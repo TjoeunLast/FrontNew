@@ -26,21 +26,29 @@ export const useDriverHome = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const fetchHomeData = useCallback(async () => {
+    setIsRefreshing(true);
     try {
-      setIsRefreshing(true);
-      // 1. 맞춤 추천 오더 가져오기 (서버 연동)
-      const recommended = await OrderService.getRecommendedOrders();
-      // 아직 기사가 배정되지 않은 '배차 대기' 상태인 오더만 홈에 노출
-      const filteredRecommended = recommended.filter(
-        (o) => o.status === "REQUESTED",
-      );
-      setRecommendedOrders(filteredRecommended);
+      const [recommendedResult, drivingResult] = await Promise.allSettled([
+        OrderService.getRecommendedOrders(),
+        OrderService.getMyDrivingOrders(),
+      ]);
 
-      // 2. 내 전체 운송 목록 가져오기 (상태 카운트용)
-      const drivingOrders = await OrderService.getMyDrivingOrders();
-      setMyOrders(drivingOrders);
-    } catch (error) {
-      console.error("데이터 로드 실패:", error);
+      if (recommendedResult.status === "fulfilled") {
+        const filteredRecommended = recommendedResult.value.filter(
+          (o) => o.status === "REQUESTED",
+        );
+        setRecommendedOrders(filteredRecommended);
+      } else {
+        console.warn("홈 추천 오더 로드 실패:", recommendedResult.reason);
+        setRecommendedOrders([]);
+      }
+
+      if (drivingResult.status === "fulfilled") {
+        setMyOrders(drivingResult.value);
+      } else {
+        console.warn("내 운행 목록 로드 실패:", drivingResult.reason);
+        setMyOrders([]);
+      }
     } finally {
       setIsRefreshing(false);
     }

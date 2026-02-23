@@ -34,10 +34,32 @@ export default function OrderDetailScreen() {
   } = useOrderDetail();
 
   // [방어 코드: 데이터 로딩 중 처리]
-  if (!order || !buttonConfig) {
+  if (loading) {
     return (
       <View style={[s.container, s.center, { backgroundColor: c.bg.canvas }]}>
         <ActivityIndicator size="large" color={c.brand.primary} />
+      </View>
+    );
+  }
+
+  // [방어 코드: 상세 데이터를 찾지 못한 경우]
+  if (!order || !buttonConfig) {
+    return (
+      <View style={[s.container, s.center, { backgroundColor: c.bg.canvas, paddingHorizontal: 24 }]}>
+        <Text style={{ color: c.text.primary, fontSize: 16, fontWeight: "700", marginBottom: 12 }}>
+          오더 상세 정보를 불러오지 못했습니다.
+        </Text>
+        <Pressable
+          onPress={actions.goBack}
+          style={{
+            paddingHorizontal: 16,
+            paddingVertical: 10,
+            borderRadius: 10,
+            backgroundColor: c.brand.primary,
+          }}
+        >
+          <Text style={{ color: "#fff", fontWeight: "800" }}>목록으로</Text>
+        </Pressable>
       </View>
     );
   }

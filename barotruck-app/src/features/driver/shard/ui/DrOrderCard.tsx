@@ -36,9 +36,23 @@ export const DrOrderCard = ({ order }: { order: OrderResponse }) => {
 
   // 2. 비즈니스 로직: 주소 요약 (시/도 + 시/군/구만 추출)
   const getShortAddr = (addr: string) => {
-    if (!addr) return "";
+    if (!addr) return "주소 미정";
     const parts = addr.split(" ");
     return `${parts[0]} ${parts[1] || ""}`;
+  };
+
+  const formatLoadSchedule = (v?: string) => {
+    const raw = String(v ?? "").trim();
+    if (!raw) return "상차 일정 미정";
+    const d = new Date(raw);
+    if (!Number.isNaN(d.getTime())) {
+      const mm = String(d.getMonth() + 1).padStart(2, "0");
+      const dd = String(d.getDate()).padStart(2, "0");
+      const hh = String(d.getHours()).padStart(2, "0");
+      const mi = String(d.getMinutes()).padStart(2, "0");
+      return `${mm}-${dd} ${hh}:${mi}`;
+    }
+    return raw;
   };
 
   // 3. 내비게이션: 오더 상세 페이지 이동
@@ -147,10 +161,10 @@ export const DrOrderCard = ({ order }: { order: OrderResponse }) => {
         {/* 좌측: 작업 상세 정보 */}
         <View style={s.infoColumn}>
           <Text style={[s.loadDateText, { color: c.text.primary }]}>
-            {startSchedule} 상차
+            {formatLoadSchedule(startSchedule)} 상차
           </Text>
           <Text style={[s.carText, { color: c.text.secondary }]}>
-            {reqTonnage} {reqCarType} • {workType || "지게차"} • {startType}
+            {reqTonnage || "-"} {reqCarType || "-"} • {workType || "지게차"} • {startType || "상차"}
           </Text>
         </View>
 

@@ -23,17 +23,28 @@ export const useOrderList = () => {
 
   /** [함수] 홈 화면 추천 데이터와 전체 오더 데이터를 동시에 가져옴 */
   const fetchOrders = useCallback(async () => {
+    setLoading(true);
     try {
-      setLoading(true);
-      // 1. 홈 화면과 동일한 추천 오더 호출
-      const recommended = await OrderService.getRecommendedOrders();
-      setRecommendedOrders(recommended.filter((o) => o.status === "REQUESTED"));
+      const [recommendedResult, availableResult] = await Promise.allSettled([
+        OrderService.getRecommendedOrders(),
+        OrderService.getAvailableOrders(),
+      ]);
 
-      // 2. 전체 배차 대기 오더 호출
-      const allOrders = await OrderService.getAvailableOrders();
-      setOrders(allOrders);
-    } catch (error) {
-      console.error("오더 로드 실패:", error);
+      if (recommendedResult.status === "fulfilled") {
+        setRecommendedOrders(
+          recommendedResult.value.filter((o) => o.status === "REQUESTED"),
+        );
+      } else {
+        console.warn("추천 오더 로드 실패:", recommendedResult.reason);
+        setRecommendedOrders([]);
+      }
+
+      if (availableResult.status === "fulfilled") {
+        setOrders(availableResult.value);
+      } else {
+        console.warn("배차 가능 오더 로드 실패:", availableResult.reason);
+        setOrders([]);
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);

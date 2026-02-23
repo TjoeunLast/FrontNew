@@ -69,6 +69,33 @@ function findNestedSettlementStatus(node: any, depth = 0): OrderResponse['settle
   return undefined;
 }
 
+function pickString(...values: any[]): string {
+  for (const v of values) {
+    if (v === undefined || v === null) continue;
+    const s = String(v).trim();
+    if (s.length > 0 && s !== 'null' && s !== 'undefined') return s;
+  }
+  return '';
+}
+
+function pickNumber(...values: any[]): number | undefined {
+  for (const v of values) {
+    if (v === undefined || v === null || v === '') continue;
+    const n = Number(v);
+    if (Number.isFinite(n)) return n;
+  }
+  return undefined;
+}
+
+function normalizeDriveMode(raw: any): string {
+  const text = String(raw ?? '').trim();
+  const upper = text.toUpperCase();
+  if (!text) return '';
+  if (upper === 'ROUND_TRIP' || upper === 'ROUNDTRIP' || upper === 'RT' || text === '왕복') return '왕복';
+  if (upper === 'ONE_WAY' || upper === 'ONEWAY' || upper === 'OW' || text === '편도') return '편도';
+  return text;
+}
+
 function normalizeOrderRow(node: any): OrderResponse | null {
   if (!node || typeof node !== 'object') return null;
   const orderIdRaw = (node as any).orderId ?? (node as any).id ?? (node as any).orderNo;
@@ -76,12 +103,83 @@ function normalizeOrderRow(node: any): OrderResponse | null {
   const orderIdNum = Number(orderIdRaw);
   if (!Number.isFinite(orderIdNum)) return null;
 
-  const createdAt = String((node as any).createdAt ?? (node as any).created_at ?? new Date().toISOString());
+  const createdAt = pickString(
+    (node as any).createdAt,
+    (node as any).created_at,
+    (node as any).registeredAt,
+    (node as any).regDt,
+    new Date().toISOString(),
+  );
   const updated = (node as any).updated ?? (node as any).updatedAt ?? (node as any).modifiedAt;
-  const startAddr = String((node as any).startAddr ?? (node as any).startAddress ?? (node as any).puAddress ?? '');
-  const startPlace = String((node as any).startPlace ?? (node as any).startName ?? startAddr);
-  const endAddr = String((node as any).endAddr ?? (node as any).endAddress ?? (node as any).doAddress ?? '');
-  const endPlace = String((node as any).endPlace ?? (node as any).endName ?? endAddr);
+  const snapshot = (node as any).snapshot ?? (node as any).orderSnapshot ?? (node as any).orderInfo ?? (node as any).order;
+
+  const startAddr = pickString(
+    (node as any).startAddr,
+    (node as any).startAddress,
+    (node as any).puAddress,
+    (node as any).pickupAddress,
+    (node as any).fromAddress,
+    snapshot?.startAddr,
+    snapshot?.startAddress,
+    snapshot?.puAddress,
+    snapshot?.pickupAddress,
+  );
+  const startPlace = pickString(
+    (node as any).startPlace,
+    (node as any).startName,
+    (node as any).puDetailAddress,
+    (node as any).pickupPlace,
+    snapshot?.startPlace,
+    snapshot?.startName,
+    startAddr,
+  );
+  const endAddr = pickString(
+    (node as any).endAddr,
+    (node as any).endAddress,
+    (node as any).doAddress,
+    (node as any).dropAddress,
+    (node as any).dropoffAddress,
+    (node as any).toAddress,
+    snapshot?.endAddr,
+    snapshot?.endAddress,
+    snapshot?.doAddress,
+    snapshot?.dropAddress,
+  );
+  const endPlace = pickString(
+    (node as any).endPlace,
+    (node as any).endName,
+    (node as any).doDetailAddress,
+    (node as any).dropoffPlace,
+    snapshot?.endPlace,
+    snapshot?.endName,
+    endAddr,
+  );
+
+  const rawDistance = pickNumber(
+    (node as any).distance,
+    (node as any).distanceKm,
+    (node as any).routeDistance,
+    snapshot?.distance,
+  ) ?? 0;
+  const distance = rawDistance > 1000 ? Number((rawDistance / 1000).toFixed(1)) : rawDistance;
+
+  const rawDuration = pickNumber(
+    (node as any).duration,
+    (node as any).durationMin,
+    (node as any).durationMinutes,
+    (node as any).eta,
+    snapshot?.duration,
+  ) ?? 0;
+  const duration = rawDuration > 1000 ? Math.round(rawDuration / 60) : rawDuration;
+
+  const basePrice = pickNumber(
+    (node as any).basePrice,
+    (node as any).price,
+    (node as any).fare,
+    (node as any).amount,
+    (node as any).totalPrice,
+    snapshot?.basePrice,
+  ) ?? 0;
 
   const settlementNode = (node as any).settlement;
   const settlementsNode =
@@ -120,29 +218,37 @@ function normalizeOrderRow(node: any): OrderResponse | null {
     updated: updated ? String(updated) : undefined,
     startAddr,
     startPlace,
-    startType: String((node as any).startType ?? (node as any).pickupType ?? ''),
-    startSchedule: String((node as any).startSchedule ?? (node as any).pickupAt ?? createdAt),
+    startType: pickString((node as any).startType, (node as any).pickupType, snapshot?.startType, '상차'),
+    startSchedule: pickString(
+      (node as any).startSchedule,
+      (node as any).pickupAt,
+      (node as any).pickupDateTime,
+      (node as any).loadingAt,
+      snapshot?.startSchedule,
+      snapshot?.pickupAt,
+      createdAt,
+    ),
     endAddr,
     endPlace,
-    endType: String((node as any).endType ?? (node as any).dropoffType ?? ''),
-    endSchedule: (node as any).endSchedule ? String((node as any).endSchedule) : undefined,
-    cargoContent: String((node as any).cargoContent ?? (node as any).cargo ?? ''),
-    loadMethod: (node as any).loadMethod ? String((node as any).loadMethod) : undefined,
-    workType: (node as any).workType ? String((node as any).workType) : undefined,
-    tonnage: Number((node as any).tonnage ?? 0),
-    reqCarType: String((node as any).reqCarType ?? (node as any).carType ?? ''),
-    reqTonnage: String((node as any).reqTonnage ?? (node as any).tonnageText ?? ''),
-    driveMode: (node as any).driveMode ? String((node as any).driveMode) : undefined,
-    loadWeight: (node as any).loadWeight !== undefined ? Number((node as any).loadWeight) : undefined,
-    basePrice: Number((node as any).basePrice ?? (node as any).price ?? 0),
-    laborFee: (node as any).laborFee !== undefined ? Number((node as any).laborFee) : undefined,
-    packagingPrice: (node as any).packagingPrice !== undefined ? Number((node as any).packagingPrice) : undefined,
-    insuranceFee: (node as any).insuranceFee !== undefined ? Number((node as any).insuranceFee) : undefined,
-    payMethod: String((node as any).payMethod ?? ''),
-    instant: Boolean((node as any).instant),
-    distance: Number((node as any).distance ?? 0),
-    duration: Number((node as any).duration ?? 0),
-    user: (node as any).user,
+    endType: pickString((node as any).endType, (node as any).dropoffType, snapshot?.endType, '하차'),
+    endSchedule: pickString((node as any).endSchedule, (node as any).dropoffAt, snapshot?.endSchedule) || undefined,
+    cargoContent: pickString((node as any).cargoContent, (node as any).cargo, snapshot?.cargoContent),
+    loadMethod: pickString((node as any).loadMethod, snapshot?.loadMethod) || undefined,
+    workType: pickString((node as any).workType, snapshot?.workType) || undefined,
+    tonnage: pickNumber((node as any).tonnage, snapshot?.tonnage) ?? 0,
+    reqCarType: pickString((node as any).reqCarType, (node as any).carType, (node as any).vehicleType, snapshot?.reqCarType),
+    reqTonnage: pickString((node as any).reqTonnage, (node as any).tonnageText, snapshot?.reqTonnage, (node as any).tonnage),
+    driveMode: normalizeDriveMode((node as any).driveMode ?? snapshot?.driveMode) || undefined,
+    loadWeight: pickNumber((node as any).loadWeight, snapshot?.loadWeight),
+    basePrice,
+    laborFee: pickNumber((node as any).laborFee, (node as any).workFee, (node as any).extraFee, snapshot?.laborFee),
+    packagingPrice: pickNumber((node as any).packagingPrice, (node as any).packFee, snapshot?.packagingPrice),
+    insuranceFee: pickNumber((node as any).insuranceFee, snapshot?.insuranceFee),
+    payMethod: pickString((node as any).payMethod, (node as any).paymentMethod, (node as any).paymentType, '인수증/후불'),
+    instant: Boolean((node as any).instant ?? (node as any).isInstant ?? ((node as any).dispatchType === 'INSTANT')),
+    distance,
+    duration,
+    user: (node as any).user ?? (node as any).shipper ?? snapshot?.user,
     cancellation: (node as any).cancellation,
   };
 }
@@ -294,13 +400,39 @@ export const OrderApi = {
 
 export const OrderService = {
   getRecommendedOrders: async (): Promise<OrderResponse[]> => {
-    const res = await apiClient.get(`${API_BASE}/recommended`);
-    return res.data;
+    const candidates = [`${API_BASE}/recommended`, `${API_BASE}/available`, `${API_BASE}`];
+    let lastError: any = null;
+    for (const url of candidates) {
+      try {
+        const res = await apiClient.get(url);
+        return toOrderList(res.data).filter((o) => o.status === 'REQUESTED');
+      } catch (error: any) {
+        lastError = error;
+      }
+    }
+    console.warn('추천 오더 조회 실패:', {
+      status: lastError?.response?.status,
+      data: lastError?.response?.data,
+    });
+    return [];
   },
 
   getAvailableOrders: async (): Promise<OrderResponse[]> => {
-    const res = await apiClient.get(`${API_BASE}/available`);
-    return res.data;
+    const candidates = [`${API_BASE}/available`, `${API_BASE}`];
+    let lastError: any = null;
+    for (const url of candidates) {
+      try {
+        const res = await apiClient.get(url);
+        return toOrderList(res.data).filter((o) => o.status === 'REQUESTED');
+      } catch (error: any) {
+        lastError = error;
+      }
+    }
+    console.warn('배차 가능 오더 조회 실패:', {
+      status: lastError?.response?.status,
+      data: lastError?.response?.data,
+    });
+    return [];
   },
 
   acceptOrder: async (orderId: number): Promise<void> => {
@@ -321,8 +453,25 @@ export const OrderService = {
   },
 
   getMyDrivingOrders: async (): Promise<OrderResponse[]> => {
-    const res = await apiClient.get(`${API_BASE}/my-driving`);
-    return res.data;
+    const candidates = [
+      `${API_BASE}/my-driving`,
+      `${API_BASE}/my-orders`,
+      `${API_BASE}/my`,
+    ];
+    let lastError: any = null;
+    for (const url of candidates) {
+      try {
+        const res = await apiClient.get(url);
+        return toOrderList(res.data);
+      } catch (error: any) {
+        lastError = error;
+      }
+    }
+    console.warn('내 운행 오더 조회 실패:', {
+      status: lastError?.response?.status,
+      data: lastError?.response?.data,
+    });
+    return [];
   },
 
 
