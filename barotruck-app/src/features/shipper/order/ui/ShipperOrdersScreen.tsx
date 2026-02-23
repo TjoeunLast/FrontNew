@@ -1,15 +1,15 @@
-﻿import { Ionicons } from "@expo/vector-icons";
+﻿import { useFocusEffect } from "@react-navigation/native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useFocusEffect } from "@react-navigation/native";
 import React from "react";
 import { Alert, Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { type DispatchStatusKey } from "@/features/common/orders/ui/DispatchStatusBadge";
+import { type DispatchStatusKey } from "@/features/shipper/order/ui/DispatchStatusBadge";
 import { OrderApi } from "@/shared/api/orderService";
-import type { OrderResponse } from "@/shared/models/order";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
+import type { OrderResponse } from "@/shared/models/order";
 import { RecommendedOrderCard } from "@/shared/ui/business/RecommendedOrderCard";
+import ShipperScreenHeader from "@/shared/ui/layout/ShipperScreenHeader";
 
 type DispatchTab = "WAITING" | "PROGRESS" | "DONE";
 
@@ -291,28 +291,14 @@ export default function ShipperOrdersScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: c.bg.canvas }}>
+      <ShipperScreenHeader title="배차 관리" hideBackButton />
       <View
         style={{
           backgroundColor: c.bg.surface,
-          paddingTop: insets.top + 4,
           borderBottomWidth: 1,
           borderBottomColor: c.border.default,
         }}
       >
-        <View style={{ borderBottomWidth: 1, borderBottomColor: c.border.default }}>
-          <Text
-            style={{
-              color: c.text.primary,
-              fontSize: 20,
-              fontWeight: "900",
-              textAlign: "center",
-              paddingVertical: 8,
-            }}
-          >
-            배차 관리
-          </Text>
-        </View>
-
         <View
           style={{
             flexDirection: "row",

@@ -1,6 +1,7 @@
 ﻿import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
-import React, { useMemo, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import {
   Alert,
   Modal,
@@ -18,9 +19,10 @@ import { OrderApi } from "@/shared/api/orderService";
 import { SettlementService } from "@/shared/api/settlementService";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import type { OrderResponse } from "@/shared/models/order";
+import ShipperScreenHeader from "@/shared/ui/layout/ShipperScreenHeader";
 
 type SettlementFilter = "ALL" | "UNPAID" | "TAX";
-type SettlementStatus = "UNPAID" | "PAID" | "TAX_INVOICE";
+type SettlementStatus = "UNPAID" | "PENDING" | "PAID" | "TAX_INVOICE";
 
 type SettlementItem = {
   id: string;
@@ -35,12 +37,36 @@ type SettlementItem = {
   vehicleInfo: string;
 };
 
+const PENDING_SETTLEMENT_STORAGE_KEY = "shipper_pending_settlement_order_ids";
+
+async function loadPendingSettlementOrderIds() {
+  try {
+    const raw = await AsyncStorage.getItem(PENDING_SETTLEMENT_STORAGE_KEY);
+    if (!raw) return new Set<number>();
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return new Set<number>();
+    return new Set(parsed.map((x) => Number(x)).filter((x) => Number.isFinite(x)));
+  } catch {
+    return new Set<number>();
+  }
+}
+
+async function savePendingSettlementOrderIds(ids: Set<number>) {
+  try {
+    const arr = Array.from(ids.values()).filter((x) => Number.isFinite(x));
+    await AsyncStorage.setItem(PENDING_SETTLEMENT_STORAGE_KEY, JSON.stringify(arr));
+  } catch {
+    // noop
+  }
+}
+
 function toWon(v: number) {
   return `${v.toLocaleString("ko-KR")}원`;
 }
 
 function statusLabel(status: SettlementStatus) {
   if (status === "UNPAID") return "미결제";
+  if (status === "PENDING") return "결제대기";
   if (status === "PAID") return "결제완료";
   return "계산서 발행";
 }
@@ -88,6 +114,8 @@ function toDateLabel(d: Date) {
 
 function toSettlementStatus(order: OrderResponse): SettlementStatus {
   const payMethod = String(order.payMethod ?? "").toLowerCase();
+  const settlementStatus = String(order.settlementStatus ?? "").toUpperCase();
+
   if (
     payMethod.includes("receipt") ||
     payMethod.includes("month") ||
@@ -96,6 +124,11 @@ function toSettlementStatus(order: OrderResponse): SettlementStatus {
   ) {
     return "TAX_INVOICE";
   }
+
+  if (settlementStatus === "COMPLETED" || settlementStatus === "PAID" || settlementStatus === "CONFIRMED") return "PAID";
+  if (settlementStatus === "WAIT" || settlementStatus === "DISPUTED") return "PENDING";
+  if (settlementStatus === "READY" || settlementStatus === "CANCELLED") return "UNPAID";
+
   if (
     payMethod.includes("card") ||
     payMethod.includes("prepaid") ||
@@ -109,11 +142,12 @@ function toSettlementStatus(order: OrderResponse): SettlementStatus {
 
 function toActionLabel(status: SettlementStatus) {
   if (status === "UNPAID") return "결제하기";
+  if (status === "PENDING") return "결제대기";
   if (status === "PAID") return "영수증 확인";
   return "계산서 보기";
 }
 
-function mapOrderToSettlement(order: OrderResponse): SettlementItem | null {
+function mapOrderToSettlement(order: OrderResponse, pendingOrderIds?: Set<number>): SettlementItem | null {
   if (order.status === "CANCELLED" || order.status === "REQUESTED" || order.status === "PENDING") return null;
 
   const scheduledAt =
@@ -126,7 +160,16 @@ function mapOrderToSettlement(order: OrderResponse): SettlementItem | null {
     Number(order.packagingPrice ?? 0) +
     Number(order.insuranceFee ?? 0);
 
-  const status = toSettlementStatus(order);
+  const baseStatus = toSettlementStatus(order);
+  const status = baseStatus === "UNPAID" && pendingOrderIds?.has(Number(order.orderId)) ? "PENDING" : baseStatus;
+  if (__DEV__) {
+    console.log("[settlement-map]", {
+      orderId: order.orderId,
+      settlementStatus: order.settlementStatus,
+      payMethod: order.payMethod,
+      resolvedStatus: status,
+    });
+  }
   const vehicleInfo = `${order.reqCarType || "차량"} ${order.reqTonnage || ""}`.trim();
 
   return {
@@ -153,6 +196,25 @@ export default function ShipperSettlementScreen() {
   const [items, setItems] = useState<SettlementItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [receiptItem, setReceiptItem] = useState<SettlementItem | null>(null);
+  const [submittingOrderId, setSubmittingOrderId] = useState<number | null>(null);
+
+  const fetchItems = useCallback(async () => {
+    const pendingOrderIds = await loadPendingSettlementOrderIds();
+    const rows = await OrderApi.getMyShipperOrders();
+    const mapped = rows
+      .map((row) => mapOrderToSettlement(row, pendingOrderIds))
+      .filter((x): x is SettlementItem => x !== null)
+      .sort((a, b) => b.scheduledAt.getTime() - a.scheduledAt.getTime());
+
+    const paidIds = mapped.filter((x) => x.status === "PAID").map((x) => x.orderId);
+    let dirty = false;
+    paidIds.forEach((id) => {
+      if (pendingOrderIds.delete(id)) dirty = true;
+    });
+    if (dirty) await savePendingSettlementOrderIds(pendingOrderIds);
+
+    return mapped;
+  }, []);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -161,11 +223,7 @@ export default function ShipperSettlementScreen() {
 
       void (async () => {
         try {
-          const rows = await OrderApi.getMyShipperOrders();
-          const mapped = rows
-            .map(mapOrderToSettlement)
-            .filter((x): x is SettlementItem => x !== null)
-            .sort((a, b) => b.scheduledAt.getTime() - a.scheduledAt.getTime());
+          const mapped = await fetchItems();
 
           if (!active) return;
           setItems(mapped);
@@ -180,7 +238,7 @@ export default function ShipperSettlementScreen() {
       return () => {
         active = false;
       };
-    }, [])
+    }, [fetchItems])
   );
 
   const isNextDisabled = compareMonth(viewMonth, currentMonth) >= 0;
@@ -206,6 +264,7 @@ export default function ShipperSettlementScreen() {
   );
 
   const onPressAction = async (item: SettlementItem) => {
+    if (submittingOrderId === item.orderId) return;
     if (item.status === "PAID") {
       setReceiptItem(item);
       return;
@@ -215,18 +274,57 @@ export default function ShipperSettlementScreen() {
       Alert.alert("안내", "계산서 보기 기능은 준비 중입니다.");
       return;
     }
+    if (item.status === "PENDING") {
+      Alert.alert("안내", "결제 요청 처리 중입니다.");
+      return;
+    }
 
     try {
+      setSubmittingOrderId(item.orderId);
       await SettlementService.initSettlement({ orderId: item.orderId, couponDiscount: 0, levelDiscount: 0 });
-      setItems((prev) =>
-        prev.map((row) =>
-          row.id === item.id ? { ...row, status: "PAID", actionLabel: toActionLabel("PAID") } : row
-        )
-      );
+      const pendingOrderIds = await loadPendingSettlementOrderIds();
+      pendingOrderIds.add(item.orderId);
+      await savePendingSettlementOrderIds(pendingOrderIds);
+      const refreshed = await fetchItems().catch(() => null);
+      if (refreshed) {
+        setItems(refreshed);
+      } else {
+        setItems((prev) =>
+          prev.map((row) =>
+            row.id === item.id ? { ...row, status: "PENDING", actionLabel: toActionLabel("PENDING") } : row
+          )
+        );
+      }
       Alert.alert("결제 요청", "결제 요청이 생성되었습니다.");
     } catch (error: any) {
       const msg = error?.response?.data?.message || "결제 요청 중 오류가 발생했습니다.";
+      const isDuplicate =
+        String(msg).includes("ORA-00001") ||
+        String(msg).toLowerCase().includes("unique") ||
+        String(msg).toLowerCase().includes("constraint") ||
+        String(msg).toLowerCase().includes("already");
+
+      if (isDuplicate) {
+        const pendingOrderIds = await loadPendingSettlementOrderIds();
+        pendingOrderIds.add(item.orderId);
+        await savePendingSettlementOrderIds(pendingOrderIds);
+        const refreshed = await fetchItems().catch(() => null);
+        if (refreshed) {
+          setItems(refreshed);
+        } else {
+          setItems((prev) =>
+            prev.map((row) =>
+              row.id === item.id ? { ...row, status: "PENDING", actionLabel: toActionLabel("PENDING") } : row
+            )
+          );
+        }
+        Alert.alert("안내", "이미 결제 요청된 건입니다.");
+        return;
+      }
+
       Alert.alert("오류", msg);
+    } finally {
+      setSubmittingOrderId((prev) => (prev === item.orderId ? null : prev));
     }
   };
 
@@ -234,68 +332,58 @@ export default function ShipperSettlementScreen() {
     () =>
       StyleSheet.create({
         page: { flex: 1, backgroundColor: "#F5F6FA" } as ViewStyle,
-        header: {
-          height: 72 + insets.top,
-          paddingTop: insets.top,
-          alignItems: "center",
-          justifyContent: "center",
-          backgroundColor: c.bg.surface,
-          borderBottomWidth: 1,
-          borderBottomColor: c.border.default,
-        } as ViewStyle,
-        headerTitle: { fontSize: 18, fontWeight: "900", color: c.text.primary } as TextStyle,
-        scrollContent: { paddingBottom: 28 } as ViewStyle,
+        scrollContent: { paddingBottom: 22 } as ViewStyle,
         monthRow: {
-          height: 86,
+          height: 72,
           flexDirection: "row",
           alignItems: "center",
           justifyContent: "center",
-          gap: 20,
+          gap: 14,
           borderBottomWidth: 1,
           borderBottomColor: c.border.default,
           backgroundColor: c.bg.surface,
         } as ViewStyle,
-        monthText: { fontSize: 20, fontWeight: "900", color: c.text.primary } as TextStyle,
+        monthText: { fontSize: 17, fontWeight: "900", color: c.text.primary } as TextStyle,
         monthNavBtn: {
-          width: 32,
-          height: 32,
+          width: 28,
+          height: 28,
           alignItems: "center",
           justifyContent: "center",
         } as ViewStyle,
         summaryCard: {
-          marginTop: 18,
-          marginHorizontal: 20,
-          borderRadius: 24,
-          paddingHorizontal: 22,
-          paddingVertical: 20,
+          marginTop: 14,
+          marginHorizontal: 16,
+          borderRadius: 18,
+          paddingHorizontal: 18,
+          paddingVertical: 16,
           backgroundColor: "#4E46E5",
         } as ViewStyle,
-        summaryCaption: { fontSize: 13, fontWeight: "700", color: "#DCD9FF" } as TextStyle,
-        summaryAmount: { marginTop: 10, fontSize: 24, fontWeight: "900", color: "#FFFFFF" } as TextStyle,
+        summaryCaption: { fontSize: 12, fontWeight: "700", color: "#DCD9FF" } as TextStyle,
+        summaryAmount: { marginTop: 8, fontSize: 21, fontWeight: "900", color: "#FFFFFF" } as TextStyle,
         summaryDivider: {
           height: 1,
           backgroundColor: "rgba(255,255,255,0.2)",
-          marginTop: 18,
-          marginBottom: 16,
+          marginTop: 14,
+          marginBottom: 12,
         } as ViewStyle,
         summaryBottomRow: { flexDirection: "row", alignItems: "center" } as ViewStyle,
         summaryCol: { flex: 1 } as ViewStyle,
-        summaryColDivider: { width: 1, height: 54, backgroundColor: "rgba(255,255,255,0.3)" } as ViewStyle,
-        summaryBig: { fontSize: 18, fontWeight: "900", color: "#FFFFFF" } as TextStyle,
-        summarySmall: { fontSize: 13, fontWeight: "700", color: "#DCD9FF" } as TextStyle,
+        summaryColDivider: { width: 1, height: 44, backgroundColor: "rgba(255,255,255,0.3)" } as ViewStyle,
+        summaryBig: { fontSize: 16, fontWeight: "900", color: "#FFFFFF" } as TextStyle,
+        summarySmall: { fontSize: 12, fontWeight: "700", color: "#DCD9FF" } as TextStyle,
         summaryBigRight: { textAlign: "right" } as TextStyle,
         summarySmallRight: { textAlign: "right" } as TextStyle,
         section: {
-          marginTop: 24,
-          paddingTop: 18,
+          marginTop: 16,
+          paddingTop: 14,
           borderTopWidth: 1,
           borderTopColor: c.border.default,
         } as ViewStyle,
-        filterRow: { flexDirection: "row", gap: 10, paddingHorizontal: 20 } as ViewStyle,
+        filterRow: { flexDirection: "row", gap: 8, paddingHorizontal: 16 } as ViewStyle,
         filterBtn: {
-          borderRadius: 22,
-          paddingHorizontal: 18,
-          height: 44,
+          borderRadius: 18,
+          paddingHorizontal: 14,
+          height: 38,
           justifyContent: "center",
           borderWidth: 1,
           borderColor: "#D4D9E3",
@@ -305,51 +393,51 @@ export default function ShipperSettlementScreen() {
           backgroundColor: "#0F172A",
           borderColor: "#0F172A",
         } as ViewStyle,
-        filterText: { fontSize: 15, fontWeight: "800", color: "#667085" } as TextStyle,
+        filterText: { fontSize: 13, fontWeight: "800", color: "#667085" } as TextStyle,
         filterTextActive: { color: "#FFFFFF" } as TextStyle,
-        listWrap: { marginTop: 14, paddingHorizontal: 20, gap: 12 } as ViewStyle,
+        listWrap: { marginTop: 10, paddingHorizontal: 16, gap: 10 } as ViewStyle,
         itemCard: {
-          borderRadius: 22,
+          borderRadius: 16,
           borderWidth: 1,
           borderColor: "#D9DEE7",
           backgroundColor: "#FFFFFF",
-          paddingHorizontal: 16,
-          paddingVertical: 16,
+          paddingHorizontal: 14,
+          paddingVertical: 12,
         } as ViewStyle,
         unpaidCard: { borderLeftWidth: 4, borderLeftColor: "#E05A55" } as ViewStyle,
         itemTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" } as ViewStyle,
-        dateRow: { flexDirection: "row", alignItems: "center", gap: 8 } as ViewStyle,
-        dateText: { fontSize: 14, fontWeight: "700", color: "#64748B" } as TextStyle,
-        statusBadge: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10 } as ViewStyle,
-        statusText: { fontSize: 13, fontWeight: "800" } as TextStyle,
-        amountText: { fontSize: 18, fontWeight: "900", color: c.text.primary } as TextStyle,
+        dateRow: { flexDirection: "row", alignItems: "center", gap: 6 } as ViewStyle,
+        dateText: { fontSize: 13, fontWeight: "700", color: "#64748B" } as TextStyle,
+        statusBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 } as ViewStyle,
+        statusText: { fontSize: 12, fontWeight: "800" } as TextStyle,
+        amountText: { fontSize: 16, fontWeight: "900", color: c.text.primary } as TextStyle,
         amountUnpaid: { color: "#E05A55" } as TextStyle,
-        routeText: { marginTop: 12, fontSize: 16, fontWeight: "900", color: c.text.primary } as TextStyle,
+        routeText: { marginTop: 10, fontSize: 14, fontWeight: "900", color: c.text.primary } as TextStyle,
         arrowText: { color: "#94A3B8" } as TextStyle,
-        actionRow: { marginTop: 10, flexDirection: "row", justifyContent: "flex-end" } as ViewStyle,
+        actionRow: { marginTop: 8, flexDirection: "row", justifyContent: "flex-end" } as ViewStyle,
         actionBtn: {
-          height: 40,
-          paddingHorizontal: 14,
-          borderRadius: 12,
+          height: 34,
+          paddingHorizontal: 12,
+          borderRadius: 10,
           flexDirection: "row",
           alignItems: "center",
-          gap: 6,
+          gap: 5,
           backgroundColor: "#EEF2FF",
         } as ViewStyle,
         actionBtnNeutral: { backgroundColor: "#EEF2F7" } as ViewStyle,
-        actionText: { fontSize: 14, fontWeight: "800", color: "#4E46E5" } as TextStyle,
+        actionText: { fontSize: 13, fontWeight: "800", color: "#4E46E5" } as TextStyle,
         actionTextNeutral: { color: "#64748B" } as TextStyle,
         emptyCard: {
-          marginHorizontal: 20,
-          marginTop: 14,
-          borderRadius: 16,
+          marginHorizontal: 16,
+          marginTop: 10,
+          borderRadius: 14,
           borderWidth: 1,
           borderColor: c.border.default,
           backgroundColor: c.bg.surface,
-          paddingVertical: 22,
+          paddingVertical: 18,
           alignItems: "center",
         } as ViewStyle,
-        emptyText: { fontSize: 14, fontWeight: "700", color: c.text.secondary } as TextStyle,
+        emptyText: { fontSize: 13, fontWeight: "700", color: c.text.secondary } as TextStyle,
         modalBackdrop: {
           flex: 1,
           backgroundColor: "rgba(0,0,0,0.28)",
@@ -357,50 +445,48 @@ export default function ShipperSettlementScreen() {
         } as ViewStyle,
         modalSheet: {
           backgroundColor: "#FFFFFF",
-          borderTopLeftRadius: 24,
-          borderTopRightRadius: 24,
-          paddingHorizontal: 18,
-          paddingTop: 18,
-          paddingBottom: Math.max(18, insets.bottom + 8),
+          borderTopLeftRadius: 20,
+          borderTopRightRadius: 20,
+          paddingHorizontal: 16,
+          paddingTop: 14,
+          paddingBottom: Math.max(14, insets.bottom + 6),
         } as ViewStyle,
         modalHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" } as ViewStyle,
-        modalTitle: { fontSize: 20, fontWeight: "900", color: c.text.primary } as TextStyle,
+        modalTitle: { fontSize: 18, fontWeight: "900", color: c.text.primary } as TextStyle,
         receiptCard: {
-          marginTop: 14,
-          borderRadius: 18,
+          marginTop: 10,
+          borderRadius: 14,
           borderWidth: 1,
           borderColor: "#E5EAF1",
           backgroundColor: "#FAFBFD",
-          padding: 16,
+          padding: 14,
         } as ViewStyle,
-        receiptAmount: { fontSize: 24, fontWeight: "900", textAlign: "center", color: c.text.primary } as TextStyle,
-        receiptPaid: { fontSize: 14, fontWeight: "700", textAlign: "center", color: "#64748B", marginTop: 2 } as TextStyle,
+        receiptAmount: { fontSize: 20, fontWeight: "900", textAlign: "center", color: c.text.primary } as TextStyle,
+        receiptPaid: { fontSize: 12, fontWeight: "700", textAlign: "center", color: "#64748B", marginTop: 2 } as TextStyle,
         receiptDash: {
           height: 1,
           borderStyle: "dashed",
           borderTopWidth: 2,
           borderColor: "#D9E0EA",
-          marginTop: 18,
-          marginBottom: 14,
+          marginTop: 14,
+          marginBottom: 10,
         } as ViewStyle,
-        receiptRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 10 } as ViewStyle,
-        receiptKey: { fontSize: 14, fontWeight: "700", color: "#64748B" } as TextStyle,
-        receiptVal: { fontSize: 14, fontWeight: "900", color: c.text.primary } as TextStyle,
-        receiptBlockGap: { height: 10 } as ViewStyle,
+        receiptRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 8 } as ViewStyle,
+        receiptKey: { fontSize: 13, fontWeight: "700", color: "#64748B" } as TextStyle,
+        receiptVal: { fontSize: 13, fontWeight: "900", color: c.text.primary } as TextStyle,
+        receiptBlockGap: { height: 8 } as ViewStyle,
       }),
     [c, insets.bottom, insets.top]
   );
 
   return (
     <View style={s.page}>
-      <View style={s.header}>
-        <Text style={s.headerTitle}>정산 내역</Text>
-      </View>
+      <ShipperScreenHeader title="정산 내역" hideBackButton />
 
       <ScrollView contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={s.monthRow}>
           <Pressable style={s.monthNavBtn} onPress={() => setViewMonth((prev) => addMonth(prev, -1))}>
-            <Ionicons name="chevron-back" size={28} color={c.text.primary} />
+            <Ionicons name="chevron-back" size={24} color={c.text.primary} />
           </Pressable>
           <Text style={s.monthText}>{viewMonthLabel}</Text>
           <Pressable
@@ -410,7 +496,7 @@ export default function ShipperSettlementScreen() {
               setViewMonth((prev) => (compareMonth(prev, currentMonth) >= 0 ? prev : addMonth(prev, 1)))
             }
           >
-            <Ionicons name="chevron-forward" size={28} color={isNextDisabled ? "#CBD5E1" : c.text.primary} />
+            <Ionicons name="chevron-forward" size={24} color={isNextDisabled ? "#CBD5E1" : c.text.primary} />
           </Pressable>
         </View>
 
@@ -463,6 +549,7 @@ export default function ShipperSettlementScreen() {
             <View style={s.listWrap}>
               {filtered.map((item) => {
                 const isUnpaid = item.status === "UNPAID";
+                const isPending = item.status === "PENDING";
                 const isPaid = item.status === "PAID";
                 return (
                   <View key={item.id} style={[s.itemCard, isUnpaid && s.unpaidCard]}>
@@ -472,10 +559,17 @@ export default function ShipperSettlementScreen() {
                         <View
                           style={[
                             s.statusBadge,
-                            { backgroundColor: isUnpaid ? "#FDE7E5" : isPaid ? "#DCFCE7" : "#E0ECFF" },
+                            {
+                              backgroundColor: isUnpaid ? "#FDE7E5" : isPending ? "#FEF9C3" : isPaid ? "#DCFCE7" : "#E0ECFF",
+                            },
                           ]}
                         >
-                          <Text style={[s.statusText, { color: isUnpaid ? "#D44B46" : isPaid ? "#15803D" : "#2E6DA4" }]}>
+                          <Text
+                            style={[
+                              s.statusText,
+                              { color: isUnpaid ? "#D44B46" : isPending ? "#A16207" : isPaid ? "#15803D" : "#2E6DA4" },
+                            ]}
+                          >
                             {statusLabel(item.status)}
                           </Text>
                         </View>
@@ -488,23 +582,33 @@ export default function ShipperSettlementScreen() {
                     </Text>
 
                     <View style={s.actionRow}>
+                      {(() => {
+                        const isSubmitting = submittingOrderId === item.orderId;
+                        return (
                       <Pressable
                         style={[s.actionBtn, !isUnpaid && s.actionBtnNeutral]}
+                        disabled={isSubmitting || isPending}
                         onPress={() => void onPressAction(item)}
                       >
                         <MaterialCommunityIcons
                           name={
                             item.status === "PAID"
                               ? "file-document-outline"
+                              : item.status === "PENDING"
+                                ? "timer-sand"
                               : item.status === "TAX_INVOICE"
                                 ? "file-outline"
                                 : "credit-card-outline"
                           }
-                          size={16}
-                          color={isUnpaid ? "#4E46E5" : "#64748B"}
+                          size={14}
+                          color={isUnpaid ? "#4E46E5" : isPending ? "#A16207" : "#64748B"}
                         />
-                        <Text style={[s.actionText, !isUnpaid && s.actionTextNeutral]}>{item.actionLabel}</Text>
+                        <Text style={[s.actionText, !isUnpaid && s.actionTextNeutral]}>
+                          {isSubmitting ? "요청중..." : item.actionLabel}
+                        </Text>
                       </Pressable>
+                        );
+                      })()}
                     </View>
                   </View>
                 );
@@ -520,7 +624,7 @@ export default function ShipperSettlementScreen() {
             <View style={s.modalHeader}>
               <Text style={s.modalTitle}>운송 영수증</Text>
               <Pressable onPress={() => setReceiptItem(null)}>
-                <Ionicons name="close" size={32} color={c.text.primary} />
+                <Ionicons name="close" size={28} color={c.text.primary} />
               </Pressable>
             </View>
 

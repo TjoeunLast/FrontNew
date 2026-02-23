@@ -17,7 +17,7 @@ import {
   sortLiveOrdersByLatest,
   type LiveOrderItem,
   type SummaryItem,
-} from "./ShipperHomeScreen~tool";
+} from "./ShipperHomeScreen.tool";
 
 
 
@@ -201,7 +201,13 @@ useFocusEffect(
                   item.status === "DRIVING" && isWithinNextHour(item.dropoffTimeHHmm)
                     ? "곧 도착"
                     : (item.drivingStageLabel ||
-                      (item.status === "DRIVING" ? "배달 중" : item.status === "DISPATCHED" ? "상차 완료" : "대기"))
+                      (item.status === "DRIVING"
+                        ? "배달 중"
+                        : item.status === "DISPATCHED"
+                          ? "상차 완료"
+                          : item.status === "DONE"
+                            ? "완료"
+                            : "대기"))
                 }
                 etaHHmm={item.dropoffTimeHHmm}
                 isEtaUrgent={isWithinNextHour(item.dropoffTimeHHmm)}

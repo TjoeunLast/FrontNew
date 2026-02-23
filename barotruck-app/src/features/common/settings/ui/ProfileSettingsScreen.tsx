@@ -16,9 +16,11 @@ import {
   type TextStyle,
   type ViewStyle,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { UserService } from "@/shared/api/userService";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
+import ShipperScreenHeader from "@/shared/ui/layout/ShipperScreenHeader";
 import { getCurrentUserSnapshot } from "@/shared/utils/currentUserStorage";
 
 const PROFILE_IMAGE_STORAGE_KEY = "baro_profile_image_url_v1";
@@ -26,17 +28,41 @@ const PROFILE_IMAGE_STORAGE_KEY = "baro_profile_image_url_v1";
 type ProfileState = {
   nickname: string;
   gender: string;
-  role: string;
+  shipperType: string;
   email: string;
   age: string;
   imageUrl: string;
 };
 
-function roleToKorean(role: string) {
-  if (role === "SHIPPER") return "화주";
-  if (role === "DRIVER") return "차주";
-  if (role === "ADMIN") return "관리자";
-  return role || "-";
+function toShipperTypeLabel(raw?: string) {
+  const v = String(raw ?? "").trim().toUpperCase();
+  if (!v) return "-";
+  if (v === "Y" || v === "CORPORATE" || v === "BUSINESS" || v === "BIZ" || v === "사업자") return "사업자";
+  if (v === "N" || v === "PERSONAL" || v === "INDIVIDUAL" || v === "개인") return "개인";
+  return "-";
+}
+
+function resolveShipperType(me: any) {
+  const role = String(me?.role ?? "").toUpperCase();
+  if (role !== "SHIPPER") return "-";
+
+  const explicitType = toShipperTypeLabel(
+    me?.isCorporate ??
+      me?.shipper?.isCorporate ??
+      me?.shipperInfo?.isCorporate ??
+      me?.shipperDto?.isCorporate
+  );
+  if (explicitType !== "-") return explicitType;
+
+  const hasBizInfo = Boolean(
+    me?.bizRegNum ??
+      me?.shipper?.bizRegNum ??
+      me?.shipperInfo?.bizRegNum ??
+      me?.companyName ??
+      me?.shipper?.companyName ??
+      me?.shipperInfo?.companyName
+  );
+  return hasBizInfo ? "사업자" : "개인";
 }
 
 function normalizeGender(input?: string) {
@@ -73,11 +99,12 @@ export default function ProfileSettingsScreen() {
   const router = useRouter();
   const t = useAppTheme();
   const c = t.colors;
+  const insets = useSafeAreaInsets();
 
   const [profile, setProfile] = React.useState<ProfileState>({
     nickname: "-",
     gender: "-",
-    role: "-",
+    shipperType: "-",
     email: "-",
     age: "-",
     imageUrl: "",
@@ -97,7 +124,7 @@ export default function ProfileSettingsScreen() {
           const next: ProfileState = {
             nickname: me.nickname || "-",
             gender: normalizeGender(me.gender ?? me.sex),
-            role: roleToKorean(me.role || ""),
+            shipperType: resolveShipperType(me),
             email: me.email || "-",
             age: normalizeAge(me.age),
             imageUrl: localImageUrl || me.profileImageUrl || "",
@@ -112,7 +139,7 @@ export default function ProfileSettingsScreen() {
           const next: ProfileState = {
             nickname: cached?.nickname || "-",
             gender: "-",
-            role: roleToKorean(cached?.role || ""),
+            shipperType: cached?.role === "SHIPPER" ? "개인" : "-",
             email: cached?.email || "-",
             age: "-",
             imageUrl: localImageUrl,
@@ -228,13 +255,8 @@ export default function ProfileSettingsScreen() {
     () =>
       StyleSheet.create({
         page: { flex: 1, backgroundColor: c.bg.canvas } as ViewStyle,
-        content: { padding: 20, paddingBottom: 36 } as ViewStyle,
-        backRow: { flexDirection: "row", alignItems: "center", gap: 4 } as ViewStyle,
-        backText: { color: c.text.primary, fontSize: 14, fontWeight: "700" } as TextStyle,
-        title: { marginTop: 10, color: c.text.primary, fontSize: 28, fontWeight: "900" } as TextStyle,
-        subtitle: { marginTop: 8, color: c.text.secondary, fontSize: 13, fontWeight: "600" } as TextStyle,
+        content: { padding: 20, paddingTop: 12, paddingBottom: 36 } as ViewStyle,
         card: {
-          marginTop: 18,
           padding: 18,
           borderRadius: 18,
           borderWidth: 1,
@@ -275,13 +297,25 @@ export default function ProfileSettingsScreen() {
           backgroundColor: c.bg.surface,
         } as ViewStyle,
         saveBtn: {
-          marginTop: 4,
           height: 44,
           borderRadius: 12,
           alignItems: "center",
           justifyContent: "center",
           backgroundColor: hasImageChange ? c.brand.primary : c.bg.muted,
           opacity: loadingImage ? 0.7 : 1,
+        } as ViewStyle,
+        saveBtnOutside: {
+          marginHorizontal: 20,
+        } as ViewStyle,
+        bottomActionBar: {
+          position: "absolute",
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: c.bg.canvas,
+          borderTopWidth: 1,
+          borderTopColor: c.border.default,
+          paddingTop: 10,
         } as ViewStyle,
         saveBtnText: {
           color: hasImageChange ? c.text.inverse : c.text.secondary,
@@ -312,57 +346,78 @@ export default function ProfileSettingsScreen() {
   );
 
   return (
-    <ScrollView style={s.page} contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
-      <Pressable style={s.backRow} onPress={() => router.back()}>
-        <Ionicons name="chevron-back" size={20} color={c.text.primary} />
-        <Text style={s.backText}></Text>
-      </Pressable>
-      <View style={s.card}>
-        <View style={s.avatarWrap}>
-          <View style={s.avatarCircle}>
-            {draftImageUri ? (
-              <Image source={{ uri: draftImageUri }} style={s.avatarImage} resizeMode="cover" />
-            ) : (
-              <Ionicons name="person" size={56} color={c.text.secondary} />
-            )}
+    <View style={s.page}>
+      <ShipperScreenHeader
+        title="프로필 설정"
+        onPressBack={() => {
+          if (router.canGoBack()) {
+            router.back();
+            return;
+          }
+          router.replace("/(shipper)/(tabs)/my" as any);
+        }}
+      />
+      <ScrollView
+        contentContainerStyle={[
+          s.content,
+          {
+            paddingBottom: Math.max(120, insets.bottom + 88),
+          },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={s.card}>
+          <View style={s.avatarWrap}>
+            <View style={s.avatarCircle}>
+              {draftImageUri ? (
+                <Image source={{ uri: draftImageUri }} style={s.avatarImage} resizeMode="cover" />
+              ) : (
+                <Ionicons name="person" size={56} color={c.text.secondary} />
+              )}
+            </View>
+            <Pressable style={s.editIconButton} onPress={openEditMenu} disabled={loadingImage}>
+              <Ionicons name="create-outline" size={16} color={c.text.primary} />
+            </Pressable>
           </View>
-          <Pressable style={s.editIconButton} onPress={openEditMenu} disabled={loadingImage}>
-            <Ionicons name="create-outline" size={16} color={c.text.primary} />
-          </Pressable>
-        </View>
 
-        <Pressable style={s.saveBtn} onPress={() => void onSaveImage()} disabled={!hasImageChange || loadingImage}>
+          <Text style={s.infoTitle}>기본 정보</Text>
+          <View style={s.infoTable}>
+            <View style={s.row}>
+              <Text style={s.label}>닉네임</Text>
+              <Text style={s.value}>{profile.nickname}</Text>
+            </View>
+            <View style={s.rowDivider} />
+            <View style={s.row}>
+              <Text style={s.label}>성별</Text>
+              <Text style={s.value}>{profile.gender}</Text>
+            </View>
+            <View style={s.rowDivider} />
+            <View style={s.row}>
+              <Text style={s.label}>화주 구분</Text>
+              <Text style={s.value}>{profile.shipperType}</Text>
+            </View>
+            <View style={s.rowDivider} />
+            <View style={s.row}>
+              <Text style={s.label}>이메일</Text>
+              <Text style={s.value}>{profile.email}</Text>
+            </View>
+            <View style={s.rowDivider} />
+            <View style={s.row}>
+              <Text style={s.label}>나이</Text>
+              <Text style={s.value}>{profile.age}</Text>
+            </View>
+          </View>
+        </View>
+      </ScrollView>
+      <View style={[s.bottomActionBar, { paddingBottom: Math.max(10, insets.bottom + 6) }]}>
+        <Pressable
+          style={[s.saveBtn, s.saveBtnOutside]}
+          onPress={() => void onSaveImage()}
+          disabled={!hasImageChange || loadingImage}
+        >
           <Text style={s.saveBtnText}>{loadingImage ? "처리 중..." : "수정"}</Text>
         </Pressable>
-
-        <Text style={s.infoTitle}>기본 정보</Text>
-        <View style={s.infoTable}>
-          <View style={s.row}>
-            <Text style={s.label}>닉네임</Text>
-            <Text style={s.value}>{profile.nickname}</Text>
-          </View>
-          <View style={s.rowDivider} />
-          <View style={s.row}>
-            <Text style={s.label}>성별</Text>
-            <Text style={s.value}>{profile.gender}</Text>
-          </View>
-          <View style={s.rowDivider} />
-          <View style={s.row}>
-            <Text style={s.label}>사용자 구분</Text>
-            <Text style={s.value}>{profile.role}</Text>
-          </View>
-          <View style={s.rowDivider} />
-          <View style={s.row}>
-            <Text style={s.label}>이메일</Text>
-            <Text style={s.value}>{profile.email}</Text>
-          </View>
-          <View style={s.rowDivider} />
-          <View style={s.row}>
-            <Text style={s.label}>나이</Text>
-            <Text style={s.value}>{profile.age}</Text>
-          </View>
-        </View>
       </View>
-    </ScrollView>
+    </View>
   );
 }
