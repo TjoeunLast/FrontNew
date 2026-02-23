@@ -45,6 +45,8 @@ export default function SignupShipperScreen() {
     password: string;
     name: string;
     phone: string;
+    gender?: string;
+    age?: string;
   }>();
 
   const [shipperType, setShipperType] = useState<ShipperType>("business");
@@ -180,12 +182,18 @@ export default function SignupShipperScreen() {
 
     setSubmitting(true);
     try {
+      const gender = params.gender === "M" || params.gender === "F" ? params.gender : undefined;
+      const ageParam = Number.parseInt(String(params.age ?? ""), 10);
+      const age = Number.isFinite(ageParam) && ageParam > 0 ? ageParam : undefined;
+
       const payload: RegisterRequest = {
         nickname: nickname.trim(),
         email: params.email,
         password: params.password,
         phone: params.phone,
         role: "SHIPPER",
+        gender,
+        age,
         shipper:
           shipperType === "business"
             ? {
@@ -204,6 +212,8 @@ export default function SignupShipperScreen() {
         name: params.name,
         nickname: nickname.trim(),
         role: "SHIPPER",
+        gender,
+        age,
       });
 
       // 4. 메인 탭으로 이동

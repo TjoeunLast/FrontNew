@@ -216,10 +216,14 @@ export default function SignupDriverScreen() {
     email = "",
     password = "",
     phone = "",
+    gender = "",
+    age = "",
   } = useLocalSearchParams<{
     email: string;
     password: string;
     phone: string;
+    gender?: string;
+    age?: string;
   }>();
 
   const [nickname, setNickname] = useState("");
@@ -357,12 +361,18 @@ export default function SignupDriverScreen() {
     if (submitting) return;
     setSubmitting(true);
     try {
+      const genderParam = gender === "M" || gender === "F" ? gender : undefined;
+      const ageParam = Number.parseInt(digitsOnly(String(age)), 10);
+      const parsedAge = Number.isFinite(ageParam) && ageParam > 0 ? ageParam : undefined;
+
       const payload: RegisterRequest = {
         email,
         password,
         nickname: nickname.trim(),
         phone,
         role: "DRIVER",
+        gender: genderParam,
+        age: parsedAge,
         driver: {
           carNum: normalizePlate(plateNo),
           carType: carType || "CARGO",

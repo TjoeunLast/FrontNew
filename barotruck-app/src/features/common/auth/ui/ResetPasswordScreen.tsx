@@ -25,17 +25,15 @@ export default function ResetPasswordScreen() {
   const pwMatch = pw.length > 0 && pw === pw2;
   const canSubmit = isUserFound && pwOk && pwMatch && !submitting;
 
-  // 1. 이메일 존재 여부 확인 (checkNickname 로직 응용)
+  // 1. 이메일 존재 여부 확인
   const onCheckEmail = async () => {
     if (!emailOk) return Alert.alert("확인", "올바른 이메일 형식을 입력해주세요.");
 
     try {
       setSubmitting(true);
-      // 백엔드의 checkNickname이 이메일 중복 체크도 겸한다면 이를 활용
-      const isDuplicated = await UserService.checkNickname(email);
+      const isExists = await UserService.checkEmailExists(email);
       
-      if (isDuplicated) {
-        // 중복됨 = 가입된 계정이 있음
+      if (isExists) {
         setIsUserFound(true);
         Alert.alert("확인 완료", "계정이 확인되었습니다. 새 비밀번호를 입력하세요.");
       } else {

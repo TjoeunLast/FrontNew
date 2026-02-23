@@ -31,7 +31,17 @@ import {
   saveCurrentUserSnapshot,
 } from "@/shared/utils/currentUserStorage";
 
-const PROFILE_IMAGE_STORAGE_KEY = "baro_profile_image_url_v1";
+function toProfileOwnerKey(email?: string, userId?: number | string) {
+  const emailKey = String(email ?? "").trim().toLowerCase();
+  if (emailKey) return emailKey.replace(/[^a-z0-9@._-]/g, "_");
+  const idKey = String(userId ?? "").trim();
+  if (idKey) return `uid_${idKey.replace(/[^a-z0-9_-]/gi, "_")}`;
+  return "guest";
+}
+
+function toProfileImageStorageKey(ownerKey: string) {
+  return `baro_profile_image_url_v1:${ownerKey}`;
+}
 
 type ProfileView = {
   email: string;
@@ -48,12 +58,54 @@ function roleToKorean(role: string) {
   return role || "-";
 }
 
-function resolveShipperType(me: any) {
-  const isCorporateRaw = String(me?.isCorporate ?? "").trim().toUpperCase();
-  if (isCorporateRaw === "Y") return "사업자";
-  if (isCorporateRaw === "N") return "개인";
+function toShipperTypeLabel(raw?: string) {
+  const v = String(raw ?? "").trim().toUpperCase();
+  if (!v) return "-";
+  if (v === "Y" || v === "CORPORATE" || v === "BUSINESS" || v === "BIZ" || v === "사업자") return "사업자";
+  if (v === "N" || v === "PERSONAL" || v === "INDIVIDUAL" || v === "개인") return "개인";
+  return "-";
+}
 
-  const hasBusinessInfo = Boolean(String(me?.bizRegNum ?? "").trim() || String(me?.companyName ?? "").trim());
+function resolveShipperType(me: any) {
+  const explicitType = toShipperTypeLabel(
+    me?.isCorporate ??
+      me?.IS_CORPORATE ??
+      me?.is_corporate ??
+      me?.shipper?.isCorporate ??
+      me?.shipper?.IS_CORPORATE ??
+      me?.shipper?.is_corporate ??
+      me?.shipperInfo?.isCorporate ??
+      me?.shipperInfo?.IS_CORPORATE ??
+      me?.shipperInfo?.is_corporate ??
+      me?.shipperDto?.isCorporate ??
+      me?.shipperDto?.IS_CORPORATE ??
+      me?.shipperDto?.is_corporate
+  );
+  if (explicitType !== "-") return explicitType;
+
+  const hasBusinessInfo = Boolean(
+    String(
+      me?.bizRegNum ??
+        me?.BIZ_REG_NUM ??
+        me?.biz_reg_num ??
+        me?.shipper?.bizRegNum ??
+        me?.shipper?.BIZ_REG_NUM ??
+        me?.shipper?.biz_reg_num ??
+        me?.shipperInfo?.bizRegNum ??
+        me?.shipperInfo?.BIZ_REG_NUM ??
+        me?.shipperInfo?.biz_reg_num ??
+        me?.companyName ??
+        me?.COMPANY_NAME ??
+        me?.company_name ??
+        me?.shipper?.companyName ??
+        me?.shipper?.COMPANY_NAME ??
+        me?.shipper?.company_name ??
+        me?.shipperInfo?.companyName ??
+        me?.shipperInfo?.COMPANY_NAME ??
+        me?.shipperInfo?.company_name ??
+        ""
+    ).trim()
+  );
   return hasBusinessInfo ? "사업자" : "개인";
 }
 
@@ -63,7 +115,12 @@ async function fetchShipperTypeFromServer(baseMe: any) {
     const role = String(baseMe?.role ?? "").trim().toUpperCase();
     if (role !== "SHIPPER") return "-";
     const res = await apiClient.get("/api/v1/shippers/me");
-    return resolveShipperType(res.data);
+    const shipperPayload =
+      res.data?.data ??
+      res.data?.user ??
+      res.data?.result ??
+      res.data;
+    return resolveShipperType(shipperPayload);
   } catch {
     return resolveShipperType(baseMe);
   }
@@ -90,11 +147,13 @@ export default function ShipperMyScreen() {
       let active = true;
 
       void (async () => {
-        const localImageUrl = (await AsyncStorage.getItem(PROFILE_IMAGE_STORAGE_KEY)) ?? "";
-
         try {
           const me = await UserService.getMyInfo();
           const cached = await getCurrentUserSnapshot();
+          const ownerKey = toProfileOwnerKey(me.email ?? cached?.email, (me as any).userId);
+          const scopedStorageKey = toProfileImageStorageKey(ownerKey);
+          const scopedImageUrl = (await AsyncStorage.getItem(scopedStorageKey)) ?? "";
+          const localImageUrl = scopedImageUrl;
           const shipperType = await fetchShipperTypeFromServer(me);
           const next: ProfileView = {
             email: me.email || "-",
@@ -111,11 +170,12 @@ export default function ShipperMyScreen() {
             nickname: me.nickname,
             name: me.name || cached?.name,
             role: me.role,
+            gender: (me as any).gender ?? (me as any).sex ?? cached?.gender,
+            age: (me as any).age ?? cached?.age,
           });
         } catch {
           const cached = await getCurrentUserSnapshot();
           if (!active) return;
-          setProfileImageUrl(localImageUrl);
           if (!cached) return;
           setProfile({
             email: cached.email || "-",
@@ -124,6 +184,10 @@ export default function ShipperMyScreen() {
             role: roleToKorean(cached.role || ""),
             shipperType: "-",
           });
+          const ownerKey = toProfileOwnerKey(cached.email);
+          const scopedStorageKey = toProfileImageStorageKey(ownerKey);
+          const scopedImageUrl = (await AsyncStorage.getItem(scopedStorageKey)) ?? "";
+          setProfileImageUrl(scopedImageUrl);
         }
       })();
 

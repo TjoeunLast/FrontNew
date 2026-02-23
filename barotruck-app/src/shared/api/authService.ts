@@ -25,6 +25,8 @@ export const AuthService = {
           nickname: data.nickname || '목업사용자',
           phone: data.phone || '01000000000',
           role: data.role || 'SHIPPER',
+          gender: data.gender,
+          age: data.age,
         })
       );
       return mockRes;
@@ -47,10 +49,20 @@ export const AuthService = {
   login: async (email: string, password: string): Promise<AuthResponse> => {
     if (USE_MOCK) {
       const role = /driver/i.test(email) ? 'DRIVER' : 'SHIPPER';
+      let previousSession: any = {};
+      try {
+        const prevRaw = await SecureStore.getItemAsync('baro_mock_auth_session');
+        previousSession = prevRaw ? JSON.parse(prevRaw) : {};
+      } catch {
+        previousSession = {};
+      }
+      const sameAccount =
+        String(previousSession?.email ?? "").trim().toLowerCase() ===
+        String(email).trim().toLowerCase();
       const mockRes: AuthResponse = {
         access_token: `mock-access-${Date.now()}`,
         refresh_token: `mock-refresh-${Date.now()}`,
-        user_id: Date.now(),
+        user_id: sameAccount ? Number(previousSession?.userId ?? Date.now()) : Date.now(),
       };
 
       await SecureStore.setItemAsync('userToken', mockRes.access_token);
@@ -60,9 +72,13 @@ export const AuthService = {
         JSON.stringify({
           userId: mockRes.user_id,
           email,
-          nickname: email.split('@')[0] || '목업사용자',
+          nickname: sameAccount
+            ? String(previousSession?.nickname ?? email.split('@')[0] ?? '목업사용자')
+            : email.split('@')[0] || '목업사용자',
           phone: '01012345678',
           role,
+          gender: sameAccount ? previousSession?.gender : undefined,
+          age: sameAccount ? previousSession?.age : undefined,
           passwordHint: password ? 'set' : 'empty',
         })
       );

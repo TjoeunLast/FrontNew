@@ -9,6 +9,8 @@ export type CurrentUserSnapshot = {
   nickname: string;
   name?: string;
   role: CurrentUserRole;
+  gender?: string;
+  age?: number | string;
 };
 
 const CURRENT_USER_KEY = "baro_current_user_snapshot";

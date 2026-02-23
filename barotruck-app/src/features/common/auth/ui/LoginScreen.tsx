@@ -56,6 +56,8 @@ export default function LoginScreen() {
         email: me.email,
         nickname: me.nickname,
         role: me.role,
+        gender: (me as any).gender ?? (me as any).sex,
+        age: (me as any).age,
       }).catch(() => {});
 
       if (me.role === "DRIVER") {

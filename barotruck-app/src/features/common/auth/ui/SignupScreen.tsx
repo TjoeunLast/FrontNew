@@ -14,6 +14,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import DateTimePicker, { type DateTimePickerEvent } from "@react-native-community/datetimepicker";
 
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import { TextField } from "@/shared/ui/form/TextField";
@@ -25,6 +26,7 @@ import { UserService } from "@/shared/api/userService";
 
 
 type Role = "shipper" | "driver";
+type Gender = "M" | "F";
 type Step = "role" | "account";
 
 function normalizeEmail(v: string) {
@@ -47,6 +49,20 @@ function showMsg(title: string, msg: string) {
   if (Platform.OS === "web") window.alert(`${title}\n\n${msg}`);
   else Alert.alert(title, msg);
 }
+function formatBirthDate(d: Date) {
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+function calcAgeFromBirthDate(birthDate: Date) {
+  const today = new Date();
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const monthDiff = today.getMonth() - birthDate.getMonth();
+  const dayDiff = today.getDate() - birthDate.getDate();
+  if (monthDiff < 0 || (monthDiff === 0 && dayDiff < 0)) age -= 1;
+  return age;
+}
 
 export default function SignupScreen() {
   const router = useRouter();
@@ -62,6 +78,9 @@ export default function SignupScreen() {
   const [pw2, setPw2] = useState("");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const [gender, setGender] = useState<Gender | null>(null);
+  const [birthDate, setBirthDate] = useState<Date | null>(null);
+  const [birthPickerOpen, setBirthPickerOpen] = useState(false);
 
   const [emailChecked, setEmailChecked] = useState(false);
   const [emailOkChecked, setEmailOkChecked] = useState(false);
@@ -159,6 +178,25 @@ export default function SignupScreen() {
         justifyContent: "center",
       } as ViewStyle,
       miniBtnText: { fontSize: 15, fontWeight: "900", color: c.text.primary } as TextStyle,
+      choiceBtn: {
+        flex: 1,
+        minHeight: 44,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: c.border.default,
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: c.bg.surface,
+      } as ViewStyle,
+      choiceBtnActive: {
+        borderColor: c.brand.primary,
+        backgroundColor: c.brand.primarySoft,
+      } as ViewStyle,
+      choiceBtnText: {
+        fontSize: 14,
+        fontWeight: "900",
+        color: c.text.primary,
+      } as TextStyle,
 
       helper: { marginTop: 8, fontSize: 13, fontWeight: "800", color: c.text.secondary } as TextStyle,
 
@@ -204,6 +242,9 @@ export default function SignupScreen() {
   const pwOk = pw.length >= 8;
   const pwMatch = pw.length > 0 && pw2.length > 0 && pw === pw2;
   const nameOk = name.trim().length > 0;
+  const genderOk = !!gender;
+  const ageNum = birthDate ? calcAgeFromBirthDate(birthDate) : Number.NaN;
+  const ageOk = Number.isFinite(ageNum) && ageNum >= 1 && ageNum <= 120;
   const phoneFormatOk = isPhoneLike(phone);
 
   const canNext =
@@ -212,6 +253,8 @@ export default function SignupScreen() {
     pwOk &&
     pwMatch &&
     nameOk &&
+    genderOk &&
+    ageOk &&
     phoneFormatOk &&
     phoneVerified;
 
@@ -238,6 +281,11 @@ export default function SignupScreen() {
     }
     showMsg("인증 실패", "인증번호가 올바르지 않아요.");
   };
+  const onChangeBirthDate = (event: DateTimePickerEvent, picked?: Date) => {
+    if (Platform.OS === "android") setBirthPickerOpen(false);
+    if (event.type === "dismissed" || !picked) return;
+    setBirthDate(picked);
+  };
 
 
 
@@ -259,6 +307,8 @@ export default function SignupScreen() {
       password: pw,
       name: name.trim(),
       phone: phone.trim(),
+      gender,
+      age: String(ageNum),
       role: role,
     };
 
@@ -381,6 +431,70 @@ export default function SignupScreen() {
 
             <Text style={s.label}>이름</Text>
             <TextField value={name} onChangeText={setName} placeholder="실명 입력" autoCapitalize="none" inputWrapStyle={s.tfWrap} inputStyle={s.tfInput} />
+
+            <View style={{ height: 16 }} />
+
+            <Text style={s.label}>성별</Text>
+            <View style={s.row}>
+              <Pressable
+                style={[s.choiceBtn, gender === "M" && s.choiceBtnActive]}
+                onPress={() => setGender("M")}
+              >
+                <Text style={s.choiceBtnText}>남성</Text>
+              </Pressable>
+              <View style={s.rowGap} />
+              <Pressable
+                style={[s.choiceBtn, gender === "F" && s.choiceBtnActive]}
+                onPress={() => setGender("F")}
+              >
+                <Text style={s.choiceBtnText}>여성</Text>
+              </Pressable>
+            </View>
+
+            <View style={{ height: 16 }} />
+
+            <Text style={s.label}>생년월일</Text>
+            <Pressable
+              onPress={() => setBirthPickerOpen((v) => !v)}
+              style={[
+                s.tfWrap,
+                {
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  s.tfInput,
+                  { color: birthDate ? c.text.primary : c.text.secondary },
+                ]}
+              >
+                {birthDate ? formatBirthDate(birthDate) : "생년월일 선택"}
+              </Text>
+              <Ionicons name="calendar-outline" size={18} color={c.text.secondary} />
+            </Pressable>
+            {birthPickerOpen ? (
+              <View style={{ marginTop: 8 }}>
+                <DateTimePicker
+                  value={birthDate ?? new Date(2000, 0, 1)}
+                  mode="date"
+                  display={Platform.OS === "ios" ? "spinner" : "default"}
+                  onChange={onChangeBirthDate}
+                  maximumDate={new Date()}
+                  minimumDate={new Date(1900, 0, 1)}
+                />
+              </View>
+            ) : null}
+            {birthDate && ageOk ? (
+              <Text style={s.helper}>만 {ageNum}세</Text>
+            ) : null}
+            {birthDate && !ageOk ? (
+              <Text style={[s.helper, { color: c.status.danger }]}>
+                생년월일을 올바르게 선택해주세요. (1~120세)
+              </Text>
+            ) : null}
 
             <View style={{ height: 16 }} />
 

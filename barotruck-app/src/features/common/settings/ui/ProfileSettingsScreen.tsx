@@ -19,11 +19,12 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { UserService } from "@/shared/api/userService";
+import apiClient from "@/shared/api/apiClient";
+import { USE_MOCK } from "@/shared/config/mock";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import ShipperScreenHeader from "@/shared/ui/layout/ShipperScreenHeader";
 import { getCurrentUserSnapshot } from "@/shared/utils/currentUserStorage";
 
-const PROFILE_IMAGE_STORAGE_KEY = "baro_profile_image_url_v1";
 
 type ProfileState = {
   nickname: string;
@@ -48,19 +49,28 @@ function resolveShipperType(me: any) {
 
   const explicitType = toShipperTypeLabel(
     me?.isCorporate ??
+      me?.is_corporate ??
       me?.shipper?.isCorporate ??
+      me?.shipper?.is_corporate ??
       me?.shipperInfo?.isCorporate ??
+      me?.shipperInfo?.is_corporate ??
       me?.shipperDto?.isCorporate
   );
   if (explicitType !== "-") return explicitType;
 
   const hasBizInfo = Boolean(
     me?.bizRegNum ??
+      me?.biz_reg_num ??
       me?.shipper?.bizRegNum ??
+      me?.shipper?.biz_reg_num ??
       me?.shipperInfo?.bizRegNum ??
+      me?.shipperInfo?.biz_reg_num ??
       me?.companyName ??
+      me?.company_name ??
       me?.shipper?.companyName ??
-      me?.shipperInfo?.companyName
+      me?.shipper?.company_name ??
+      me?.shipperInfo?.companyName ??
+      me?.shipperInfo?.company_name
   );
   return hasBizInfo ? "사업자" : "개인";
 }
@@ -74,22 +84,109 @@ function normalizeGender(input?: string) {
 }
 
 function normalizeAge(input?: number | string) {
-  if (typeof input === "number" && Number.isFinite(input) && input > 0) return `${Math.floor(input)}세`;
+  if (typeof input === "number" && Number.isFinite(input) && input > 0) return `만 ${Math.floor(input)}세`;
   if (typeof input === "string" && input.trim()) {
     const onlyNum = Number(input.replace(/[^\d]/g, ""));
-    if (Number.isFinite(onlyNum) && onlyNum > 0) return `${Math.floor(onlyNum)}세`;
+    if (Number.isFinite(onlyNum) && onlyNum > 0) return `만 ${Math.floor(onlyNum)}세`;
   }
   return "-";
 }
 
-async function persistProfileImage(uri: string): Promise<string> {
+function calcAgeFromBirthDate(value?: string | number | Date) {
+  if (!value) return undefined;
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) return undefined;
+  const today = new Date();
+  let age = today.getFullYear() - d.getFullYear();
+  const monthDiff = today.getMonth() - d.getMonth();
+  const dayDiff = today.getDate() - d.getDate();
+  if (monthDiff < 0 || (monthDiff === 0 && dayDiff < 0)) age -= 1;
+  return age > 0 ? age : undefined;
+}
+
+function resolveGenderFromPayload(node: any): string {
+  const raw =
+    node?.gender ??
+    node?.sex ??
+    node?.GENDER ??
+    node?.SEX ??
+    node?.gender_cd ??
+    node?.shipper?.gender ??
+    node?.shipper?.sex ??
+    node?.shipper?.GENDER ??
+    node?.shipper?.SEX ??
+    node?.shipper?.gender_cd ??
+    node?.shipperInfo?.gender ??
+    node?.shipperInfo?.sex ??
+    node?.shipperInfo?.GENDER ??
+    node?.shipperInfo?.SEX ??
+    node?.shipperInfo?.gender_cd ??
+    node?.shipperDto?.gender ??
+    node?.shipperDto?.sex ??
+    node?.shipperDto?.GENDER ??
+    node?.shipperDto?.SEX ??
+    node?.shipperDto?.gender_cd;
+  return normalizeGender(raw);
+}
+
+function resolveAgeFromPayload(node: any): string {
+  const ageRaw =
+    node?.age ??
+    node?.AGE ??
+    node?.user_age ??
+    node?.shipper?.age ??
+    node?.shipper?.AGE ??
+    node?.shipper?.user_age ??
+    node?.shipperInfo?.age ??
+    node?.shipperInfo?.AGE ??
+    node?.shipperInfo?.user_age ??
+    node?.shipperDto?.age ??
+    node?.shipperDto?.AGE;
+  const normalizedAge = normalizeAge(ageRaw);
+  if (normalizedAge !== "-") return normalizedAge;
+
+  const birthRaw =
+    node?.birthDate ??
+    node?.birth ??
+    node?.birthday ??
+    node?.dob ??
+    node?.BIRTH_DATE ??
+    node?.BIRTHDATE ??
+    node?.BIRTH ??
+    node?.BIRTHDAY ??
+    node?.DOB ??
+    node?.shipper?.birthDate ??
+    node?.shipper?.birth ??
+    node?.shipper?.BIRTH_DATE ??
+    node?.shipper?.BIRTHDATE ??
+    node?.shipperInfo?.birthDate ??
+    node?.shipperInfo?.BIRTH_DATE ??
+    node?.shipperDto?.birthDate ??
+    node?.shipperDto?.BIRTH_DATE;
+  const birthAge = calcAgeFromBirthDate(birthRaw);
+  return birthAge ? `만 ${birthAge}세` : "-";
+}
+
+function toProfileOwnerKey(email?: string, userId?: number | string) {
+  const emailKey = String(email ?? "").trim().toLowerCase();
+  if (emailKey) return emailKey.replace(/[^a-z0-9@._-]/g, "_");
+  const idKey = String(userId ?? "").trim();
+  if (idKey) return `uid_${idKey.replace(/[^a-z0-9_-]/gi, "_")}`;
+  return "guest";
+}
+
+function toProfileImageStorageKey(ownerKey: string) {
+  return `baro_profile_image_url_v1:${ownerKey}`;
+}
+
+async function persistProfileImageByOwner(uri: string, ownerKey: string): Promise<string> {
   const docDir = FileSystem.documentDirectory;
   if (!docDir) return uri;
 
   const cleanUri = uri.split("?")[0] || uri;
   const ext = cleanUri.includes(".") ? cleanUri.substring(cleanUri.lastIndexOf(".")) : ".jpg";
   const safeExt = ext.length >= 2 && ext.length <= 5 ? ext : ".jpg";
-  const targetUri = `${docDir}profile-image${safeExt}`;
+  const targetUri = `${docDir}profile-image-${ownerKey}${safeExt}`;
 
   await FileSystem.copyAsync({ from: uri, to: targetUri });
   return targetUri;
@@ -117,31 +214,64 @@ export default function ProfileSettingsScreen() {
       let active = true;
 
       void (async () => {
-        const localImageUrl = (await AsyncStorage.getItem(PROFILE_IMAGE_STORAGE_KEY)) ?? "";
+        const cached = await getCurrentUserSnapshot();
+        let me: any = null;
+        try {
+          me = await UserService.getMyInfo();
+        } catch {
+          me = null;
+        }
+        let shipperMe: any = null;
+        try {
+          const role = String(me?.role ?? "").toUpperCase();
+          if (!USE_MOCK && role === "SHIPPER") {
+            const res = await apiClient.get("/api/v1/shippers/me");
+            shipperMe =
+              res.data?.data ??
+              res.data?.user ??
+              res.data?.result ??
+              res.data;
+          }
+        } catch {
+          shipperMe = null;
+        }
+        // Keep `me` as the root source and attach shipper payload as nested fallback.
+        // Some shipper endpoints return null user fields and can overwrite valid values.
+        const profileSource = shipperMe ? { ...me, shipper: shipperMe } : me;
+
+        const ownerKey = toProfileOwnerKey(profileSource?.email ?? cached?.email, profileSource?.userId);
+        const scopedStorageKey = toProfileImageStorageKey(ownerKey);
+        const scopedImageUrl = (await AsyncStorage.getItem(scopedStorageKey)) ?? "";
+        const localImageUrl = scopedImageUrl;
 
         try {
-          const me = (await UserService.getMyInfo()) as any;
+          if (!profileSource) throw new Error("empty me");
           const next: ProfileState = {
-            nickname: me.nickname || "-",
-            gender: normalizeGender(me.gender ?? me.sex),
-            shipperType: resolveShipperType(me),
-            email: me.email || "-",
-            age: normalizeAge(me.age),
-            imageUrl: localImageUrl || me.profileImageUrl || "",
+            nickname: profileSource.nickname || "-",
+            gender:
+              resolveGenderFromPayload(profileSource) !== "-"
+                ? resolveGenderFromPayload(profileSource)
+                : normalizeGender(cached?.gender),
+            shipperType: resolveShipperType(profileSource),
+            email: profileSource.email || "-",
+            age:
+              resolveAgeFromPayload(profileSource) !== "-"
+                ? resolveAgeFromPayload(profileSource)
+                : normalizeAge(cached?.age),
+            imageUrl: localImageUrl || profileSource.profileImageUrl || "",
           };
           if (!active) return;
           setProfile(next);
           setDraftImageUri(next.imageUrl);
           return;
         } catch {
-          const cached = await getCurrentUserSnapshot();
           if (!active) return;
           const next: ProfileState = {
             nickname: cached?.nickname || "-",
-            gender: "-",
+            gender: normalizeGender(cached?.gender),
             shipperType: cached?.role === "SHIPPER" ? "개인" : "-",
             email: cached?.email || "-",
-            age: "-",
+            age: normalizeAge(cached?.age),
             imageUrl: localImageUrl,
           };
           setProfile(next);
@@ -232,15 +362,17 @@ export default function ProfileSettingsScreen() {
     if (!hasImageChange || loadingImage) return;
     setLoadingImage(true);
     try {
+      const ownerKey = toProfileOwnerKey(profile.email);
+      const targetStorageKey = toProfileImageStorageKey(ownerKey);
       if (!draftImageUri) {
-        await AsyncStorage.removeItem(PROFILE_IMAGE_STORAGE_KEY);
+        await AsyncStorage.removeItem(targetStorageKey);
         setProfile((prev) => ({ ...prev, imageUrl: "" }));
         Alert.alert("수정 완료", "프로필 사진이 기본 이미지로 변경되었습니다.");
         return;
       }
 
-      const persistedUri = await persistProfileImage(draftImageUri);
-      await AsyncStorage.setItem(PROFILE_IMAGE_STORAGE_KEY, persistedUri);
+      const persistedUri = await persistProfileImageByOwner(draftImageUri, ownerKey);
+      await AsyncStorage.setItem(targetStorageKey, persistedUri);
       setProfile((prev) => ({ ...prev, imageUrl: persistedUri }));
       setDraftImageUri(persistedUri);
       Alert.alert("수정 완료", "프로필 사진이 저장되었습니다.");

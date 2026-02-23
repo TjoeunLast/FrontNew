@@ -10,6 +10,10 @@ export interface UserProfile {
   phone: string;
   role: 'USER' | 'DRIVER' | 'SHIPPER' | 'ADMIN';
   ratingAvg: number;
+  gender?: 'M' | 'F' | string;
+  sex?: 'M' | 'F' | string;
+  age?: number;
+  isCorporate?: 'Y' | 'N' | string;
 }
 
 /**
