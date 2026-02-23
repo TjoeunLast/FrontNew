@@ -1,7 +1,6 @@
-﻿import { useState, useCallback, useMemo, useEffect } from "react";
-
-import { OrderService } from "@/shared/api/orderService";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { OrderResponse } from "@/shared/models/order";
+import { OrderService } from "@/shared/api/orderService";
 
 export interface IncomeSummary {
   month: number;
@@ -10,70 +9,68 @@ export interface IncomeSummary {
   growthRate: number;
 }
 
-const DEFAULT_INCOME: IncomeSummary = {
-  month: new Date().getMonth() + 1,
-  amount: 0,
-  targetDiff: 0,
-  growthRate: 0,
+// 수익 카드는 요청하신 대로 목업 유지
+const MOCK_INCOME: IncomeSummary = {
+  month: 2,
+  amount: 3540000,
+  targetDiff: 460000,
+  growthRate: 8.5,
 };
 
 export const useDriverHome = () => {
-  const [orders, setOrders] = useState<OrderResponse[]>([]);
-  const [income] = useState<IncomeSummary>(DEFAULT_INCOME);
+  const [recommendedOrders, setRecommendedOrders] = useState<OrderResponse[]>(
+    [],
+  );
+  const [myOrders, setMyOrders] = useState<OrderResponse[]>([]);
+  const [income] = useState<IncomeSummary>(MOCK_INCOME);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const loadOrders = useCallback(async () => {
-    const [available, driving] = await Promise.all([
-      OrderService.getAvailableOrders().catch(() => [] as OrderResponse[]),
-      OrderService.getMyDrivingOrders().catch(() => [] as OrderResponse[]),
-    ]);
-
-    const merged = [...available, ...driving];
-    const byId = new Map<number, OrderResponse>();
-    for (const o of merged) {
-      byId.set(Number(o.orderId), o);
-    }
-    setOrders(Array.from(byId.values()));
-  }, []);
-
-  useEffect(() => {
-    void loadOrders();
-  }, [loadOrders]);
-
-  const statusCounts = useMemo(() => {
-    return {
-      pending: orders.filter((o) => o.status === "REQUESTED" || o.status === "PENDING").length,
-      confirmed: orders.filter((o) => o.status === "ACCEPTED").length,
-      shipping: orders.filter((o) => ["LOADING", "IN_TRANSIT", "UNLOADING"].includes(o.status)).length,
-      completed: orders.filter((o) => o.status === "COMPLETED").length,
-    };
-  }, [orders]);
-
-  const recommendedOrders = useMemo(() => {
-    return orders
-      .filter((o) => o.status === "REQUESTED" || o.status === "PENDING")
-      .sort((a, b) => {
-        if (a.instant === true && b.instant !== true) return -1;
-        if (a.instant !== true && b.instant === true) return 1;
-        return 0;
-      });
-  }, [orders]);
-
-  const onRefresh = useCallback(async () => {
-    setIsRefreshing(true);
+  const fetchHomeData = useCallback(async () => {
     try {
-      await loadOrders();
+      setIsRefreshing(true);
+      // 1. 맞춤 추천 오더 가져오기 (서버 연동)
+      const recommended = await OrderService.getRecommendedOrders();
+      // 아직 기사가 배정되지 않은 '배차 대기' 상태인 오더만 홈에 노출
+      const filteredRecommended = recommended.filter(
+        (o) => o.status === "REQUESTED",
+      );
+      setRecommendedOrders(filteredRecommended);
+
+      // 2. 내 전체 운송 목록 가져오기 (상태 카운트용)
+      const drivingOrders = await OrderService.getMyDrivingOrders();
+      setMyOrders(drivingOrders);
+    } catch (error) {
+      console.error("데이터 로드 실패:", error);
     } finally {
       setIsRefreshing(false);
     }
-  }, [loadOrders]);
+  }, []);
+
+  useEffect(() => {
+    fetchHomeData();
+  }, [fetchHomeData]);
+
+  // 요청하신 상태값 기준 필터링 로직
+  const statusCounts = useMemo(() => {
+    return {
+      // 승인대기: APPLIED
+      pending: myOrders.filter((o) => o.status === "APPLIED").length,
+      // 배차확정: ACCEPTED
+      confirmed: myOrders.filter((o) => o.status === "ACCEPTED").length,
+      // 운송중: LOADING, IN_TRANSIT, UNLOADING
+      shipping: myOrders.filter((o) =>
+        ["LOADING", "IN_TRANSIT", "UNLOADING"].includes(o.status),
+      ).length,
+      // 운송완료: COMPLETED
+      completed: myOrders.filter((o) => o.status === "COMPLETED").length,
+    };
+  }, [myOrders]);
 
   return {
-    orders,
     recommendedOrders,
     income,
     statusCounts,
     isRefreshing,
-    onRefresh,
+    onRefresh: fetchHomeData,
   };
 };

@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { useFocusEffect } from "expo-router";
 import { OrderService } from "@/shared/api/orderService";
 import { OrderResponse } from "@/shared/models/order";
 
@@ -23,11 +24,19 @@ export const useDrivingList = () => {
     fetchMyOrders();
   }, []);
 
+  useFocusEffect(
+    useCallback(() => {
+      fetchMyOrders();
+    }, []),
+  );
+
   return {
     activeTab,
     setActiveTab,
     pendingOrders: orders.filter(
-      (o) => o.status === "APPLIED" || o.status === "ACCEPTED",
+      (o) =>
+        o.status === "APPLIED" ||
+        (o.status === "ACCEPTED" && !o.status.includes("CANCELLED")),
     ),
     activeOrders: orders.filter((o) =>
       ["LOADING", "IN_TRANSIT", "UNLOADING"].includes(o.status),

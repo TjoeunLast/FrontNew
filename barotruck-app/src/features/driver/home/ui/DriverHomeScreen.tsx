@@ -10,36 +10,35 @@ import {
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 
-// 프로젝트 공통 UI 및 API 서비스, 타입 임포트
 import { DrOrderCard } from "@/features/driver/shard/ui/DrOrderCard";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
-
-// 분리한 로직(Model) 임포트
 import { useDriverHome } from "../model/useDriverHome";
 
 export default function DriverHomeScreen() {
-  // 1. 테마 및 라우터 설정
   const t = useAppTheme();
   const c = t.colors;
   const router = useRouter();
 
-  // 2. 커스텀 훅에서 데이터와 기능 가져오기
-  const {
-    orders,
-    recommendedOrders,
-    income,
-    statusCounts,
-    isRefreshing,
-    onRefresh,
-  } = useDriverHome();
+  const { recommendedOrders, income, statusCounts, isRefreshing, onRefresh } =
+    useDriverHome();
+
+  /**
+   * [함수] 운송 현황 클릭 시 해당 탭으로 이동
+   * @param tabName - READY(배차), ONGOING(운송중), DONE(완료)
+   */
+  const handleStatusPress = (tabName: "READY" | "ONGOING" | "DONE") => {
+    router.push({
+      pathname: "/(driver)/(tabs)/driving",
+      params: { initialTab: tabName },
+    });
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: c.bg.canvas }]}>
-      {/* --- 상단 헤더 영역 --- */}
-      <View style={styles.header}>
-        <Text style={styles.logoText}>BARO</Text>
+      {/* SECTION 1: 상단 헤더 (로고 및 알림/채팅) */}
+      <View style={[styles.header, { backgroundColor: c.bg.surface }]}>
+        <Text style={[styles.logoText, { color: c.brand.primary }]}>BARO</Text>
         <View style={styles.headerIcons}>
-          {/* 3. 채팅 아이콘 클릭 시 이동 로직 추가 */}
           <Pressable onPress={() => router.push("/(chat)")}>
             <Ionicons
               name="chatbubble-outline"
@@ -47,7 +46,6 @@ export default function DriverHomeScreen() {
               color={c.text.primary}
             />
           </Pressable>
-          
           <Pressable onPress={() => console.log("알림 이동")}>
             <Ionicons
               name="notifications-outline"
@@ -58,7 +56,6 @@ export default function DriverHomeScreen() {
         </View>
       </View>
 
-      {/* --- 스크롤 가능한 메인 콘텐츠 영역 --- */}
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
@@ -66,7 +63,7 @@ export default function DriverHomeScreen() {
           <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />
         }
       >
-        {/* 수익 요약 카드 (클릭 시 정산 탭으로 이동) */}
+        {/* SECTION 2: 예상 수익 카드 (목업 데이터 기반) */}
         <Pressable
           onPress={() => router.push("/(driver)/(tabs)/sales")}
           style={[
@@ -74,31 +71,45 @@ export default function DriverHomeScreen() {
             { backgroundColor: c.brand.primary, overflow: "hidden" },
           ]}
         >
+          {/* 카드 배경 장식 패턴 */}
           <View style={styles.bgPatternContainer}>
-            <View style={[styles.bgShape, styles.shapeCircleBig]} />
-            <View style={[styles.bgShape, styles.shapeSquareRotated]} />
-            <View style={[styles.bgShape, styles.shapeCircleSmall]} />
+            <View style={(styles.bgShape, styles.shapeCircleBig)} />
+            <View style={(styles.bgShape, styles.shapeSquareRotated)} />
+            <View style={(styles.bgShape, styles.shapeCircleSmall)} />
           </View>
+
           <View style={{ zIndex: 1 }}>
             <View style={styles.incomeHeader}>
               <Text style={styles.incomeTitle}>{income.month}월 예상 수익</Text>
-              <View style={styles.incomeBadge}>
-                <Text style={styles.incomeBadgeText}>
+              <View
+                style={[
+                  styles.incomeBadge,
+                  { backgroundColor: "rgba(255, 255, 255, 0.2)" },
+                ]}
+              >
+                <Text
+                  style={[styles.incomeBadgeText, { color: c.text.inverse }]}
+                >
                   +{income.growthRate}%
                 </Text>
               </View>
             </View>
 
-            <Text style={styles.incomeAmount}>
+            <Text style={[styles.incomeAmount, { color: c.text.inverse }]}>
               {income.amount.toLocaleString()}원
             </Text>
-            <Text style={styles.incomeSub}>
+            <Text
+              style={[
+                styles.incomeSub,
+                { color: c.text.inverse, opacity: 0.9 },
+              ]}
+            >
               목표 달성까지 {income.targetDiff.toLocaleString()}원 남았어요!
             </Text>
           </View>
         </Pressable>
 
-        {/* --- 운송 현황 대시보드 --- */}
+        {/* SECTION 3: 대시보드 (운송 단계별 현황 카운트) */}
         <View style={styles.dashboardContainer}>
           <Text
             style={[
@@ -109,102 +120,178 @@ export default function DriverHomeScreen() {
             운송 현황
           </Text>
           <View style={styles.statsGrid}>
-            {/* 1. 배차대기 */}
-            <View style={[styles.statItem, { backgroundColor: c.bg.surface }]}>
-              <View style={[styles.iconCircle, { backgroundColor: "#E0E7FF" }]}>
-                <Ionicons name="cube" size={20} color="#3730A3" />
+            {/* 승인대기 */}
+            <Pressable
+              onPress={() => handleStatusPress("READY")}
+              style={[
+                styles.statItem,
+                {
+                  backgroundColor: c.bg.surface,
+                  borderColor: c.border.default,
+                },
+              ]}
+            >
+              <View
+                style={[
+                  styles.iconCircle,
+                  { backgroundColor: c.status.warningSoft },
+                ]}
+              >
+                <Ionicons name="cube" size={20} color={c.status.warning} />
               </View>
-              <Text style={[styles.statLabel, { color: "#3730A3" }]}>
-                배차대기
+              <Text style={[styles.statLabel, { color: c.status.warning }]}>
+                승인대기
               </Text>
-              <Text style={[styles.statValue, { color: "#3730A3" }]}>
+              <Text style={[styles.statValue, { color: c.status.warning }]}>
                 {statusCounts.pending}
               </Text>
-            </View>
+            </Pressable>
 
-            {/* 2. 배차확정  */}
-            <View style={[styles.statItem, { backgroundColor: c.bg.surface }]}>
-              <View style={[styles.iconCircle, { backgroundColor: "#DCFCE7" }]}>
-                <Ionicons name="clipboard-outline" size={20} color="#166534" />
-                {statusCounts.confirmed > 0 && <View style={styles.redDot} />}
+            {/* 배차확정 */}
+            <Pressable
+              onPress={() => handleStatusPress("READY")}
+              style={[
+                styles.statItem,
+                {
+                  backgroundColor: c.bg.surface,
+                  borderColor: c.border.default,
+                },
+              ]}
+            >
+              <View
+                style={[
+                  styles.iconCircle,
+                  { backgroundColor: c.brand.primarySoft },
+                ]}
+              >
+                <Ionicons
+                  name="clipboard-outline"
+                  size={20}
+                  color={c.brand.primary}
+                />
+                {statusCounts.confirmed > 0 && (
+                  <View
+                    style={[
+                      styles.redDot,
+                      {
+                        backgroundColor: c.status.danger,
+                        borderColor: c.bg.surface,
+                      },
+                    ]}
+                  />
+                )}
               </View>
-              <Text style={[styles.statLabel, { color: "#166534" }]}>
+              <Text style={[styles.statLabel, { color: c.brand.primary }]}>
                 배차확정
               </Text>
-              <Text style={[styles.statValue, { color: "#166534" }]}>
+              <Text style={[styles.statValue, { color: c.brand.primary }]}>
                 {statusCounts.confirmed}
               </Text>
-            </View>
+            </Pressable>
 
-            {/* 3. 운송중 */}
-            <View style={[styles.statItem, { backgroundColor: c.bg.surface }]}>
-              <View style={[styles.iconCircle, { backgroundColor: "#E0F2FE" }]}>
+            {/* 운송중 */}
+            <Pressable
+              onPress={() => handleStatusPress("ONGOING")}
+              style={[
+                styles.statItem,
+                {
+                  backgroundColor: c.bg.surface,
+                  borderColor: c.border.default,
+                },
+              ]}
+            >
+              <View
+                style={[
+                  styles.iconCircle,
+                  { backgroundColor: c.status.successSoft },
+                ]}
+              >
                 <MaterialCommunityIcons
                   name="truck-delivery"
                   size={20}
-                  color="#075985"
+                  color={c.status.success}
                 />
               </View>
-              <Text style={[styles.statLabel, { color: "#075985" }]}>
+              <Text style={[styles.statLabel, { color: c.status.success }]}>
                 운송중
               </Text>
-              <Text style={[styles.statValue, { color: "#075985" }]}>
+              <Text style={[styles.statValue, { color: c.status.success }]}>
                 {statusCounts.shipping}
               </Text>
-            </View>
+            </Pressable>
 
-            {/* 4. 운송완료 */}
-            <View style={[styles.statItem, { backgroundColor: c.bg.surface }]}>
-              <View style={[styles.iconCircle, { backgroundColor: "#F1F5F9" }]}>
-                <Ionicons name="checkmark-circle" size={20} color="#334155" />
+            {/* 운송완료 */}
+            <Pressable
+              onPress={() => handleStatusPress("DONE")}
+              style={[
+                styles.statItem,
+                {
+                  backgroundColor: c.bg.surface,
+                  borderColor: c.border.default,
+                },
+              ]}
+            >
+              <View
+                style={[styles.iconCircle, { backgroundColor: c.bg.canvas }]}
+              >
+                <Ionicons
+                  name="checkmark-circle"
+                  size={20}
+                  color={c.text.secondary}
+                />
               </View>
-              <Text style={styles.statLabel}>운송완료</Text>
-              <Text style={[styles.statValue, { color: "#334155" }]}>
+              <Text style={[styles.statLabel, { color: c.text.secondary }]}>
+                운송완료
+              </Text>
+              <Text style={[styles.statValue, { color: c.text.secondary }]}>
                 {statusCounts.completed}
               </Text>
-            </View>
+            </Pressable>
           </View>
         </View>
 
-        {/* --- 추천 오더 리스트 영역 --- */}
+        {/* SECTION 4: 맞춤 추천 오더 리스트 (상태: REQUESTED) */}
         <View style={styles.orderList}>
           <View style={styles.listHeader}>
             <Text style={[styles.sectionTitle, { color: c.text.primary }]}>
               맞춤 추천 오더
             </Text>
-            <Pressable
-              onPress={() => router.push("/(driver)/(tabs)/orders")}
-            ></Pressable>
+            <Pressable onPress={() => router.push("/(driver)/(tabs)/orders")}>
+              <Text style={{ color: c.text.secondary }}>전체보기 &gt;</Text>
+            </Pressable>
           </View>
 
-          {/* 맞춤 추천 오더 데이터 렌더링*/}
           {recommendedOrders.map((order) => (
-            <DrOrderCard key={order.orderId} {...(order as any)} />
+            <Pressable
+              key={order.orderId}
+              onPress={() =>
+                router.push(`/(driver)/order-detail/${order.orderId}`)
+              }
+            >
+              <DrOrderCard order={order} />
+            </Pressable>
           ))}
-          {/* 추천 오더가 없을 경우 */}
+
+          {/* 데이터 부재 시 예외 처리 */}
           {recommendedOrders.length === 0 && (
             <Text
-              style={{ textAlign: "center", color: "#94A3B8", marginTop: 20 }}
+              style={{
+                textAlign: "center",
+                color: c.text.secondary,
+                marginTop: 40,
+              }}
             >
               현재 대기 중인 추천 오더가 없습니다.
             </Text>
           )}
-
-          {/* Model에서 가져온 오더 데이터 렌더링 */}
-          {/* {orders.map((order) => (
-            <DrOrderCard key={order.orderId} {...(order as any)} />
-          ))} */}
         </View>
       </ScrollView>
     </View>
   );
 }
 
-// 스타일 정의
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
+  container: { flex: 1 },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -212,21 +299,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 60,
     paddingBottom: 20,
-    backgroundColor: "#fff",
   },
-  logoText: {
-    fontSize: 22,
-    fontWeight: "900",
-    color: "#4E46E5",
-  },
-  headerIcons: {
-    flexDirection: "row",
-    gap: 15,
-  },
-  bgPatternContainer: {
-    ...StyleSheet.absoluteFillObject,
-    zIndex: 0,
-  },
+  logoText: { fontSize: 22, fontWeight: "900" },
+  headerIcons: { flexDirection: "row", gap: 15 },
+  bgPatternContainer: { ...StyleSheet.absoluteFillObject, zIndex: 0 },
   bgShape: {
     position: "absolute",
     backgroundColor: "rgba(255, 255, 255, 0.08)",
@@ -244,7 +320,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     bottom: -30,
     left: -20,
-    transform: [{ rotate: "35deg" }], // 35도 회전
+    transform: [{ rotate: "35deg" }],
   },
   shapeCircleSmall: {
     width: 60,
@@ -252,18 +328,14 @@ const styles = StyleSheet.create({
     borderRadius: 30,
     top: "40%",
     right: 20,
-    backgroundColor: "rgba(255, 255, 255, 0.05)", // 더 연하게
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
   },
-  scrollContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 30,
-  },
+  scrollContent: { paddingHorizontal: 20, paddingBottom: 30 },
   incomeCard: {
     padding: 24,
     borderRadius: 24,
     marginBottom: 24,
     elevation: 8,
-    shadowColor: "#4E46E5",
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.25,
     shadowRadius: 20,
@@ -274,31 +346,19 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 16,
   },
-  incomeTitle: {
-    color: "#FFF",
-    opacity: 0.9,
-    fontSize: 14,
-    fontWeight: "500",
-  },
+  incomeTitle: { opacity: 0.9, fontSize: 14, fontWeight: "500" },
   incomeBadge: {
-    backgroundColor: "rgba(255, 255, 255, 0.2)",
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
   },
-  incomeBadgeText: {
-    color: "#FFF",
-    fontSize: 13,
-    fontWeight: "700",
-  },
+  incomeBadgeText: { fontSize: 13, fontWeight: "700" },
   incomeAmount: {
-    color: "#FFF",
     fontSize: 32,
     fontWeight: "800",
     marginBottom: 4,
   },
   incomeSub: {
-    color: "rgba(255, 255, 255, 0.9)",
     fontSize: 13,
     fontWeight: "500",
   },
@@ -306,30 +366,17 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    // marginBottom: 16,
   },
-  orderList: {
-    gap: 16,
-  },
-  dashboardContainer: {
-    marginBottom: 24,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-  },
-  statsGrid: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    gap: 8,
-  },
+  orderList: { gap: 16 },
+  dashboardContainer: { marginBottom: 24 },
+  sectionTitle: { fontSize: 18, fontWeight: "700" },
+  statsGrid: { flexDirection: "row", justifyContent: "space-between", gap: 8 },
   statItem: {
-    flex: 1, // 모든 카드가 동일한 너비를 가집니다.
+    flex: 1,
     paddingVertical: 16,
     paddingHorizontal: 4,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: "#F1F5F9",
     alignItems: "center",
     elevation: 2,
     shadowColor: "#000",
@@ -349,13 +396,9 @@ const styles = StyleSheet.create({
   statLabel: {
     fontSize: 11,
     fontWeight: "600",
-    color: "#64748B",
     marginBottom: 4,
   },
-  statValue: {
-    fontSize: 18,
-    fontWeight: "800",
-  },
+  statValue: { fontSize: 18, fontWeight: "800" },
   redDot: {
     position: "absolute",
     top: 0,
@@ -363,8 +406,6 @@ const styles = StyleSheet.create({
     width: 7,
     height: 7,
     borderRadius: 3.5,
-    backgroundColor: "#EF4444",
     borderWidth: 1.5,
-    borderColor: "#FFF",
   },
 });
