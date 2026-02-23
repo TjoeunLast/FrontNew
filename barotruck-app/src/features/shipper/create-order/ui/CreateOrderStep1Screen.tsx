@@ -11,6 +11,11 @@ import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import { Button } from "@/shared/ui/base/Button";
 import { Card } from "@/shared/ui/base/Card";
 
+// 기존 import들 사이에 추가!
+import AddressSearch from "@/shared/utils/AddressSearch";
+import { RECENT_START_OPTIONS } from "./createOrderStep1.constants";
+import { SearchableAddressField } from "./createOrderStep1.components"; // InlineDropdownField 옆에 추가로 불러오세요.
+
 import {
   Chip,
   ChoiceCard,
@@ -86,6 +91,13 @@ export function ShipperCreateOrderStep1Screen() {
   });
   const [carDropdownOpen, setCarDropdownOpen] = useState(false);
   const [tonDropdownOpen, setTonDropdownOpen] = useState(false);
+  
+  // ✅ 여기에 새롭게 추가! (모달 및 드롭다운 열림/닫힘 상태)
+  const [isStartModalOpen, setIsStartModalOpen] = useState(false);
+  const [isEndModalOpen, setIsEndModalOpen] = useState(false);
+  const [isRecentDropdownOpen, setIsRecentDropdownOpen] = useState(false);
+  const [selectedRecentValue, setSelectedRecentValue] = useState<string | undefined>(undefined);
+  
   const [startAddrSuggestions, setStartAddrSuggestions] = useState<string[]>([]);
   const [endAddrSuggestions, setEndAddrSuggestions] = useState<string[]>([]);
   const distanceKm = useMemo(
@@ -355,46 +367,37 @@ export function ShipperCreateOrderStep1Screen() {
             <View style={s.timelineBody}>
               <Text style={[s.fieldLabel, { color: c.text.primary }]}>상차지 정보</Text>
 
-              <View style={[s.searchField, { backgroundColor: c.bg.surface, borderColor: c.border.default }]}>
-                <TextInput
-                  value={startSearch}
-                  onChangeText={(v) => {
-                    setStartSearch(v);
-                    setStartSelected(v.trim());
+              
+              {/* 2. 주소 검색창 (터치하면 모달 오픈) */}
+              <SearchableAddressField
+                label=""
+                value={startSelected}
+                placeholder="터치하여 상차지 주소를 검색해주세요"
+                onPress={() => {
+                  setIsStartModalOpen(true);
+                  setIsRecentDropdownOpen(false);
+                }}
+              />
+
+              {/* 1. 최근 출발지 드롭다운 */}
+              <View style={{ marginBottom: 10 }}>
+                <InlineDropdownField
+                  label=""
+                  placeholder="최근 주소를 선택하세요 (선택)"
+                  valueLabel={startSelected}
+                  open={isRecentDropdownOpen}
+                  options={RECENT_START_OPTIONS}
+                  selectedValue={selectedRecentValue}
+                  onToggle={() => setIsRecentDropdownOpen(!isRecentDropdownOpen)}
+                  onSelect={(op) => {
+                    setStartSelected(op.label);
+                    setStartSearch(op.label); // distanceKm 계산을 위해 둘 다 세팅
+                    setSelectedRecentValue(op.value);
+                    setIsRecentDropdownOpen(false);
                   }}
-                  placeholder="상차지 주소를 검색해주세요"
-                  placeholderTextColor={c.text.secondary}
-                  style={[s.searchInput, { color: c.text.primary }]}
                 />
-                <Pressable onPress={onPressStartSearch} hitSlop={8}>
-                  <Ionicons name="search" size={18} color={c.text.secondary} />
-                </Pressable>
               </View>
 
-              {startAddrSuggestions.length ? (
-                <View
-                  style={[
-                    s.addressSuggestWrap,
-                    { borderColor: c.border.default, backgroundColor: c.bg.surface, marginTop: 8 },
-                  ]}
-                >
-                  {startAddrSuggestions.map((addr) => (
-                    <Pressable
-                      key={addr}
-                      onPress={() => {
-                        setStartSelected(addr);
-                        setStartSearch(addr);
-                      }}
-                      style={[s.addressSuggestItem, { borderColor: c.border.default }]}
-                    >
-                      <Ionicons name="time-outline" size={14} color={c.text.secondary} />
-                      <Text style={[s.addressSuggestText, { color: c.text.primary }]} numberOfLines={1}>
-                        {addr}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
-              ) : null}
 
               {(startSelected || startSearch).trim() ? (
                 <>
@@ -490,39 +493,13 @@ export function ShipperCreateOrderStep1Screen() {
             <View style={s.timelineBody}>
               <Text style={[s.fieldLabel, { color: c.text.primary }]}>하차지 정보</Text>
 
-              <View style={[s.searchField, { backgroundColor: c.bg.surface, borderColor: c.border.default }]}>
-                <TextInput
-                  value={endAddr}
-                  onChangeText={setEndAddr}
-                  placeholder="주소를 검색해주세요"
-                  placeholderTextColor={c.text.secondary}
-                  style={[s.searchInput, { color: c.text.primary }]}
-                />
-                <Pressable onPress={onPressEndSearch} hitSlop={8}>
-                  <Ionicons name="search" size={18} color={c.text.secondary} />
-                </Pressable>
-              </View>
-              {endAddrSuggestions.length ? (
-                <View
-                  style={[
-                    s.addressSuggestWrap,
-                    { borderColor: c.border.default, backgroundColor: c.bg.surface },
-                  ]}
-                >
-                  {endAddrSuggestions.map((addr) => (
-                    <Pressable
-                      key={addr}
-                      onPress={() => setEndAddr(addr)}
-                      style={[s.addressSuggestItem, { borderColor: c.border.default }]}
-                    >
-                      <Ionicons name="location-outline" size={14} color={c.text.secondary} />
-                      <Text style={[s.addressSuggestText, { color: c.text.primary }]} numberOfLines={1}>
-                        {addr}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
-              ) : null}
+              <SearchableAddressField
+                label=""
+                value={endAddr}
+                placeholder="터치하여 하차지 주소를 검색해주세요"
+                onPress={() => setIsEndModalOpen(true)}
+              />
+
 
               {endAddr.trim() ? (
                 <>
@@ -852,6 +829,23 @@ export function ShipperCreateOrderStep1Screen() {
 
         <View style={{ height: 150 + insets.bottom }} />
       </ScrollView>
+
+      {/* --- 주소 검색 모달 추가 --- */}
+      <AddressSearch
+        visible={isStartModalOpen}
+        onClose={() => setIsStartModalOpen(false)}
+        onComplete={(address) => {
+          setStartSelected(address);
+          setStartSearch(address);
+          setSelectedRecentValue(undefined); 
+        }}
+      />
+      <AddressSearch
+        visible={isEndModalOpen}
+        onClose={() => setIsEndModalOpen(false)}
+        onComplete={(address) => setEndAddr(address)}
+      />
+      {/* ------------------------- */}
 
       <View
         style={[
