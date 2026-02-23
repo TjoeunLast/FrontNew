@@ -100,11 +100,11 @@ function parseCargoAndRequests(raw?: string) {
       continue;
     }
     if (part.startsWith("직접입력:")) {
-      requests.push(`직접 요청: ${part.replace(/^직접입력:/, "").trim()}`);
+      requests.push(`${part.replace(/^직접입력:/, "").trim()}`);
       continue;
     }
     if (part.startsWith("추가메모:")) {
-      requests.push(`추가 메모: ${part.replace(/^추가메모:/, "").trim()}`);
+      requests.push(`${part.replace(/^추가메모:/, "").trim()}`);
       continue;
     }
     if (part.startsWith("상차지 연락처:")) {
@@ -115,11 +115,11 @@ function parseCargoAndRequests(raw?: string) {
       continue;
     }
     if (part.startsWith("상하차방식:")) {
-      requests.push(`상하차 방식: ${part.replace(/^상하차방식:/, "").trim()}`);
+      requests.push(`${part.replace(/^상하차방식:/, "").trim()}`);
       continue;
     }
     if (part.startsWith("포장:")) {
-      requests.push(`포장: ${part.replace(/^포장:/, "").trim()}`);
+      requests.push(`${part.replace(/^포장:/, "").trim()}`);
       continue;
     }
   }
