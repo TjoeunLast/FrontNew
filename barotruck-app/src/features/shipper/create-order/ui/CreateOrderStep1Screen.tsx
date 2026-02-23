@@ -5,41 +5,43 @@ import React, { useMemo, useState } from "react";
 import { Alert, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { setCreateOrderDraft } from "@/features/shipper/create-order/model/createOrderDraft";
+import { getCreateOrderDraft, setCreateOrderDraft } from "@/features/shipper/create-order/model/createOrderDraft";
+import { AddressApi } from "@/shared/api/addressService";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import { Button } from "@/shared/ui/base/Button";
 import { Card } from "@/shared/ui/base/Card";
+import ShipperScreenHeader from "@/shared/ui/layout/ShipperScreenHeader";
 
-import {
-  CAR_TYPE_OPTIONS,
-  DEFAULT_PHOTOS,
-  DEFAULT_SELECTED_REQUEST_TAGS,
-  getEstimatedDistanceKm,
-  getRecommendedFareByDistance,
-  PRESET_REQUEST_TAGS,
-  RECENT_ADDRESS_POOL,
-  RECENT_START_OPTIONS,
-  SP,
-  TON_OPTIONS,
-} from "./createOrderStep1.constants";
+// 기존 import들 사이에 추가!
+import AddressSearch from "@/shared/utils/AddressSearch";
+import { RECENT_START_OPTIONS } from "./createOrderStep1.constants";
+import { SearchableAddressField } from "./createOrderStep1.components"; // InlineDropdownField 옆에 추가로 불러오세요.
+
 import {
   Chip,
   ChoiceCard,
-  CreateOrderTopBar,
   InlineDropdownField,
   PaymentTile,
   SectionTitle,
 } from "./createOrderStep1.components";
+import {
+  CAR_TYPE_OPTIONS,
+  DEFAULT_PHOTOS,
+  getEstimatedDistanceKm,
+  getRecommendedFareByDistance,
+  SP,
+  TON_OPTIONS,
+} from "./createOrderStep1.constants";
 import { s } from "./createOrderStep1.styles";
 import {
-  type ArriveType,
   ARRIVE_OPTIONS,
+  type ArriveType,
   type DispatchType,
   LOAD_DAY_OPTIONS,
   type LoadDayType,
   type Option,
-  type PayType,
   PAYMENT_OPTIONS,
+  type PayType,
   TRIP_OPTIONS,
   type TripType,
 } from "./createOrderStep1.types";
@@ -50,40 +52,54 @@ export function ShipperCreateOrderStep1Screen() {
   const c = t.colors;
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const initialDraft = getCreateOrderDraft();
 
-  const [startSelected, setStartSelected] = useState("");
-  const [startAddrDetail, setStartAddrDetail] = useState("");
-  const [startContact, setStartContact] = useState("");
-  const [startSearch, setStartSearch] = useState("");
-  const [loadDay, setLoadDay] = useState<LoadDayType>("당상(오늘)");
-  const [loadDate, setLoadDate] = useState(new Date());
+  const [startSelected, setStartSelected] = useState(initialDraft?.startSelected ?? "");
+  const [startAddrDetail, setStartAddrDetail] = useState(initialDraft?.startAddrDetail ?? "");
+  const [startContact, setStartContact] = useState(initialDraft?.startContact ?? "");
+  const [startSearch, setStartSearch] = useState(initialDraft?.startSelected ?? "");
+  const [loadDay, setLoadDay] = useState<LoadDayType>(initialDraft?.loadDay ?? "당상(오늘)");
+  const [loadDate, setLoadDate] = useState(
+    initialDraft?.loadDateISO ? new Date(initialDraft.loadDateISO) : new Date()
+  );
   const [loadDatePickerOpen, setLoadDatePickerOpen] = useState(false);
-  const [startTimeHHmm, setStartTimeHHmm] = useState("09:00");
+  const [startTimeHHmm, setStartTimeHHmm] = useState(initialDraft?.startTimeHHmm ?? "09:00");
   const [startTimePickerOpen, setStartTimePickerOpen] = useState(false);
-  const [endAddr, setEndAddr] = useState("");
-  const [endAddrDetail, setEndAddrDetail] = useState("");
-  const [endContact, setEndContact] = useState("");
-  const [endTimeHHmm, setEndTimeHHmm] = useState("18:00");
+  const [endAddr, setEndAddr] = useState(initialDraft?.endAddr ?? "");
+  const [endAddrDetail, setEndAddrDetail] = useState(initialDraft?.endAddrDetail ?? "");
+  const [endContact, setEndContact] = useState(initialDraft?.endContact ?? "");
+  const [endTimeHHmm, setEndTimeHHmm] = useState(initialDraft?.endTimeHHmm ?? "18:00");
   const [endTimePickerOpen, setEndTimePickerOpen] = useState(false);
-  const [arriveType, setArriveType] = useState<ArriveType>("당착");
+  const [arriveType, setArriveType] = useState<ArriveType>(initialDraft?.arriveType ?? "당착");
 
-  const [carType, setCarType] = useState<Option>(CAR_TYPE_OPTIONS[1]);
-  const [ton, setTon] = useState<Option>(TON_OPTIONS[3]);
-  const [cargoDetail, setCargoDetail] = useState("");
-  const [weightTon, setWeightTon] = useState("0");
+  const [carType, setCarType] = useState<Option>(initialDraft?.carType ?? CAR_TYPE_OPTIONS[1]);
+  const [ton, setTon] = useState<Option>(initialDraft?.ton ?? TON_OPTIONS[3]);
+  const [cargoDetail, setCargoDetail] = useState(initialDraft?.cargoDetail ?? "");
+  const [weightTon, setWeightTon] = useState(initialDraft?.weightTon ?? "0");
 
-  const [selectedRequestTags, setSelectedRequestTags] = useState<string[]>(DEFAULT_SELECTED_REQUEST_TAGS);
-  const [customRequestOpen, setCustomRequestOpen] = useState(false);
-  const [customRequestText, setCustomRequestText] = useState("");
-
-  const [photos, setPhotos] = useState(DEFAULT_PHOTOS);
-  const [dispatch, setDispatch] = useState<DispatchType>("instant");
-  const [tripType, setTripType] = useState<TripType>("oneWay");
-  const [pay, setPay] = useState<PayType>("receipt30");
-  const [fareInput, setFareInput] = useState("");
-  const [appliedBaseFare, setAppliedBaseFare] = useState(0);
+  const [photos, setPhotos] = useState(initialDraft?.photos ?? DEFAULT_PHOTOS);
+  const [dispatch, setDispatch] = useState<DispatchType>(initialDraft?.dispatch ?? "instant");
+  const [tripType, setTripType] = useState<TripType>(initialDraft?.tripType ?? "oneWay");
+  const [pay, setPay] = useState<PayType>(initialDraft?.pay ?? "receipt30");
+  const [fareInput, setFareInput] = useState(
+    initialDraft?.appliedFare ? String(initialDraft.appliedFare) : ""
+  );
+  const [appliedBaseFare, setAppliedBaseFare] = useState(() => {
+    if (!initialDraft) return 0;
+    if (initialDraft.tripType === "roundTrip") return Math.max(0, Math.round(initialDraft.appliedFare / 1.8));
+    return initialDraft.appliedFare;
+  });
   const [carDropdownOpen, setCarDropdownOpen] = useState(false);
   const [tonDropdownOpen, setTonDropdownOpen] = useState(false);
+  
+  // ✅ 여기에 새롭게 추가! (모달 및 드롭다운 열림/닫힘 상태)
+  const [isStartModalOpen, setIsStartModalOpen] = useState(false);
+  const [isEndModalOpen, setIsEndModalOpen] = useState(false);
+  const [isRecentDropdownOpen, setIsRecentDropdownOpen] = useState(false);
+  const [selectedRecentValue, setSelectedRecentValue] = useState<string | undefined>(undefined);
+  
+  const [startAddrSuggestions, setStartAddrSuggestions] = useState<string[]>([]);
+  const [endAddrSuggestions, setEndAddrSuggestions] = useState<string[]>([]);
   const distanceKm = useMemo(
     () => getEstimatedDistanceKm(startSelected || startSearch, endAddr),
     [startSelected, startSearch, endAddr]
@@ -95,6 +111,7 @@ export function ShipperCreateOrderStep1Screen() {
     return baseFare;
   };
 
+  const aiDisplayedFare = useMemo(() => adjustFareByTripType(aiFare), [aiFare, tripType]);
   const appliedFare = useMemo(() => adjustFareByTripType(appliedBaseFare), [appliedBaseFare, tripType]);
 
   const fee = useMemo(() => {
@@ -104,21 +121,79 @@ export function ShipperCreateOrderStep1Screen() {
 
   const totalPay = useMemo(() => appliedFare + fee, [appliedFare, fee]);
 
-  const startAddrSuggestions = useMemo(() => {
+  const fetchAddressSuggestions = React.useCallback(
+    async (rawQuery: string, onDone: (rows: string[]) => void, minLength: number) => {
+      const q = rawQuery.trim();
+      if (q.length < minLength) {
+        onDone([]);
+        return;
+      }
+      try {
+        const rows = await AddressApi.search(q);
+        onDone(rows.filter((addr) => addr !== q).slice(0, 5));
+      } catch {
+        onDone([]);
+      }
+    },
+    []
+  );
+
+  React.useEffect(() => {
     const q = startSearch.trim();
-    const pool = RECENT_START_OPTIONS.map((item) => item.label);
-    if (!q) return pool.slice(0, 2);
-    return pool.filter((addr) => addr.includes(q) && addr !== q).slice(0, 2);
-  }, [startSearch]);
+    if (q.length < 1) {
+      setStartAddrSuggestions([]);
+      return;
+    }
 
-  const endAddrSuggestions = useMemo(() => {
+    let active = true;
+    const timer = setTimeout(async () => {
+      await fetchAddressSuggestions(
+        q,
+        (rows) => {
+          if (!active) return;
+          setStartAddrSuggestions(rows);
+        },
+        1
+      );
+    }, 250);
+
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [fetchAddressSuggestions, startSearch]);
+
+  React.useEffect(() => {
     const q = endAddr.trim();
-    if (!q) return [];
-    return RECENT_ADDRESS_POOL.filter((addr) => addr.includes(q) && addr !== q).slice(0, 2);
-  }, [endAddr]);
+    if (q.length < 1) {
+      setEndAddrSuggestions([]);
+      return;
+    }
 
-  const toggleRequestTag = (tag: string) => {
-    setSelectedRequestTags((prev) => (prev.includes(tag) ? prev.filter((x) => x !== tag) : [...prev, tag]));
+    let active = true;
+    const timer = setTimeout(async () => {
+      await fetchAddressSuggestions(
+        q,
+        (rows) => {
+          if (!active) return;
+          setEndAddrSuggestions(rows);
+        },
+        1
+      );
+    }, 250);
+
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [endAddr, fetchAddressSuggestions]);
+
+  const onPressStartSearch = () => {
+    void fetchAddressSuggestions(startSearch, setStartAddrSuggestions, 1);
+  };
+
+  const onPressEndSearch = () => {
+    void fetchAddressSuggestions(endAddr, setEndAddrSuggestions, 1);
   };
 
   const addPhoto = () => {
@@ -194,6 +269,7 @@ export function ShipperCreateOrderStep1Screen() {
     }
 
     setCreateOrderDraft({
+      editOrderId: initialDraft?.editOrderId,
       startSelected: resolvedStartAddr,
       startAddrDetail: startAddrDetail.trim(),
       startContact: startContact.trim(),
@@ -209,8 +285,8 @@ export function ShipperCreateOrderStep1Screen() {
       ton,
       cargoDetail: cargoDetail.trim(),
       weightTon: weightTon.trim(),
-      requestTags: selectedRequestTags,
-      requestText: customRequestText.trim(),
+      requestTags: [],
+      requestText: "",
       photos,
       dispatch,
       tripType,
@@ -266,11 +342,27 @@ export function ShipperCreateOrderStep1Screen() {
     setEndTimeHHmm(formatHHmm(picked));
   };
 
+  const digitsOnly = (v: string) => v.replace(/[^0-9]/g, "");
+
   return (
     <View style={[s.page, { backgroundColor: c.bg.canvas }]}>
-      <CreateOrderTopBar onBack={() => router.back()} />
+      <ShipperScreenHeader
+        title="화물 등록"
+        onPressBack={() => {
+          if (router.canGoBack()) {
+            router.back();
+            return;
+          }
+          router.replace("/(shipper)/(tabs)" as any);
+        }}
+      />
 
-      <ScrollView contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={s.content}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+      >
         <SectionTitle title="구간 및 일시" />
         <Card padding={16} style={{ marginBottom: SP.sectionGap }}>
           <View style={s.timelineRow}>
@@ -284,44 +376,37 @@ export function ShipperCreateOrderStep1Screen() {
             <View style={s.timelineBody}>
               <Text style={[s.fieldLabel, { color: c.text.primary }]}>상차지 정보</Text>
 
-              <View style={[s.searchField, { backgroundColor: c.bg.surface, borderColor: c.border.default }]}>
-                <TextInput
-                  value={startSearch}
-                  onChangeText={(v) => {
-                    setStartSearch(v);
-                    setStartSelected(v.trim());
+              
+              {/* 2. 주소 검색창 (터치하면 모달 오픈) */}
+              <SearchableAddressField
+                label=""
+                value={startSelected}
+                placeholder="터치하여 상차지 주소를 검색해주세요"
+                onPress={() => {
+                  setIsStartModalOpen(true);
+                  setIsRecentDropdownOpen(false);
+                }}
+              />
+
+              {/* 1. 최근 출발지 드롭다운 */}
+              <View style={{ marginBottom: 10 }}>
+                <InlineDropdownField
+                  label=""
+                  placeholder="최근 주소를 선택하세요 (선택)"
+                  valueLabel={startSelected}
+                  open={isRecentDropdownOpen}
+                  options={RECENT_START_OPTIONS}
+                  selectedValue={selectedRecentValue}
+                  onToggle={() => setIsRecentDropdownOpen(!isRecentDropdownOpen)}
+                  onSelect={(op) => {
+                    setStartSelected(op.label);
+                    setStartSearch(op.label); // distanceKm 계산을 위해 둘 다 세팅
+                    setSelectedRecentValue(op.value);
+                    setIsRecentDropdownOpen(false);
                   }}
-                  placeholder="상차지 주소를 검색해주세요"
-                  placeholderTextColor={c.text.secondary}
-                  style={[s.searchInput, { color: c.text.primary }]}
                 />
-                <Ionicons name="search" size={18} color={c.text.secondary} />
               </View>
 
-              {startAddrSuggestions.length ? (
-                <View
-                  style={[
-                    s.addressSuggestWrap,
-                    { borderColor: c.border.default, backgroundColor: c.bg.surface, marginTop: 8 },
-                  ]}
-                >
-                  {startAddrSuggestions.map((addr) => (
-                    <Pressable
-                      key={addr}
-                      onPress={() => {
-                        setStartSelected(addr);
-                        setStartSearch(addr);
-                      }}
-                      style={[s.addressSuggestItem, { borderColor: c.border.default }]}
-                    >
-                      <Ionicons name="time-outline" size={14} color={c.text.secondary} />
-                      <Text style={[s.addressSuggestText, { color: c.text.primary }]} numberOfLines={1}>
-                        {addr}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
-              ) : null}
 
               {(startSelected || startSearch).trim() ? (
                 <>
@@ -343,8 +428,8 @@ export function ShipperCreateOrderStep1Screen() {
                     <View style={[s.inputWrap, { backgroundColor: c.bg.surface, borderColor: c.border.default }]}>
                       <TextInput
                         value={startContact}
-                        onChangeText={setStartContact}
-                        placeholder="예: 010-1234-5678"
+                        onChangeText={(v) => setStartContact(digitsOnly(v))}
+                        placeholder="예: 01012345678"
                         keyboardType="phone-pad"
                         placeholderTextColor={c.text.secondary}
                         style={[s.input, { color: c.text.primary }]}
@@ -417,37 +502,13 @@ export function ShipperCreateOrderStep1Screen() {
             <View style={s.timelineBody}>
               <Text style={[s.fieldLabel, { color: c.text.primary }]}>하차지 정보</Text>
 
-              <View style={[s.searchField, { backgroundColor: c.bg.surface, borderColor: c.border.default }]}>
-                <TextInput
-                  value={endAddr}
-                  onChangeText={setEndAddr}
-                  placeholder="주소를 검색해주세요"
-                  placeholderTextColor={c.text.secondary}
-                  style={[s.searchInput, { color: c.text.primary }]}
-                />
-                <Ionicons name="search" size={18} color={c.text.secondary} />
-              </View>
-              {endAddrSuggestions.length ? (
-                <View
-                  style={[
-                    s.addressSuggestWrap,
-                    { borderColor: c.border.default, backgroundColor: c.bg.surface },
-                  ]}
-                >
-                  {endAddrSuggestions.map((addr) => (
-                    <Pressable
-                      key={addr}
-                      onPress={() => setEndAddr(addr)}
-                      style={[s.addressSuggestItem, { borderColor: c.border.default }]}
-                    >
-                      <Ionicons name="location-outline" size={14} color={c.text.secondary} />
-                      <Text style={[s.addressSuggestText, { color: c.text.primary }]} numberOfLines={1}>
-                        {addr}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
-              ) : null}
+              <SearchableAddressField
+                label=""
+                value={endAddr}
+                placeholder="터치하여 하차지 주소를 검색해주세요"
+                onPress={() => setIsEndModalOpen(true)}
+              />
+
 
               {endAddr.trim() ? (
                 <>
@@ -469,8 +530,8 @@ export function ShipperCreateOrderStep1Screen() {
                     <View style={[s.inputWrap, { backgroundColor: c.bg.surface, borderColor: c.border.default }]}>
                       <TextInput
                         value={endContact}
-                        onChangeText={setEndContact}
-                        placeholder="예: 010-1234-5678"
+                        onChangeText={(v) => setEndContact(digitsOnly(v))}
+                        placeholder="예: 01012345678"
                         keyboardType="phone-pad"
                         placeholderTextColor={c.text.secondary}
                         style={[s.input, { color: c.text.primary }]}
@@ -581,47 +642,7 @@ export function ShipperCreateOrderStep1Screen() {
 
           <View style={{ height: 14 }} />
 
-          <Text style={[s.fieldLabel, { color: c.text.primary }]}>요청사항</Text>
-
-          <View style={s.tagWrap}>
-            {PRESET_REQUEST_TAGS.map((tag) => {
-              const selected = selectedRequestTags.includes(tag);
-              return (
-                <Chip
-                  key={tag}
-                  label={`#${tag}`}
-                  selected={selected}
-                  onPress={() => toggleRequestTag(tag)}
-                />
-              );
-            })}
-
-            <Chip
-              label="직접 입력"
-              selected={customRequestOpen}
-              onPress={() => setCustomRequestOpen((v) => !v)}
-            />
-          </View>
-
-          {customRequestOpen ? (
-            <View
-              style={[
-                s.inputWrapMulti,
-                { marginTop: 10, backgroundColor: c.bg.surface, borderColor: c.border.default },
-              ]}
-            >
-              <TextInput
-                value={customRequestText}
-                onChangeText={setCustomRequestText}
-                placeholder="예) 취급주의 / 세워서 적재 / 도착 30분 전 연락 등"
-                placeholderTextColor={c.text.secondary}
-                style={[s.inputMulti, { color: c.text.primary }]}
-                multiline
-              />
-            </View>
-          ) : null}
-
-          <Text style={[s.fieldLabel, { color: c.text.primary, marginTop: 14 }]}>사진 첨부 (선택)</Text>
+          <Text style={[s.fieldLabel, { color: c.text.primary }]}>사진 첨부 (선택)</Text>
 
           <View style={s.photoRow}>
             <Pressable
@@ -674,29 +695,50 @@ export function ShipperCreateOrderStep1Screen() {
           </View>
 
           <View style={[s.aiBox, { backgroundColor: c.brand.primarySoft, borderColor: c.border.default }]}>
-            <View style={{ marginBottom: 10 }}>
-              <Text style={[s.fieldLabel, { color: c.text.primary }]}>운행 형태</Text>
-              <View style={s.chipRow}>
-                {TRIP_OPTIONS.map((item) => (
-                  <Chip
-                    key={item.value}
-                    label={item.label}
-                    selected={tripType === item.value}
-                    onPress={() => setTripType(item.value)}
-                  />
-                ))}
+            <View style={s.tripHeaderRow}>
+              <Text style={[s.tripHeaderLabel, { color: c.text.primary }]}>운행 형태</Text>
+              <View style={s.tripPillRow}>
+                {TRIP_OPTIONS.map((item) => {
+                  const selected = tripType === item.value;
+                  return (
+                    <Pressable
+                      key={item.value}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected }}
+                      onPress={() => setTripType(item.value)}
+                      style={[
+                        s.tripPill,
+                        selected
+                          ? { borderColor: c.brand.primary, backgroundColor: c.brand.primarySoft }
+                          : { borderColor: c.border.default, backgroundColor: c.bg.surface },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          s.tripPillText,
+                          { color: selected ? c.brand.primary : c.text.secondary },
+                          selected ? s.tripPillTextActive : null,
+                        ]}
+                      >
+                        {item.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
               </View>
             </View>
 
-            <View style={{ flex: 1 }}>
-              <Text style={[s.aiLabel, { color: c.brand.primary }]}>AI 추천 운임 (거리 {distanceKm}km)</Text>
-              <Text style={[s.aiPrice, { color: c.brand.primary }]}>{won(aiFare)}</Text>
+            <View style={s.aiBottomRow}>
+              <View style={s.aiTextWrap}>
+                <Text style={[s.aiLabel, { color: c.brand.primary }]}>AI 추천 운임 (거리 {distanceKm}km)</Text>
+                <Text style={[s.aiPrice, { color: c.brand.primary }]}>{won(aiDisplayedFare)}</Text>
+              </View>
+              <Button
+                title="적용하기"
+                onPress={applyAiFare}
+                style={{ height: 48, minWidth: 118, paddingHorizontal: 16, borderRadius: 18 } as any}
+              />
             </View>
-            <Button
-              title="적용하기"
-              onPress={applyAiFare}
-              style={{ height: 40, paddingHorizontal: 14 } as any}
-            />
           </View>
 
           <View style={{ marginTop: 16 }}>
@@ -744,6 +786,39 @@ export function ShipperCreateOrderStep1Screen() {
             ))}
           </View>
 
+          <View
+            style={{
+              marginTop: 10,
+              borderWidth: 1,
+              borderColor: pay === "card" ? c.status.danger : c.border.default,
+              backgroundColor: c.bg.surface,
+              borderRadius: 12,
+              paddingHorizontal: 12,
+              paddingVertical: 10,
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 8,
+            }}
+          >
+            <Ionicons
+              name={pay === "card" ? "alert-circle-outline" : "checkmark-circle-outline"}
+              size={16}
+              color={pay === "card" ? c.status.danger : c.brand.primary}
+            />
+            <Text
+              style={{
+                flex: 1,
+                fontSize: 12,
+                fontWeight: "800",
+                color: pay === "card" ? c.status.danger : c.text.secondary,
+              }}
+            >
+              {pay === "card"
+                ? "카드 결제 선택 시 수수료 10%가 추가됩니다."
+                : "선택한 결제 방식은 별도 수수료가 없습니다."}
+            </Text>
+          </View>
+
           <Card padding={14} style={{ marginTop: 14 }}>
             <View style={s.feeRow}>
               <Text style={[s.feeLabel, { color: c.text.secondary }]}>희망 운임</Text>
@@ -763,6 +838,23 @@ export function ShipperCreateOrderStep1Screen() {
 
         <View style={{ height: 150 + insets.bottom }} />
       </ScrollView>
+
+      {/* --- 주소 검색 모달 추가 --- */}
+      <AddressSearch
+        visible={isStartModalOpen}
+        onClose={() => setIsStartModalOpen(false)}
+        onComplete={(address) => {
+          setStartSelected(address);
+          setStartSearch(address);
+          setSelectedRecentValue(undefined); 
+        }}
+      />
+      <AddressSearch
+        visible={isEndModalOpen}
+        onClose={() => setIsEndModalOpen(false)}
+        onComplete={(address) => setEndAddr(address)}
+      />
+      {/* ------------------------- */}
 
       <View
         style={[
@@ -784,7 +876,7 @@ export function ShipperCreateOrderStep1Screen() {
           </View>
         </View>
 
-        <Button title="화물 등록하기" onPress={submit} fullWidth />
+        <Button title="다음" onPress={submit} fullWidth />
       </View>
     </View>
   );

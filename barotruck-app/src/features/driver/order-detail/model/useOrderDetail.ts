@@ -2,6 +2,8 @@ import { useMemo, useState, useEffect, useCallback } from "react";
 import { Alert, Linking } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as Clipboard from "expo-clipboard";
+import { Ionicons } from "@expo/vector-icons";
+
 import { OrderService } from "@/shared/api/orderService";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import { useDrivingProcess } from "@/features/driver/driving/model/useDrivingProcess";
