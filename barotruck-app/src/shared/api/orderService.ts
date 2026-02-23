@@ -1,4 +1,4 @@
-﻿import { AssignedDriverInfoResponse, OrderRequest, OrderResponse, OrderStatus } from '../models/order';
+﻿import { AssignedDriverInfoResponse, MyRevenueResponse, OrderRequest, OrderResponse, OrderStatus } from '../models/order';
 import apiClient from './apiClient';
 
 const API_BASE = '/api/v1/orders';
@@ -23,19 +23,19 @@ function normalizeStatus(raw: any): OrderStatus {
 function normalizeSettlementStatus(raw: any): OrderResponse['settlementStatus'] {
   const rawText = String(raw ?? '').trim();
   const v = rawText.toUpperCase();
-  if (v === 'READY' || v === 'WAIT' || v === 'COMPLETED') return v;
+  if (v === 'READY' || v === 'WAIT' || v === 'COMPLETED') return v as any;
   // TransportPaymentStatus (backend): READY, PAID, CONFIRMED, DISPUTED, CANCELLED
   if (v === 'PAID' || v === 'CONFIRMED') return 'COMPLETED';
-  if (v === 'DISPUTED') return 'WAIT';
+  if (v === 'DISPUTED') return 'WAIT' as any ;
   if (v === 'CANCELLED') return 'READY';
   if (v === '0') return 'READY';
-  if (v === '1') return 'WAIT';
+  if (v === '1') return 'WAIT' as any;
   if (v === '2') return 'COMPLETED';
   if (v === 'UNPAID' || v === 'INIT') return 'READY';
-  if (v === 'PENDING' || v === 'WAITING' || v === 'REQUESTED') return 'WAIT';
+  if (v === 'PENDING' || v === 'WAITING' || v === 'REQUESTED') return 'WAIT' as any;
   if (v === 'PAID' || v === 'DONE' || v === 'SUCCESS') return 'COMPLETED';
   if (rawText.includes('미결제') || rawText.includes('결제전')) return 'READY';
-  if (rawText.includes('대기')) return 'WAIT';
+  if (rawText.includes('대기')) return 'WAIT' as any;
   if (rawText.includes('완료') || rawText.includes('결제됨')) return 'COMPLETED';
   return undefined;
 }
@@ -328,16 +328,6 @@ export const OrderService = {
 
 /** 차주 전용: 월간 수익 통계 및 목록 조회 */
   getMyRevenue: async (year?: number, month?: number): Promise<MyRevenueResponse> => {
-    // 목업 모드 대응
-    if (USE_MOCK) {
-      return {
-        totalAmount: 1500000,
-        receivedAmount: 1200000,
-        pendingAmount: 300000,
-        orders: MOCK_ORDERS.slice(0, 5), // 목업 데이터 일부 반환
-      };
-    }
-
     // API 호출 (쿼리 파라미터 전달)
     const res = await apiClient.get(`${API_BASE}/my-revenue`, {
       params: { year, month }
