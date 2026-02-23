@@ -245,3 +245,42 @@ export function CreateOrderTopBar({ onBack }: { onBack: () => void }) {
     </View>
   );
 }
+
+// createOrderStep1.components.tsx 맨 아래에 추가
+
+export function SearchableAddressField({
+  label,
+  value,
+  placeholder,
+  onPress,
+}: {
+  label: string;
+  value: string;
+  placeholder: string;
+  onPress: () => void;
+}) {
+  const { colors: c } = useAppTheme();
+  
+  return (
+    <View style={{ flex: 1, marginBottom: 16 }}>
+      {label ? <Text style={[s.fieldLabel, { color: c.text.primary }]}>{label}</Text> : null}
+      <Pressable
+        onPress={onPress}
+        style={[
+          s.select, // 기존에 쓰시던 테두리/패딩 스타일 재사용
+          { backgroundColor: c.bg.surface, borderColor: c.border.default, justifyContent: 'center' },
+        ]}
+      >
+        <Text
+          style={[
+            s.selectText,
+            { color: value ? c.text.primary : c.text.secondary },
+          ]}
+          numberOfLines={1}
+        >
+          {value || placeholder}
+        </Text>
+      </Pressable>
+    </View>
+  );
+}

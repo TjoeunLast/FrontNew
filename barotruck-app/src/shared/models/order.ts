@@ -1,4 +1,5 @@
 import { ImageInfo } from "./ImageInfo";
+import type { SettlementStatus as PaymentSettlementStatus } from "./Settlement";
 
 // @/shared/models/order.
 
@@ -27,6 +28,9 @@ export interface OrderRequest {
   // 상차 방식 (예: 당상-당일 상차, 익상-다음날 상차, 야간상차)
   // 상차 예정 시간 (예: "2024-05-20 14:00" 또는 "오전 중")
   // 상차지 광역 자치단체명 (예: 서울, 경기, 부산) - 지역별 오더 필터링용
+
+  startLat?: number;
+  startLng?: number;
 
   endAddr: string;
   endPlace: string;
@@ -98,6 +102,9 @@ export interface OrderResponse {
   endType: string;
   endSchedule?: string;
 
+  startLat?: number;
+  startLng?: number;
+
   cargoContent: string;
   loadMethod?: string;
   workType?: string;
@@ -115,16 +122,17 @@ export interface OrderResponse {
   payMethod: string;
 
   memo?: string;
+  remark?: string;
   tag?: string[];
   instant: boolean; // 즉시 배차 요청 여부 (true면 빠른 배차 우선 처리)
 
   // 시스템 지표
   distance: number;
   duration: number;
-  remark?: string; // 요청사항
 
   user?: UserSummary;
   cancellation?: CancellationSummary;
+  applicantCount?: number;
 }
 
 export interface UserSummary {
@@ -174,4 +182,12 @@ export interface AssignedDriverInfoResponse {
   bankName?: string; // 정산용 은행명
   accountNum?: string; // 정산용 계좌번호
   type?: string; // 개별/용달/법인 구분
+}
+
+
+export interface MyRevenueResponse {
+  totalAmount: number;    // 이번 달 총 수익
+  receivedAmount: number; // 정산 완료 금액
+  pendingAmount: number;  // 정산 예정 금액
+  orders: OrderResponse[]; // 이번 달 오더 상세 목록
 }

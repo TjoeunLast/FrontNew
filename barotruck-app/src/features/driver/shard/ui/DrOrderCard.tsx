@@ -1,9 +1,10 @@
 import React from "react";
-import { View, Text, StyleSheet, Pressable } from "react-native";
+import { View, Text, Pressable } from "react-native";
 import { useRouter } from "expo-router";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import { OrderResponse } from "@/shared/models/order";
 import { Badge } from "@/shared/ui/feedback/Badge";
+import { orderCardStyles as s } from "@/shared/ui/business/orderCardStyles";
 
 export const DrOrderCard = ({ order }: { order: OrderResponse }) => {
   const {
@@ -47,6 +48,10 @@ export const DrOrderCard = ({ order }: { order: OrderResponse }) => {
       params: { id: orderId.toString() },
     });
   };
+  const createdDateLabel =
+    typeof createdAt === "string" && createdAt.length >= 10
+      ? createdAt.substring(5, 10).replace("-", ".")
+      : "-";
 
   return (
     <Pressable
@@ -76,7 +81,7 @@ export const DrOrderCard = ({ order }: { order: OrderResponse }) => {
           />
         </View>
         <Text style={[s.timeText, { color: c.text.secondary }]}>
-          {createdAt.substring(5, 10).replace("-", ".")}
+          {createdDateLabel}
         </Text>
       </View>
 
