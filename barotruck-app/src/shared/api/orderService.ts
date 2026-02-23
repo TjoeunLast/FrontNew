@@ -324,4 +324,32 @@ export const OrderService = {
     const res = await apiClient.get(`${API_BASE}/my-driving`);
     return res.data;
   },
+
+
+/** 차주 전용: 월간 수익 통계 및 목록 조회 */
+  getMyRevenue: async (year?: number, month?: number): Promise<MyRevenueResponse> => {
+    // 목업 모드 대응
+    if (USE_MOCK) {
+      return {
+        totalAmount: 1500000,
+        receivedAmount: 1200000,
+        pendingAmount: 300000,
+        orders: MOCK_ORDERS.slice(0, 5), // 목업 데이터 일부 반환
+      };
+    }
+
+    // API 호출 (쿼리 파라미터 전달)
+    const res = await apiClient.get(`${API_BASE}/my-revenue`, {
+      params: { year, month }
+    });
+    
+    // 백엔드에서 준 orders 리스트를 normalizeOrderRow 등을 통해 가공해야 한다면 아래처럼 처리 가능
+    const data = res.data;
+    if (data && data.orders) {
+      data.orders = toOrderList(data.orders);
+    }
+    
+    return data;
+  },
+
 };
