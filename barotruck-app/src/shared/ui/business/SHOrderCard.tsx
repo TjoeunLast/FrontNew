@@ -75,6 +75,7 @@ export default function SHOrderCard(props: SHOrderCardProps) {
   const { colors: c } = useAppTheme();
   const [loading, setLoading] = useState(false); // [추가] 로딩 상태 관리
   const highlightColor = isInstant ? "#DC2626" : c.brand.primary;
+  const isRoundTrip = driveMode === "roundTrip" || driveMode === "왕복";
   const [totalPrice, setTotalPrice] = useState(
     basePrice + (laborFee || 0) + (packagingPrice || 0) 
   );
@@ -132,8 +133,8 @@ export default function SHOrderCard(props: SHOrderCardProps) {
               />
             ) : null}
             <Badge
-              label={driveMode === "왕복" ? "왕복" : "편도"}
-              tone={driveMode === "왕복" ? "roundTrip" : "oneWay"}
+              label={isRoundTrip ? "왕복" : "편도"}
+              tone={isRoundTrip ? "info" : "neutral"}
               style={{
                 height: 24,
                 justifyContent: "center",

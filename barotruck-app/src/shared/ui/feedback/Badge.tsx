@@ -1,3 +1,4 @@
+import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import React, { memo, useMemo } from "react";
 import {
   StyleSheet,
@@ -6,7 +7,6 @@ import {
   type TextStyle,
   type ViewStyle,
 } from "react-native";
-import { useAppTheme } from "@/shared/hooks/useAppTheme";
 
 export type BadgeTone =
   | "success" // 완료, 성공 (status.success)

@@ -46,6 +46,8 @@ function toScheduleText(iso: string, hhmm?: string) {
   const timeMatch = (hhmm ?? "").match(/^([01]\d|2[0-3]):([0-5]\d)$/);
   if (timeMatch) {
     d.setHours(Number(timeMatch[1]), Number(timeMatch[2]), 0, 0);
+  } else {
+    d.setHours(0, 0, 0, 0);
   }
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -89,8 +91,6 @@ export function ShipperCreateOrderStep2CargoScreen() {
   const [workTool, setWorkTool] = React.useState<"지게차" | "크레인">("지게차");
   const [packaging, setPackaging] = React.useState<"미포장" | "포장">("미포장");
   const [selectedRequestTags, setSelectedRequestTags] = React.useState<string[]>(draft?.requestTags ?? []);
-  const [customRequestOpen, setCustomRequestOpen] = React.useState(Boolean(draft?.requestText?.trim()));
-  const [customRequestText, setCustomRequestText] = React.useState(draft?.requestText ?? "");
   const [memo, setMemo] = React.useState("");
   const [loading, setLoading] = React.useState(false);
 
@@ -106,7 +106,7 @@ export function ShipperCreateOrderStep2CargoScreen() {
   const resolvedWorkType = workMode === "수작업" ? "수작업" : workTool;
   const packagingHintText = packaging === "포장" ? `선택 시 +${won(packagingPrice)}` : "추가요금 없음";
   const payFeeHintText =
-    draft.pay === "card" ? `카드 결제 수수료 +10% (${won(fee)})` : "결제 방식 수수료 없음";
+    draft.pay === "card" ? `토스 결제 수수료 +10% (${won(fee)})` : "결제 방식 수수료 없음";
   const toggleRequestTag = (tag: string) => {
     setSelectedRequestTags((prev) => (prev.includes(tag) ? prev.filter((x) => x !== tag) : [...prev, tag]));
   };
@@ -121,23 +121,26 @@ export function ShipperCreateOrderStep2CargoScreen() {
         startType: draft.loadDay,
         startSchedule: toScheduleText(draft.loadDateISO, draft.startTimeHHmm),
         puProvince: parseProvince(draft.startSelected),
+        startLat: draft.startLat,
+        startLng: draft.startLng,
         endAddr: draft.endAddr,
         endPlace: draft.endAddrDetail || draft.endAddr,
         endType: draft.arriveType,
         endSchedule: toScheduleText(draft.loadDateISO, draft.endTimeHHmm),
         doProvince: parseProvince(draft.endAddr),
+        endLat: draft.endLat,
+        endLng: draft.endLng,
         cargoContent: [
           selectedRequestTags.length ? `요청태그:${selectedRequestTags.join(",")}` : "",
-          customRequestText.trim() ? `직접입력:${customRequestText.trim()}` : "",
           `상하차방식:${resolvedWorkType}`,
           `포장:${packaging}`,
-          memo.trim() ? `추가메모:${memo.trim()}` : "",
           draft.cargoDetail ? `화물:${draft.cargoDetail}` : "",
           draft.startContact ? `상차지 연락처:${draft.startContact}` : "",
           draft.endContact ? `하차지 연락처:${draft.endContact}` : "",
         ]
           .filter(Boolean)
           .join(" | "),
+        memo: memo.trim() || undefined,
         loadMethod,
         workType: resolvedWorkType,
         tonnage: parseTonnage(draft.ton.label, draft.ton.value),
@@ -222,7 +225,9 @@ export function ShipperCreateOrderStep2CargoScreen() {
           <Text style={{ color: c.text.secondary, fontWeight: "800" }}>연락처</Text>
           <Text style={{ color: c.text.primary, fontWeight: "900", marginBottom: 8 }}>{draft.endContact}</Text>
           <Text style={{ color: c.text.secondary, fontWeight: "800" }}>하차 시간</Text>
-          <Text style={{ color: c.text.primary, fontWeight: "900", marginBottom: 8 }}>{draft.endTimeHHmm}</Text>
+          <Text style={{ color: c.text.primary, fontWeight: "900", marginBottom: 8 }}>
+            {draft.endTimeHHmm?.trim() || "하차시간 미정"}
+          </Text>
 
           <View style={{ height: 1, backgroundColor: c.border.default, marginVertical: 12 }} />
 
@@ -312,35 +317,7 @@ export function ShipperCreateOrderStep2CargoScreen() {
                 onPress={() => toggleRequestTag(tag)}
               />
             ))}
-
-            <RequestChip
-              label="직접 입력"
-              selected={customRequestOpen || Boolean(customRequestText.trim())}
-              onPress={() => setCustomRequestOpen((v) => !v)}
-            />
           </View>
-
-          {customRequestOpen ? (
-            <View
-              style={{
-                marginTop: 10,
-                borderWidth: 1,
-                borderColor: c.border.default,
-                borderRadius: 14,
-                padding: 12,
-                backgroundColor: c.bg.surface,
-              }}
-            >
-              <TextInput
-                value={customRequestText}
-                onChangeText={setCustomRequestText}
-                placeholder="예) 취급주의 / 세워서 적재 / 도착 30분 전 연락 등"
-                placeholderTextColor={c.text.secondary}
-                style={{ color: c.text.primary, fontWeight: "700", lineHeight: 18, minHeight: 72 }}
-                multiline
-              />
-            </View>
-          ) : null}
 
           <View style={{ height: 12 }} />
           <Text style={{ fontSize: 13, fontWeight: "800", color: c.text.primary, marginBottom: 8 }}>추가 메모</Text>
@@ -422,4 +399,3 @@ export function ShipperCreateOrderStep2CargoScreen() {
     </View>
   );
 }
-

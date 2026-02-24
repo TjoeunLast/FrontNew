@@ -32,7 +32,8 @@ function normalizeSettlementStatus(raw: any): OrderResponse['settlementStatus'] 
   if (v === '1') return 'WAIT' as any;
   if (v === '2') return 'COMPLETED';
   if (v === 'UNPAID' || v === 'INIT') return 'READY';
-  if (v === 'PENDING' || v === 'WAITING' || v === 'REQUESTED') return 'WAIT' as any;
+  if (v === 'PENDING' || v === 'WAITING') return 'WAIT' as any;
+  if (v === 'REQUESTED') return 'READY';
   if (v === 'PAID' || v === 'DONE' || v === 'SUCCESS') return 'COMPLETED';
   if (rawText.includes('미결제') || rawText.includes('결제전')) return 'READY';
   if (rawText.includes('대기')) return 'WAIT' as any;
@@ -44,8 +45,7 @@ function findNestedSettlementStatus(node: any, depth = 0): OrderResponse['settle
   if (!node || typeof node !== 'object' || depth > 3) return undefined;
 
   const direct = normalizeSettlementStatus(
-    (node as any).status ??
-      (node as any).settlementStatus ??
+    (node as any).settlementStatus ??
       (node as any).settlement_status ??
       (node as any).paymentStatus ??
       (node as any).payStatus ??
@@ -139,6 +139,8 @@ function normalizeOrderRow(node: any): OrderResponse | null {
     packagingPrice: (node as any).packagingPrice !== undefined ? Number((node as any).packagingPrice) : undefined,
     insuranceFee: (node as any).insuranceFee !== undefined ? Number((node as any).insuranceFee) : undefined,
     payMethod: String((node as any).payMethod ?? ''),
+    memo: (node as any).memo !== undefined ? String((node as any).memo) : undefined,
+    remark: (node as any).remark !== undefined ? String((node as any).remark) : undefined,
     instant: Boolean((node as any).instant),
     distance: Number((node as any).distance ?? 0),
     duration: Number((node as any).duration ?? 0),

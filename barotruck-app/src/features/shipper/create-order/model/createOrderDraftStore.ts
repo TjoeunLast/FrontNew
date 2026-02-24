@@ -1,8 +1,8 @@
-﻿export type CreateOrderDraft = {
+export type CreateOrderDraft = {
   startSelected: string;
   startAddrDetail: string;
   startContact: string;
-  loadDay: "당상(오늘)" | "익상(내일)" | "직접 지정";
+  loadDay: "당상" | "익상" | "직접 지정";
   loadDateISO: string;
   startTimeHHmm: string;
 
@@ -20,8 +20,6 @@
 
   requestTags: string[];
   requestText: string;
-
-  photos: { id: string; name: string }[];
 
   dispatch: "instant" | "direct";
   tripType: "oneWay" | "roundTrip";

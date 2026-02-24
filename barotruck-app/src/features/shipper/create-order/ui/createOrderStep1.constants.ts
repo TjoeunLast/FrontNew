@@ -51,7 +51,6 @@ export const PRESET_REQUEST_TAGS: string[] = [
 export const DEFAULT_SELECTED_REQUEST_TAGS: string[] = [
 ];
 
-export const DEFAULT_PHOTOS = [{ id: "p1", name: "IMG_01" }];
 
 export const DISTANCE_KM = 340;
 
@@ -98,3 +97,4 @@ export function getRecommendedFareByDistance(distanceKm: number) {
   const perKmFare = 850;
   return roundToThousand(baseFare + Math.max(0, distanceKm) * perKmFare);
 }
+
