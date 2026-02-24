@@ -16,6 +16,8 @@ export interface RegisterRequest {
     bankName: string;
     accountNum: string;
     career: number; // 또는 경력 형식에 따라 string 추가
+    address?: string; // 차주 주소
+    nbhId?: number;   // 지역 코드
   };
   // 화주 추가 정보
   shipper?: {

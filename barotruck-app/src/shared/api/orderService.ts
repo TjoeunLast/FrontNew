@@ -45,7 +45,8 @@ function findNestedSettlementStatus(node: any, depth = 0): OrderResponse['settle
   if (!node || typeof node !== 'object' || depth > 3) return undefined;
 
   const direct = normalizeSettlementStatus(
-    (node as any).settlementStatus ??
+      (node as any).status ??
+      (node as any).settlementStatus ??
       (node as any).settlement_status ??
       (node as any).paymentStatus ??
       (node as any).payStatus ??
@@ -122,10 +123,14 @@ function normalizeOrderRow(node: any): OrderResponse | null {
     startPlace,
     startType: String((node as any).startType ?? (node as any).pickupType ?? ''),
     startSchedule: String((node as any).startSchedule ?? (node as any).pickupAt ?? createdAt),
+    puProvince: (node as any).puProvince,
+    startNbhId: (node as any).startNbhId,
     endAddr,
     endPlace,
     endType: String((node as any).endType ?? (node as any).dropoffType ?? ''),
     endSchedule: (node as any).endSchedule ? String((node as any).endSchedule) : undefined,
+    doProvince: (node as any).doProvince,
+    endNbhId: (node as any).endNbhId,
     cargoContent: String((node as any).cargoContent ?? (node as any).cargo ?? ''),
     loadMethod: (node as any).loadMethod ? String((node as any).loadMethod) : undefined,
     workType: (node as any).workType ? String((node as any).workType) : undefined,
@@ -327,6 +332,21 @@ export const OrderService = {
     return res.data;
   },
 
+  /**
+   * 5. 차주: 지역 기반 오더 검색
+   * @param nbhId 지역 코드 (선택) - 우선 순위 높음
+   * @param address 주소 문자열 (선택) - nbhId가 없을 때 사용 (예: "서울 종로구")
+   */
+  searchOrders: async (nbhId?: number, address?: string): Promise<OrderResponse[]> => {
+    const params: any = {};
+    if (nbhId) {
+      params.nbhId = nbhId;
+    } else if (address) {
+      params.address = address;
+    }
+    const res = await apiClient.get<OrderResponse[]>(`${API_BASE}/search`, { params });
+    return res.data;
+  },
 
 /** 차주 전용: 월간 수익 통계 및 목록 조회 */
   getMyRevenue: async (year?: number, month?: number): Promise<MyRevenueResponse> => {
