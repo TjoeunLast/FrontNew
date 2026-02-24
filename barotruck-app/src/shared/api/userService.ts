@@ -78,11 +78,10 @@ export const UserService = {
    * 앱 실행 시 또는 토큰 갱신 시 호출됨
    */
   updateFcmToken: async (token: string): Promise<void> => {
-    // 백엔드 UsersController의 @PatchMapping("/fcm-token")과 매칭
-    await apiClient.patch('/api/user/fcm-token', null, {
-      params: { fcmToken: token }
-    });
-  },
+    console.log("🌐 [UserService] 서버로 FCM 토큰 전송 시도:", token);
+    // .patch 대신 .post 사용
+    await apiClient.post('/api/user/fcm-token', { fcmToken: token });
+},
   
 
 };
