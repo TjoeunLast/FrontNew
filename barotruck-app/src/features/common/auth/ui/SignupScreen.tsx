@@ -1,3 +1,5 @@
+import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import React, { useMemo, useState } from "react";
 import {
   Alert,
@@ -12,20 +14,17 @@ import {
   type ViewStyle,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
 
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
-import { TextField } from "@/shared/ui/form/TextField";
 import { Button } from "@/shared/ui/base/Button";
+import { TextField } from "@/shared/ui/form/TextField";
 import { withAlpha } from "@/shared/utils/color";
-import { AuthService } from "@/shared/api/authService";
-import { UserService } from "@/shared/api/userService";
 
 
 
 type Role = "shipper" | "driver";
 type Step = "role" | "account";
+type Gender = "M" | "F";
 
 function normalizeEmail(v: string) {
   return v.trim().toLowerCase();
@@ -39,6 +38,17 @@ function digitsOnly(v: string) {
 }
 function isPhoneLike(v: string) {
   return digitsOnly(v).length >= 10;
+}
+function parseBirthDate(v: string) {
+  const m = /^(\d{4})(\d{2})(\d{2})$/.exec(digitsOnly(v).slice(0, 8));
+  if (!m) return null;
+  const y = Number(m[1]);
+  const mo = Number(m[2]);
+  const d = Number(m[3]);
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+  const dt = new Date(y, mo - 1, d);
+  if (dt.getFullYear() !== y || dt.getMonth() !== mo - 1 || dt.getDate() !== d) return null;
+  return { y, mo, d };
 }
 function genCode6() {
   return String(Math.floor(100000 + Math.random() * 900000));
@@ -62,6 +72,8 @@ export default function SignupScreen() {
   const [pw2, setPw2] = useState("");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const [gender, setGender] = useState<Gender | null>(null);
+  const [birthDate, setBirthDate] = useState("");
 
   const [emailChecked, setEmailChecked] = useState(false);
   const [emailOkChecked, setEmailOkChecked] = useState(false);
@@ -144,7 +156,6 @@ export default function SignupScreen() {
         paddingHorizontal: 16,
         backgroundColor: c.bg.surface,
         borderWidth: 1,
-        borderColor: c.border.default,
       } as ViewStyle,
       tfInput: { fontSize: 16, fontWeight: "800", paddingVertical: 0 } as TextStyle,
 
@@ -159,6 +170,17 @@ export default function SignupScreen() {
         justifyContent: "center",
       } as ViewStyle,
       miniBtnText: { fontSize: 15, fontWeight: "900", color: c.text.primary } as TextStyle,
+      genderBtn: {
+        flex: 1,
+        height: 46,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: c.border.default,
+        backgroundColor: c.bg.surface,
+        alignItems: "center",
+        justifyContent: "center",
+      } as ViewStyle,
+      genderBtnText: { fontSize: 14, fontWeight: "800", color: c.text.secondary } as TextStyle,
 
       helper: { marginTop: 8, fontSize: 13, fontWeight: "800", color: c.text.secondary } as TextStyle,
 
@@ -205,6 +227,8 @@ export default function SignupScreen() {
   const pwMatch = pw.length > 0 && pw2.length > 0 && pw === pw2;
   const nameOk = name.trim().length > 0;
   const phoneFormatOk = isPhoneLike(phone);
+  const birthDateOk = parseBirthDate(birthDate) !== null;
+  const genderOk = gender !== null;
 
   const canNext =
     !!role &&
@@ -213,6 +237,8 @@ export default function SignupScreen() {
     pwMatch &&
     nameOk &&
     phoneFormatOk &&
+    genderOk &&
+    birthDateOk &&
     phoneVerified;
 
 
@@ -260,6 +286,8 @@ export default function SignupScreen() {
       name: name.trim(),
       phone: phone.trim(),
       role: role,
+      gender: gender!,
+      birthDate: birthDate.trim(),
     };
 
     // 데이터를 query params로 넘기거나, 다음 페이지에서 다시 입력받지 않도록 
@@ -380,7 +408,52 @@ export default function SignupScreen() {
             <View style={{ height: 16 }} />
 
             <Text style={s.label}>이름</Text>
-            <TextField value={name} onChangeText={setName} placeholder="실명 입력" autoCapitalize="none" inputWrapStyle={s.tfWrap} inputStyle={s.tfInput} />
+            <TextField
+              value={name}
+              onChangeText={setName}
+              placeholder="실명 입력"
+              autoCapitalize="none"
+              inputWrapStyle={s.tfWrap}
+              inputStyle={s.tfInput}
+            />
+
+            <View style={{ height: 16 }} />
+
+            <Text style={s.label}>성별</Text>
+            <View style={s.row}>
+              <Pressable
+                onPress={() => setGender("M")}
+                style={[
+                  s.genderBtn,
+                  gender === "M" && { borderColor: c.brand.primary },
+                ]}
+              >
+                <Text style={[s.genderBtnText, gender === "M" && { color: c.text.primary }]}>남성</Text>
+              </Pressable>
+              <View style={s.rowGap} />
+              <Pressable
+                onPress={() => setGender("F")}
+                style={[
+                  s.genderBtn,
+                  gender === "F" && { borderColor: c.brand.primary },
+                ]}
+              >
+                <Text style={[s.genderBtnText, gender === "F" && { color: c.text.primary }]}>여성</Text>
+              </Pressable>
+            </View>
+
+            <View style={{ height: 16 }} />
+
+            <Text style={s.label}>생년월일</Text>
+            <TextField
+              value={birthDate}
+              onChangeText={(v) => setBirthDate(digitsOnly(v).slice(0, 8))}
+              placeholder="YYYYMMDD"
+              keyboardType="number-pad"
+              inputWrapStyle={s.tfWrap}
+              inputStyle={s.tfInput}
+              errorText={birthDate.length > 0 && !birthDateOk ? "YYYYMMDD 숫자 8자리를 입력해주세요." : undefined}
+            />
 
             <View style={{ height: 16 }} />
 
