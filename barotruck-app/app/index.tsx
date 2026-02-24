@@ -5,12 +5,15 @@ import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import { Button, Card } from "@/shared/ui/base";
 import { tokenStorage } from "@/shared/utils/tokenStorage";
 import { getCurrentUserSnapshot } from "@/shared/utils/currentUserStorage";
+import { useFCM } from '@/shared/hooks/useFCM'; // 경로 맞춰서 import
 
 export default function Index() {
   const t = useAppTheme(); // 테마 객체 가져오기
   const c = t.colors; // 색상 팔레트 추출
   const router = useRouter(); // Expo Router 네비게이션 도구
   const [checkingAutoLogin, setCheckingAutoLogin] = React.useState(true);
+
+  useFCM(); // FCM 훅 실행
 
   React.useEffect(() => {
     let active = true;

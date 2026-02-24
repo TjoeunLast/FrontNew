@@ -6,16 +6,29 @@ import { tokenStorage } from "@/shared/utils/tokenStorage";
 
 
 function resolveApiBaseUrl() {
+  // 1. .env 파일에 강제로 설정된 값이 있으면 최우선 사용
   const envBase = String(process.env.EXPO_PUBLIC_API_BASE_URL ?? "").trim();
   if (envBase) return envBase;
 
+  // 2. Expo Metro Bundler가 실행 중인 호스트 PC의 IP (예: 192.168.0.x)
   const hostFromExpo = Constants.expoConfig?.hostUri?.split(":").shift();
-  if (hostFromExpo && hostFromExpo !== "undefined") return `http://${hostFromExpo}:8080`;
 
+  // 3. Android 환경에 대한 특수 처리
+  if (Platform.OS === 'android') {
+    // Expo Go나 Dev Client로 실행 중이라 호스트 IP가 감지된 경우 -> 해당 IP 사용
+    if (hostFromExpo && hostFromExpo !== "undefined") {
+      return `http://${hostFromExpo}:8080`;
+    }
+    // 에뮬레이터인데 호스트 IP를 못 찾은 경우 -> 에뮬레이터 전용 루프백 주소 사용
+    return "http://10.0.2.2:8080";
+  }
+
+  // 4. 웹 환경 처리
   if (Platform.OS === "web" && typeof window !== "undefined" && window.location?.hostname) {
     return `${window.location.protocol}//${window.location.hostname}:8080`;
   }
 
+  // 5. iOS 시뮬레이터 또는 그 외 환경 (localhost 사용 가능
   return "http://localhost:8080";
 }
 

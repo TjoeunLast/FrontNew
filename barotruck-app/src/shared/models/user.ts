@@ -23,6 +23,8 @@ export interface DriverInfo {
   bankName: string;
   accountNum: string;
   type?: string; // 냉장, 냉동 등
+  address?: string; // 차주 주소 (선호 지역)
+  nbhId?: number;   // 지역 코드 (Neighborhood ID)
 }
 
 /**
