@@ -17,6 +17,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { AuthService } from "@/shared/api/authService";
+import apiClient from "@/shared/api/apiClient";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import type { RegisterRequest } from "@/shared/models/auth";
 import { Button } from "@/shared/ui/base/Button";
@@ -47,6 +48,17 @@ function parseBirthDateToAge(v: string): number | undefined {
 function showMsg(title: string, msg: string) {
   if (Platform.OS === "web") window.alert(`${title}\n\n${msg}`);
   else Alert.alert(title, msg);
+}
+
+function readBizLookupFields(payload: any) {
+  const source = payload?.data ?? payload ?? {};
+  const companyName = String(
+    source?.companyName ?? source?.corpName ?? source?.businessName ?? source?.name ?? ""
+  ).trim();
+  const representative = String(
+    source?.representative ?? source?.ceoName ?? source?.ownerName ?? source?.nameOfRep ?? ""
+  ).trim();
+  return { companyName, representative };
 }
 
 export default function SignupShipperScreen() {
@@ -211,6 +223,7 @@ export default function SignupShipperScreen() {
                 bizRegNum: bizNoDigits,
                 representative: ceoName.trim(),
                 bizAddress: "",
+                isCorporate: "Y",
               }
             : undefined,
       };
@@ -222,6 +235,8 @@ export default function SignupShipperScreen() {
         name: params.name,
         nickname: nickname.trim(),
         role: "SHIPPER",
+        gender: params.gender,
+        birthDate: String(params.birthDate ?? "").trim() || undefined,
       });
 
       // 4. 메인 탭으로 이동
@@ -251,17 +266,41 @@ export default function SignupShipperScreen() {
 
     try {
       setCheckingBiz(true);
-      // 목업 지연 시간
-      await new Promise((r) => setTimeout(r, 600));
+      const paramCandidates = [
+        { bizRegNum: bizNoDigits },
+        { bizNum: bizNoDigits },
+        { bizNo: bizNoDigits },
+      ];
 
-      // API가 없다면 임시 데이터로 채워줍니다.
-      if (!companyName.trim()) setCompanyName("(주)바로트럭물류");
-      if (!ceoName.trim()) setCeoName(params.name || "대표자명");
+      let responseData: any = null;
+      for (const params of paramCandidates) {
+        try {
+          const res = await apiClient.get("/api/v1/shippers/check-biz-num", { params });
+          responseData = res.data;
+          break;
+        } catch {
+          // 다음 파라미터 후보 시도
+        }
+      }
 
-      showMsg("조회 성공", "사업자 정보 조회가 완료되었습니다.");
-    } catch (e) {
-      console.log("❌ 사업자 조회 오류:", e);
-      showMsg("오류", "사업자 조회 중 문제가 발생했습니다.");
+      if (!responseData) {
+        showMsg("조회 실패", "사업자번호 조회 API 응답을 확인하지 못했습니다. 회사명/대표자명을 직접 입력해주세요.");
+        return;
+      }
+
+      const { companyName: foundCompanyName, representative: foundRepresentative } = readBizLookupFields(responseData);
+      if (foundCompanyName) setCompanyName(foundCompanyName);
+      if (foundRepresentative) setCeoName(foundRepresentative);
+
+      if (foundCompanyName || foundRepresentative) {
+        showMsg("조회 성공", "사업자 정보가 반영되었습니다.");
+      } else {
+        showMsg("조회 완료", "사업자번호는 확인됐습니다. 회사명/대표자명은 직접 입력해주세요.");
+      }
+    } catch (e: any) {
+      console.log("❌ 사업자 조회 오류:", e?.response?.data ?? e);
+      const msg = e?.response?.data?.error || e?.response?.data?.message || "사업자 조회 중 문제가 발생했습니다.";
+      showMsg("오류", msg);
     } finally {
       setCheckingBiz(false);
     }
