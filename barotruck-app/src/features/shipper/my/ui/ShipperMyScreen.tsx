@@ -39,6 +39,8 @@ type ProfileView = {
   nickname: string;
   role: string;
   shipperType: string;
+  gender: string;
+  birthDate: string;
 };
 
 function roleToKorean(role: string) {
@@ -48,24 +50,77 @@ function roleToKorean(role: string) {
   return role || "-";
 }
 
-function resolveShipperType(me: any) {
-  const isCorporateRaw = String(me?.isCorporate ?? "").trim().toUpperCase();
-  if (isCorporateRaw === "Y") return "사업자";
-  if (isCorporateRaw === "N") return "개인";
+function toShipperTypeLabel(raw?: unknown) {
+  const v = String(raw ?? "").trim().toUpperCase();
+  if (!v) return "-";
+  if (
+    v === "Y" ||
+    v === "TRUE" ||
+    v === "T" ||
+    v === "1" ||
+    v === "CORPORATE" ||
+    v === "BUSINESS" ||
+    v === "BIZ" ||
+    v === "사업자"
+  ) {
+    return "사업자";
+  }
+  if (
+    v === "N" ||
+    v === "FALSE" ||
+    v === "F" ||
+    v === "0" ||
+    v === "PERSONAL" ||
+    v === "INDIVIDUAL" ||
+    v === "개인"
+  ) {
+    return "개인";
+  }
+  return "-";
+}
 
-  const hasBusinessInfo = Boolean(String(me?.bizRegNum ?? "").trim() || String(me?.companyName ?? "").trim());
+function resolveShipperType(...sources: any[]) {
+  const explicit = toShipperTypeLabel(
+    sources.find((s) => s?.isCorporate != null)?.isCorporate ??
+      sources.find((s) => s?.is_corporate != null)?.is_corporate ??
+      sources.find((s) => s?.shipper?.isCorporate != null)?.shipper?.isCorporate ??
+      sources.find((s) => s?.shipper?.is_corporate != null)?.shipper?.is_corporate ??
+      sources.find((s) => s?.shipperInfo?.isCorporate != null)?.shipperInfo?.isCorporate ??
+      sources.find((s) => s?.shipperInfo?.is_corporate != null)?.shipperInfo?.is_corporate ??
+      sources.find((s) => s?.shipperDto?.isCorporate != null)?.shipperDto?.isCorporate
+  );
+  if (explicit !== "-") return explicit;
+
+  const hasBusinessInfo = Boolean(
+    sources.some((s) => String(s?.bizRegNum ?? s?.biz_reg_num ?? "").trim().length > 0) ||
+      sources.some((s) => String(s?.companyName ?? s?.company_name ?? "").trim().length > 0)
+  );
   return hasBusinessInfo ? "사업자" : "개인";
 }
 
-async function fetchShipperTypeFromServer(baseMe: any) {
-  if (USE_MOCK) return resolveShipperType(baseMe);
+function normalizeGenderLabel(input?: string) {
+  const v = String(input ?? "").trim().toUpperCase();
+  if (!v) return "-";
+  if (v === "M" || v === "MALE" || v === "남" || v === "남성") return "남성";
+  if (v === "F" || v === "FEMALE" || v === "여" || v === "여성") return "여성";
+  return String(input).trim() || "-";
+}
+
+function normalizeBirthDateLabel(input?: string) {
+  const digits = String(input ?? "").replace(/\D/g, "");
+  if (digits.length !== 8) return "-";
+  return `${digits.slice(0, 4)}.${digits.slice(4, 6)}.${digits.slice(6, 8)}`;
+}
+
+async function fetchShipperDetailFromServer(baseMe: any) {
+  if (USE_MOCK) return null;
   try {
     const role = String(baseMe?.role ?? "").trim().toUpperCase();
-    if (role !== "SHIPPER") return "-";
+    if (role && role !== "SHIPPER") return null;
     const res = await apiClient.get("/api/v1/shippers/me");
-    return resolveShipperType(res.data);
+    return res.data;
   } catch {
-    return resolveShipperType(baseMe);
+    return null;
   }
 }
 
@@ -82,6 +137,8 @@ export default function ShipperMyScreen() {
     nickname: "-",
     role: "-",
     shipperType: "-",
+    gender: "-",
+    birthDate: "-",
   });
   const [profileImageUrl, setProfileImageUrl] = useState("");
 
@@ -93,25 +150,76 @@ export default function ShipperMyScreen() {
         const localImageUrl = (await AsyncStorage.getItem(PROFILE_IMAGE_STORAGE_KEY)) ?? "";
 
         try {
-          const me = await UserService.getMyInfo();
+          const me = (await UserService.getMyInfo()) as any;
           const cached = await getCurrentUserSnapshot();
-          const shipperType = await fetchShipperTypeFromServer(me);
+          const shipperDetail = await fetchShipperDetailFromServer(me);
+          const shipperType = resolveShipperType(
+            me,
+            shipperDetail,
+            shipperDetail?.user,
+            me?.shipper,
+            me?.shipperInfo,
+            me?.shipperDto
+          );
           const next: ProfileView = {
             email: me.email || "-",
             name: me.name || cached?.name || "-",
             nickname: me.nickname || cached?.nickname || "-",
             role: roleToKorean(me.role || cached?.role || ""),
             shipperType,
+            gender: normalizeGenderLabel(
+              me.gender ??
+                me.sex ??
+                shipperDetail?.gender ??
+                shipperDetail?.sex ??
+                shipperDetail?.user?.gender ??
+                shipperDetail?.user?.sex ??
+                cached?.gender
+            ),
+            birthDate: normalizeBirthDateLabel(
+              me.birthDate ??
+                me.birthday ??
+                me.birth ??
+                me.dateOfBirth ??
+                me.dob ??
+                shipperDetail?.birthDate ??
+                shipperDetail?.birthday ??
+                shipperDetail?.birth ??
+                shipperDetail?.dateOfBirth ??
+                shipperDetail?.dob ??
+                shipperDetail?.user?.birthDate ??
+                shipperDetail?.user?.birthday ??
+                shipperDetail?.user?.birth ??
+                shipperDetail?.user?.dateOfBirth ??
+                shipperDetail?.user?.dob ??
+                cached?.birthDate
+            ),
           };
           if (!active) return;
           setProfile(next);
           setProfileImageUrl(localImageUrl || me.profileImageUrl || "");
-          await saveCurrentUserSnapshot({
-            email: me.email,
-            nickname: me.nickname,
-            name: me.name || cached?.name,
-            role: me.role,
-          });
+          try {
+            await saveCurrentUserSnapshot({
+              email: me.email,
+              nickname: me.nickname,
+              name: me.name || cached?.name,
+              role: me.role,
+              gender: me.gender ?? me.sex ?? shipperDetail?.user?.gender ?? cached?.gender,
+              birthDate:
+                String(
+                  me.birthDate ??
+                    me.birthday ??
+                    me.birth ??
+                    me.dateOfBirth ??
+                    me.dob ??
+                    shipperDetail?.user?.birthDate ??
+                    shipperDetail?.user?.birthday ??
+                    shipperDetail?.user?.birth ??
+                    cached?.birthDate ??
+                    ""
+                ).trim() || undefined,
+            });
+          } catch {}
         } catch {
           const cached = await getCurrentUserSnapshot();
           if (!active) return;
@@ -123,6 +231,8 @@ export default function ShipperMyScreen() {
             nickname: cached.nickname || "-",
             role: roleToKorean(cached.role || ""),
             shipperType: "-",
+            gender: normalizeGenderLabel(cached.gender),
+            birthDate: normalizeBirthDateLabel(cached.birthDate),
           });
         }
       })();
@@ -155,8 +265,10 @@ export default function ShipperMyScreen() {
         backgroundColor: withAlpha(c.brand.primary, 0.12),
       } as ViewStyle,
       profileImage: { width: "100%", height: "100%" } as ImageStyle,
-      profileInfo: { flex: 1, flexDirection: "row", alignItems: "center", gap: 8 } as ViewStyle,
+      profileInfo: { flex: 1, gap: 6 } as ViewStyle,
+      profileTopRow: { flexDirection: "row", alignItems: "center", gap: 8 } as ViewStyle,
       profileName: { fontSize: 18, fontWeight: "800", color: c.text.primary } as TextStyle,
+      profileMeta: { fontSize: 13, fontWeight: "700", color: c.text.secondary } as TextStyle,
       shipperTypeBadge: {
         paddingHorizontal: 10,
         height: 26,
@@ -265,11 +377,18 @@ export default function ShipperMyScreen() {
             )}
           </View>
           <View style={s.profileInfo}>
-            <Text style={s.profileName}>{profile.nickname === "-" ? "화주님" : `${profile.nickname}님`}</Text>
-            {profile.shipperType !== "-" ? (
-              <View style={s.shipperTypeBadge}>
-                <Text style={s.shipperTypeBadgeText}>{profile.shipperType}</Text>
-              </View>
+            <View style={s.profileTopRow}>
+              <Text style={s.profileName}>{profile.nickname === "-" ? "화주님" : `${profile.nickname}님`}</Text>
+              {profile.shipperType !== "-" ? (
+                <View style={s.shipperTypeBadge}>
+                  <Text style={s.shipperTypeBadgeText}>{profile.shipperType}</Text>
+                </View>
+              ) : null}
+            </View>
+            {(profile.gender !== "-" || profile.birthDate !== "-") ? (
+              <Text style={s.profileMeta}>
+                {[profile.gender, profile.birthDate].filter((v) => v !== "-").join(" · ")}
+              </Text>
             ) : null}
           </View>
           <View style={s.arrowCircle}>

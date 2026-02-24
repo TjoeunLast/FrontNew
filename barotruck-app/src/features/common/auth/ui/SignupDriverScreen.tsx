@@ -397,6 +397,8 @@ export default function SignupDriverScreen() {
         email,
         nickname: nickname.trim(),
         role: "DRIVER",
+        gender,
+        birthDate: String(birthDate ?? "").trim() || undefined,
       });
 
       router.replace("/(driver)/(tabs)");

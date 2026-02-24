@@ -50,12 +50,14 @@ export default function LoginScreen() {
     setSubmitting(true);
     try {
       await AuthService.login(nextEmail, nextPw);
-      const me = await UserService.getMyInfo();
+      const me = (await UserService.getMyInfo()) as any;
 
       void saveCurrentUserSnapshot({
         email: me.email,
         nickname: me.nickname,
         role: me.role,
+        gender: me.gender ?? me.sex,
+        birthDate: String(me.birthDate ?? me.birthday ?? me.birth ?? me.dateOfBirth ?? me.dob ?? "").trim() || undefined,
       }).catch(() => {});
 
       if (me.role === "DRIVER") {
