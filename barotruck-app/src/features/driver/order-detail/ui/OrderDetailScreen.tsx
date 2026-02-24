@@ -11,7 +11,6 @@ import {
 } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 
-// [컴포넌트 & 훅 임포트]
 import { useOrderDetail } from "../model/useOrderDetail";
 import { Badge } from "@/shared/ui/feedback/Badge";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
@@ -22,9 +21,10 @@ const { width } = Dimensions.get("window");
 export default function OrderDetailScreen() {
   const { colors: c } = useAppTheme();
 
+  // 데이터 밒 기능 로드
   const {
-    order,
-    loading,
+    order, // 오더 상세 데이터
+    loading, // 현재 상태에 맞는 하단 버튼 설정
     totalPrice,
     formatAddress,
     actions,
@@ -34,11 +34,9 @@ export default function OrderDetailScreen() {
     myLocation,
     startType,
     endType,
-    payMethodLabel,
-    payMethodTone,
   } = useOrderDetail();
 
-  // [방어 코드: 데이터 로딩 중 처리]
+  // 방어 코드: 데이터 로딩 중 처리
   if (!order || !buttonConfig) {
     return (
       <View style={[s.container, s.center, { backgroundColor: c.bg.canvas }]}>
@@ -47,7 +45,7 @@ export default function OrderDetailScreen() {
     );
   }
 
-  // [거리 계산 함수]
+  // 거리 계산 함수
   const getDist = (lat: number, lng: number) => {
     if (!myLocation || !lat || !lng) return null;
     const R = 6371;
@@ -65,8 +63,9 @@ export default function OrderDetailScreen() {
 
   const distFromMe = order ? getDist(order.startLat, order.startLng) : null;
 
+  // 전산 관련 상태 판단 변수
   const isCompleted = order.status === "COMPLETED";
-  const isSettled = order.settlementStatus === "COMPLETED";
+  const isSettled = order.settlementStatus === "COMPLETED"; // 백엔드 수정 후 다시 수정
 
   const getStatusInfo = (status: string) => {
     switch (status) {
@@ -91,7 +90,7 @@ export default function OrderDetailScreen() {
 
   return (
     <View style={[s.container, { backgroundColor: c.bg.canvas }]}>
-      {/* SECTION 1: 헤더 영역 */}
+      {/* 헤더 */}
       <View
         style={[
           s.header,
@@ -111,7 +110,8 @@ export default function OrderDetailScreen() {
         <View style={{ width: 40 }} />
       </View>
 
-      {/* SECTION 2: 정산 알림바 */}
+      {/* 정산 알림바(운송 완료 탭에서만 보임) */}
+      {/* 백엔드 정산 상태 추가 후 다시 수정 */}
       {isCompleted && (
         <View
           style={[
@@ -150,7 +150,7 @@ export default function OrderDetailScreen() {
           isCompleted && { paddingTop: 10 },
         ]}
       >
-        {/* SECTION 3: 메인 카드 */}
+        {/* 메인 */}
         <View
           style={[
             s.card,
@@ -178,11 +178,15 @@ export default function OrderDetailScreen() {
                       style={s.unifiedBadge}
                     />
                   )}
-                  <Badge
-                    label={order.instant ? "바로배차" : "직접배차"}
-                    tone={order.instant ? "urgent" : "direct"}
-                    style={s.unifiedBadge}
-                  />
+
+                  {(order.status === "REQUESTED" ||
+                    order.status === "APPLIED") && (
+                    <Badge
+                      label={order.instant ? "바로배차" : "직접배차"}
+                      tone={order.instant ? "urgent" : "direct"}
+                      style={s.unifiedBadge}
+                    />
+                  )}
                 </>
               )}
             </View>
@@ -191,6 +195,7 @@ export default function OrderDetailScreen() {
             </Text>
           </View>
 
+          {/* 주소 영역 */}
           <View style={s.routeBigRow}>
             <View style={s.addrBox}>
               <Text style={[s.addrBig, { color: c.text.primary }]}>
@@ -221,6 +226,7 @@ export default function OrderDetailScreen() {
             </View>
           </View>
 
+          {/* 인포 바 */}
           <View style={[s.infoBar, { backgroundColor: c.bg.canvas }]}>
             <View style={s.infoItem}>
               <MaterialCommunityIcons
@@ -229,7 +235,15 @@ export default function OrderDetailScreen() {
                 color={c.brand.primary}
               />
               <Text style={[s.infoText, { color: c.brand.primary }]}>
-                내 위치에서 {distFromMe ? `${distFromMe}km` : "계산 중..."}
+                {isCompleted
+                  ? "운송 완료"
+                  : order.status === "LOADING" ||
+                      order.status === "IN_TRANSIT" ||
+                      order.status === "UNLOADING"
+                    ? "운송 중"
+                    : distFromMe
+                      ? `내 위치에서 ${distFromMe}km`
+                      : "계산 중..."}
               </Text>
             </View>
             <View style={[s.divider, { backgroundColor: c.border.default }]} />
@@ -259,18 +273,26 @@ export default function OrderDetailScreen() {
             </Text>
           </View>
 
-          <View style={s.payMethodRow}>
-            {/* 🚩 DrOrderCard와 동일한 로직의 배지 적용 */}
-            <Badge label={payMethodLabel} />
+          {/* 결제 방식 정해 진 후 다시 수정 */}
+          {/* <View style={s.payMethodRow}>
+            <Badge
+              label={order.payMethod}
+              tone={
+                order.payMethod?.includes("선착불")
+                  ? "payPrepaid"
+                  : "payDeferred"
+              }
+              style={{ marginTop: 6, alignSelf: "flex-end" }}
+            />
             <Text style={[s.payMethodText, { color: c.text.secondary }]}>
               {isSettled
                 ? "정산계좌로 입금이 완료되었습니다"
                 : "화주 확인 후 정산 일정에 따라 입금됩니다"}
             </Text>
-          </View>
+          </View> */}
         </View>
 
-        {/* SECTION 4: 운행 경로 타임라인 */}
+        {/* 운행 경로 타임라인 */}
         <View style={[s.sectionCard, { backgroundColor: c.bg.surface }]}>
           <Text style={[s.sectionTitle, { color: c.text.primary }]}>
             운행 경로
@@ -283,15 +305,15 @@ export default function OrderDetailScreen() {
               <View
                 style={[s.timelineDot, { backgroundColor: c.brand.primary }]}
               >
-                <Text style={s.dotText}>출</Text>
+                <Text style={s.dotText}>출발</Text>
               </View>
               <View style={s.timelineContent}>
                 <View
                   style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
                 >
-                  {/* 🚩 당상(startType) 정보 추가 */}
+                  {/* 상차 정보 */}
                   <Text style={[s.timeLabel, { color: c.brand.primary }]}>
-                    {order.startSchedule} {startType} 상차
+                    {order.startSchedule} {startType}
                   </Text>
                 </View>
                 <Text style={[s.placeTitle, { color: c.text.primary }]}>
@@ -306,12 +328,12 @@ export default function OrderDetailScreen() {
               <View
                 style={[s.timelineDot, { backgroundColor: c.brand.primary }]}
               >
-                <Text style={s.dotText}>도</Text>
+                <Text style={s.dotText}>도착</Text>
               </View>
               <View style={s.timelineContent}>
-                {/* 🚩 당착(endType) 정보 추가 */}
+                {/* 하차 정보*/}
                 <Text style={[s.timeLabel, { color: c.brand.primary }]}>
-                  {order.endSchedule || "시간 미정"} {endType} 하차
+                  {order.endSchedule || "시간 미정"} {endType}
                 </Text>
                 <Text style={[s.placeTitle, { color: c.text.primary }]}>
                   {order.endAddr}
@@ -324,26 +346,45 @@ export default function OrderDetailScreen() {
           </View>
         </View>
 
-        {/* SECTION 5: 화물 정보 */}
+        {/* 화물 정보 */}
         <View style={[s.sectionCard, { backgroundColor: c.bg.surface }]}>
           <Text style={[s.sectionTitle, { color: c.text.primary }]}>
             화물 정보
           </Text>
           <View style={s.gridContainer}>
             <GridItem
-              label="차종/톤수"
-              value={`${order.reqTonnage} ${order.reqCarType}`}
+              label="화물종류"
+              value={order.cargoContent || "일반화물"}
             />
             <GridItem label="운송방식" value={order.driveMode || "독차"} />
-            <GridItem label="화물종류" value={order.cargoContent || "파렛트"} />
-            <GridItem
-              label="중량"
-              value={order.loadWeight ? `${order.loadWeight}톤` : "미지정"}
-            />
+            <GridItem label="상하차방법" value={order.loadMethod || "지게차"} />
+            <GridItem label="요청차종" value={order.reqCarType || "카고"} />
+            <GridItem label="요청톤수" value={order.reqTonnage || "1톤"} />
+            <GridItem label="작업유형" value={order.workType || "일반"} />
           </View>
         </View>
 
-        {/* SECTION 6: 화주 정보 */}
+        {/* 요청 사항 */}
+        <View style={[s.sectionCard, { backgroundColor: c.bg.surface }]}>
+          <Text style={[s.sectionTitle, { color: c.text.primary }]}>
+            요청 사항
+          </Text>
+          <View
+            style={[
+              s.memoBox,
+              {
+                backgroundColor: "#FFFBEB", // 연한 노란색 배경 (포스트잇 느낌)
+                borderColor: "#FDE68A", // 조금 더 진한 노란색 테두리
+              },
+            ]}
+          >
+            <Text style={[s.memoText, { color: c.text.primary }]}>
+              {order.memo || "등록된 요청 사항이 없습니다."}
+            </Text>
+          </View>
+        </View>
+
+        {/* 화주 정보 */}
         <View style={[s.sectionCard, { backgroundColor: c.bg.surface }]}>
           <Text style={[s.sectionTitle, { color: c.text.primary }]}>
             화주 정보
@@ -385,7 +426,8 @@ export default function OrderDetailScreen() {
         <View style={{ height: 120 }} />
       </ScrollView>
 
-      {/* SECTION 7: 액션바 */}
+      {/* 액션바 */}
+      {/* !isCompleted(운송 중) */}
       <View
         style={[
           s.bottomBar,
@@ -394,12 +436,13 @@ export default function OrderDetailScreen() {
       >
         {!isCompleted ? (
           <>
+            {/* 채팅 및 전화 버튼 */}
             <View style={s.iconBtnGroup}>
               <Pressable
                 style={[s.circleBtn, { borderColor: c.border.default }]}
               >
                 <Ionicons
-                  name="chatbubble-ellipses-outline"
+                  name="chatbubble-outline"
                   size={24}
                   color={c.text.primary}
                 />
@@ -419,6 +462,8 @@ export default function OrderDetailScreen() {
                 />
               </Pressable>
             </View>
+
+            {/* 메인 버튼 */}
             <Pressable
               onPress={loading ? undefined : buttonConfig.onPress}
               style={({ pressed }) => [
@@ -556,7 +601,7 @@ const s = StyleSheet.create({
   placeDetail: { fontSize: 13, marginTop: 2 },
   gridContainer: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   gridItem: { width: (width - 82) / 2, padding: 16, borderRadius: 16 },
-  gridLabel: { fontSize: 12, marginBottom: 4, fontWeight: "700" },
+  gridLabel: { fontSize: 12, marginBottom: 6, fontWeight: "600" },
   gridValue: { fontSize: 15, fontWeight: "800" },
   bottomBar: {
     position: "absolute",
@@ -592,4 +637,15 @@ const s = StyleSheet.create({
   managerRow: { flexDirection: "row", alignItems: "center" },
   managerLabel: { fontSize: 14, width: 60, marginLeft: 8, fontWeight: "700" },
   managerValue: { fontSize: 15, fontWeight: "800", flex: 1 },
+  memoBox: {
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    minHeight: 80, // 내용이 짧아도 어느 정도 영역을 확보해서 눈에 띄게 함
+  },
+  memoText: {
+    fontSize: 15,
+    lineHeight: 22, // 줄 간격을 넓혀서 긴 글도 읽기 편하게 함
+    fontWeight: "600", // 내용을 좀 더 두껍게 해서 강조
+  },
 });

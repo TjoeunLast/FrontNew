@@ -6,7 +6,7 @@ import { OrderResponse } from "@/shared/models/order";
 import { Badge } from "@/shared/ui/feedback/Badge";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 
-// [유틸] 거리 계산 함수 (하버사인)
+// 거리 계산 함수(하버사인 공식)
 function getDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
   const R = 6371;
   const dLat = (lat2 - lat1) * (Math.PI / 180);
@@ -28,6 +28,7 @@ export const DrOrderCard = ({
   order: OrderResponse;
   myLocation?: any;
 }) => {
+  // 데이터 구조 분해 할당
   const {
     orderId,
     createdAt,
@@ -50,29 +51,30 @@ export const DrOrderCard = ({
     endType,
     startLat,
     startLng,
+    loadMethod,
   } = order;
 
   const { colors: c } = useAppTheme();
   const router = useRouter();
 
-  // 1. 비즈니스 로직: 총 금액 합산
+  // totalPrice 계산(기본 운송료 + 수수료 + 포장비)
   const totalPrice = basePrice + (laborFee || 0) + (packagingPrice || 0);
 
-  // 2. 비즈니스 로직: 주소 요약
+  // 주소 요약
   const getShortAddr = (addr: string) => {
     if (!addr) return "";
     const parts = addr.split(" ");
     return `${parts[0]} ${parts[1] || ""}`;
   };
 
-  // 3. 실시간 거리 계산
+  // 실시간 거리 계산
   const distanceText = useMemo(() => {
     if (myLocation && startLat && startLng) {
       const d = getDistance(myLocation.lat, myLocation.lng, startLat, startLng);
-      return `${d.toFixed(1)}km`;
+      return `${d.toFixed(1)}km`; // 소수점 첫째 자리까지 표시
     }
     return null;
-  }, [myLocation, startLat, startLng]);
+  }, [myLocation, startLat, startLng]); // 이 값들이 바뀔 때만 재계산
 
   const handlePress = () => {
     router.push({
@@ -80,11 +82,6 @@ export const DrOrderCard = ({
       params: { id: orderId.toString() },
     });
   };
-
-  const createdDateLabel =
-    typeof createdAt === "string" && createdAt.length >= 10
-      ? createdAt.substring(5, 10).replace("-", ".")
-      : "-";
 
   return (
     <Pressable
@@ -99,7 +96,7 @@ export const DrOrderCard = ({
         },
       ]}
     >
-      {/* 내 위치 거리 표시 (상단 중앙 유지) */}
+      {/* 내 위치 거리 표시 */}
       {distanceText && (
         <View style={s.centerDistance}>
           <MaterialCommunityIcons
@@ -113,7 +110,7 @@ export const DrOrderCard = ({
         </View>
       )}
 
-      {/* SECTION: 상단 헤더 */}
+      {/* 상단 헤더 */}
       <View style={s.topRow}>
         <View style={s.badgeRow}>
           <Badge
@@ -127,12 +124,13 @@ export const DrOrderCard = ({
           />
         </View>
         <Text style={[s.timeText, { color: c.text.secondary }]}>
-          {createdDateLabel}
+          {createdAt?.substring(5, 10).replace("-", ".")}
         </Text>
       </View>
 
-      {/* SECTION: 운송 경로 */}
+      {/* 운송 경로 */}
       <View style={s.routeRow}>
+        {/* 상차지 섹션 */}
         <View style={s.locGroup}>
           <Text style={s.locLabel}>상차지</Text>
           <Text
@@ -149,6 +147,7 @@ export const DrOrderCard = ({
           </Text>
         </View>
 
+        {/* 경로 구분선 및 거리 정보 */}
         <View style={s.arrowArea}>
           <View
             style={[
@@ -165,6 +164,7 @@ export const DrOrderCard = ({
           </View>
         </View>
 
+        {/* 하차지 섹션 */}
         <View style={[s.locGroup, { alignItems: "flex-end" }]}>
           <Text style={s.locLabel}>하차지</Text>
           <Text
@@ -185,14 +185,21 @@ export const DrOrderCard = ({
         </View>
       </View>
 
-      {/* SECTION: 하단 정보 */}
+      {/* 하단 정보 */}
       <View style={[s.bottomRow, { borderTopColor: c.bg.canvas }]}>
         <View style={s.infoColumn}>
           <Text style={[s.loadDateText, { color: c.text.primary }]}>
             {startSchedule} 상차
           </Text>
           <Text style={[s.carText, { color: c.text.secondary }]}>
-            {reqTonnage} {reqCarType} • {workType || "지게차"} • {startType}
+            {/* 1. 당상 · 당착 (startType, endType) */}
+            {order.startType} · {order.endType}
+            {/* 2. 혼적 여부 (loadMethod) */}
+            {` · ${order.loadMethod || "독차"}`}
+            {/* 3. 수작업 여부 (laborFee가 존재하고 0이 아닐 때만 '수작업' 표시) */}
+            {order.laborFee && order.laborFee !== 0 ? " · 수작업" : ""}
+            {/* 4. 차종 정보 */}
+            {` · ${order.reqTonnage} ${order.reqCarType}`}
           </Text>
         </View>
 

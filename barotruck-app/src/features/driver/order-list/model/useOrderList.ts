@@ -5,11 +5,9 @@ import * as Location from "expo-location";
 
 export type SortType = "LATEST" | "PRICE_HIGH" | "NEARBY";
 
-/**
- * [유틸] 두 좌표 사이의 거리를 km 단위로 계산 (하버사인 공식)
- */
+// 거리 계산 공식
 function getDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
-  const R = 6371; // 지구 반지름 (km)
+  const R = 6371;
   const dLat = (lat2 - lat1) * (Math.PI / 180);
   const dLon = (lon2 - lon1) * (Math.PI / 180);
   const a =
@@ -23,55 +21,40 @@ function getDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
 }
 
 export const useOrderList = () => {
-  const [orders, setOrders] = useState<OrderResponse[]>([]);
+  // 상태 관리
+  const [orders, setOrders] = useState<OrderResponse[]>([]); // 전체 오더
   const [recommendedOrders, setRecommendedOrders] = useState<OrderResponse[]>(
-    [],
+    [], // 맞춤 오더
   );
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   const [filter, setFilter] = useState({
-    dispatchType: "ALL", // ALL | RECOMMENDED | INSTANT | DIRECT
-    region: "지역",
-    tonnage: "톤 수",
-    carType: "차종",
+    dispatchType: "ALL",
   });
 
   const [sortBy, setSortBy] = useState<SortType>("LATEST");
-
-  // 🚩 기사님 현재 위치 상태
   const [myLocation, setMyLocation] = useState<{
     lat: number;
     lng: number;
   } | null>(null);
 
-  /**
-   * [함수] 내 위치 가져오기
-   */
+  // 내 위치 가져오기
   const getMyLocation = useCallback(async () => {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") {
-        console.log("위치 권한 거부됨");
-        return;
-      }
-
+      if (status !== "granted") return;
       const location = await Location.getCurrentPositionAsync({});
-      const coords = {
+      setMyLocation({
         lat: location.coords.latitude,
         lng: location.coords.longitude,
-      };
-
-      setMyLocation(coords);
-      console.log("📍 내 현재 위치 획득 성공:", coords);
+      });
     } catch (error) {
       console.error("위치 가져오기 실패:", error);
     }
   }, []);
 
-  /**
-   * [함수] 오더 데이터 패칭
-   */
+  // 오더 데이터 패칭
   const fetchOrders = useCallback(async () => {
     try {
       setLoading(true);
@@ -95,19 +78,18 @@ export const useOrderList = () => {
     getMyLocation();
   }, [fetchOrders, getMyLocation]);
 
-  /**
-   * [로직] 필터링 및 정렬
-   * - 내 위치(myLocation)나 정렬 기준(sortBy)이 바뀔 때마다 재계산됨
-   */
+  // 필터링 및 정렬
   const filteredAndSortedOrders = useMemo(() => {
-    // 🚩 이제 가짜 데이터(MOCK)를 쓰지 않고 DB에서 온 진짜 데이터를 사용합니다.
-    let sourceData = [...orders];
+    let sourceData =
+      filter.dispatchType === "RECOMMENDED"
+        ? [...recommendedOrders]
+        : [...orders];
 
     if (filter.dispatchType === "RECOMMENDED") {
       sourceData = [...recommendedOrders];
     }
 
-    // 기본 필터링 로직
+    // 배차 유형 필터링
     let result = sourceData.filter((o) => {
       if (o.status !== "REQUESTED") return false;
       if (filter.dispatchType === "INSTANT") return o.instant === true;
@@ -117,15 +99,14 @@ export const useOrderList = () => {
 
     // 정렬 로직 적용
     result.sort((a, b) => {
-      const getFullPrice = (o: any) =>
+      const getTotalPrice = (o: any) =>
         (o.basePrice || 0) + (o.laborFee || 0) + (o.packagingPrice || 0);
 
       switch (sortBy) {
         case "PRICE_HIGH":
-          return getFullPrice(b) - getFullPrice(a);
+          return getTotalPrice(b) - getTotalPrice(a);
 
         case "NEARBY":
-          // 🚩 DB에서 온 데이터(a, b)에 좌표가 있고 내 위치가 확보되었을 때만 계산
           if (
             myLocation &&
             a.startLat &&
@@ -150,7 +131,6 @@ export const useOrderList = () => {
           return 0;
 
         default:
-          // 최신순 (LATEST)
           return (
             new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
           );

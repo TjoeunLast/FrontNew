@@ -6,7 +6,31 @@ import { useAppTheme } from "@/shared/hooks/useAppTheme";
 
 export const DoneOrderCard = ({ order, onDetail }: any) => {
   const { colors: c } = useAppTheme();
-  const isSettled = order.settlementStatus === "COMPLETED";
+
+  const {
+    orderId,
+    settlementStatus,
+    startAddr,
+    startPlace,
+    endAddr,
+    endPlace,
+    distance,
+    reqTonnage,
+    reqCarType,
+    cargoContent,
+    basePrice,
+    laborFee,
+    packagingPrice,
+    payMethod,
+  } = order;
+
+  // 정산 상태 확인
+  const isSettled = settlementStatus === "COMPLETED";
+
+  // 총 금액 계산 (모든 비용 합산)
+  const totalPrice = (basePrice || 0) + (laborFee || 0) + (packagingPrice || 0);
+
+  // 주소 요약 함수
   const getShortAddr = (addr: string) =>
     addr ? `${addr.split(" ")[0]} ${addr.split(" ")[1] || ""}` : "";
 
@@ -16,29 +40,25 @@ export const DoneOrderCard = ({ order, onDetail }: any) => {
         s.container,
         { borderColor: c.border.default, backgroundColor: c.bg.surface },
       ]}
-      onPress={() => onDetail(Number(order.orderId))}
+      onPress={() => onDetail(Number(orderId))}
     >
+      {/* 상단 영역 */}
       <View style={s.topRow}>
         <View style={s.badgeRow}>
-          {/* 정산 상태 배지: 테마 success/warning 활용 */}
           <Badge
             label={isSettled ? "정산 완료" : "정산 대기"}
             tone={isSettled ? "success" : "warning"}
           />
-          <View style={[s.receiptBadge, { backgroundColor: c.bg.muted }]}>
-            <Text style={[s.receiptText, { color: c.text.secondary }]}>
-              인수증 확인됨
-            </Text>
-          </View>
         </View>
         <View style={s.detailLink}>
           <Text style={[s.detailText, { color: c.text.secondary }]}>
-            #{order.orderId}
+            #{orderId}
           </Text>
           <Ionicons name="chevron-forward" size={14} color={c.text.secondary} />
         </View>
       </View>
 
+      {/* 중단 영역 (운송 경로) */}
       <View style={s.routeRow}>
         <View style={s.locGroup}>
           <Text style={[s.locLabel, { color: c.text.secondary }]}>상차지</Text>
@@ -46,13 +66,13 @@ export const DoneOrderCard = ({ order, onDetail }: any) => {
             style={[s.locName, { color: c.text.primary }]}
             numberOfLines={1}
           >
-            {getShortAddr(order.startAddr)}
+            {getShortAddr(startAddr)}
           </Text>
           <Text
             style={[s.placeText, { color: c.text.secondary }]}
             numberOfLines={1}
           >
-            {order.startPlace}
+            {startPlace}
           </Text>
         </View>
 
@@ -64,7 +84,7 @@ export const DoneOrderCard = ({ order, onDetail }: any) => {
             ]}
           >
             <Text style={[s.distText, { color: c.text.secondary }]}>
-              {order.distance}km
+              {distance}km
             </Text>
           </View>
           <View style={[s.line, { backgroundColor: c.border.default }]}>
@@ -78,7 +98,7 @@ export const DoneOrderCard = ({ order, onDetail }: any) => {
             style={[s.locName, { color: c.text.primary, textAlign: "right" }]}
             numberOfLines={1}
           >
-            {getShortAddr(order.endAddr)}
+            {getShortAddr(endAddr)}
           </Text>
           <Text
             style={[
@@ -87,19 +107,16 @@ export const DoneOrderCard = ({ order, onDetail }: any) => {
             ]}
             numberOfLines={1}
           >
-            {order.endPlace}
+            {endPlace}
           </Text>
         </View>
       </View>
 
+      {/* 하단 정보 (운송 완료 정보 및 금액) */}
       <View style={[s.bottomRow, { borderTopColor: c.bg.canvas }]}>
         <View style={s.infoColumn}>
           <Text style={[s.loadDateText, { color: c.text.primary }]}>
             운송 완료
-          </Text>
-          <Text style={[s.carText, { color: c.text.secondary }]}>
-            {order.reqTonnage} {order.reqCarType} •{" "}
-            {order.cargoContent || "일반짐"}
           </Text>
         </View>
         <View style={s.priceColumn}>
@@ -109,11 +126,11 @@ export const DoneOrderCard = ({ order, onDetail }: any) => {
               { color: isSettled ? c.status.success : c.text.primary },
             ]}
           >
-            {order.basePrice?.toLocaleString()}원
+            {totalPrice.toLocaleString()}원
           </Text>
           <Badge
-            label={order.payMethod === "PREPAID" ? "현금/선불" : "인수증/후불"}
-            tone={order.payMethod === "PREPAID" ? "payPrepaid" : "payDeferred"}
+            label={payMethod}
+            tone={payMethod?.includes("선착불") ? "payPrepaid" : "payDeferred"}
             style={{ marginTop: 6, alignSelf: "flex-end" }}
           />
         </View>

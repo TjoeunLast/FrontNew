@@ -2,7 +2,6 @@ import { useMemo, useState, useEffect, useCallback } from "react";
 import { Alert, Linking } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as Clipboard from "expo-clipboard";
-import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
 
 import { OrderService } from "@/shared/api/orderService";
@@ -96,18 +95,7 @@ export const useOrderDetail = () => {
           icon: "checkmark-circle-outline",
           color: order.instant ? c.badge.urgentBg : c.brand.primary,
           onPress: async () => {
-            try {
-              if (order.instant) {
-                await OrderService.acceptOrder(order.orderId);
-                Alert.alert("성공", "배차가 즉시 확정되었습니다.");
-              } else {
-                await OrderService.applyOrder(order.orderId);
-                Alert.alert("성공", "배차 신청이 완료되었습니다.");
-              }
-              fetchDetail();
-            } catch (error) {
-              Alert.alert("오류", "배차 처리 중 문제가 발생했습니다.");
-            }
+            await handleUpdateStatus(order.orderId, "APPLIED");
           },
         };
       case "APPLIED":
@@ -182,14 +170,6 @@ export const useOrderDetail = () => {
     // 🚩 당상/당착 정보 반환 (UI에서 사용 예정)
     startType: order?.startType || "",
     endType: order?.endType || "",
-
-    // 🚩 인수증/후불 배지 로직 (DrOrderCard와 동기화)
-    payMethodLabel: order?.payMethod?.includes("선착불")
-      ? "현금/선불"
-      : "인수증/후불",
-    payMethodTone: order?.payMethod?.includes("선착불")
-      ? "payPrepaid"
-      : "payDeferred",
 
     formatAddress: {
       big: (addr: string) => addr?.split(" ").slice(0, 2).join(" ") || "",
