@@ -25,6 +25,7 @@ export interface RegisterRequest {
     bizRegNum: string;
     representative: string;
     bizAddress: string;
+    isCorporate?: 'Y' | 'N';
   };
 }
 

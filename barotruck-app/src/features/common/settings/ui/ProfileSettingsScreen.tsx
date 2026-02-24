@@ -18,6 +18,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import apiClient from "@/shared/api/apiClient";
 import { UserService } from "@/shared/api/userService";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import ShipperScreenHeader from "@/shared/ui/layout/ShipperScreenHeader";
@@ -28,38 +29,80 @@ const PROFILE_IMAGE_STORAGE_KEY = "baro_profile_image_url_v1";
 type ProfileState = {
   nickname: string;
   gender: string;
+  birthDate: string;
   shipperType: string;
   email: string;
-  age: string;
   imageUrl: string;
 };
 
 function toShipperTypeLabel(raw?: string) {
   const v = String(raw ?? "").trim().toUpperCase();
   if (!v) return "-";
-  if (v === "Y" || v === "CORPORATE" || v === "BUSINESS" || v === "BIZ" || v === "사업자") return "사업자";
-  if (v === "N" || v === "PERSONAL" || v === "INDIVIDUAL" || v === "개인") return "개인";
+  if (
+    v === "Y" ||
+    v === "TRUE" ||
+    v === "T" ||
+    v === "1" ||
+    v === "CORPORATE" ||
+    v === "BUSINESS" ||
+    v === "BIZ" ||
+    v === "사업자"
+  ) {
+    return "사업자";
+  }
+  if (
+    v === "N" ||
+    v === "FALSE" ||
+    v === "F" ||
+    v === "0" ||
+    v === "PERSONAL" ||
+    v === "INDIVIDUAL" ||
+    v === "개인"
+  ) {
+    return "개인";
+  }
   return "-";
 }
 
-function resolveShipperType(me: any) {
-  const role = String(me?.role ?? "").toUpperCase();
-  if (role !== "SHIPPER") return "-";
-
+function resolveShipperType(me: any, detail?: any) {
   const explicitType = toShipperTypeLabel(
     me?.isCorporate ??
+      detail?.isCorporate ??
+      me?.is_corporate ??
+      detail?.is_corporate ??
       me?.shipper?.isCorporate ??
+      detail?.shipper?.isCorporate ??
+      me?.shipper?.is_corporate ??
+      detail?.shipper?.is_corporate ??
       me?.shipperInfo?.isCorporate ??
+      detail?.shipperInfo?.isCorporate ??
+      me?.shipperInfo?.is_corporate ??
+      detail?.shipperInfo?.is_corporate ??
       me?.shipperDto?.isCorporate
   );
   if (explicitType !== "-") return explicitType;
 
   const hasBizInfo = Boolean(
     me?.bizRegNum ??
+      detail?.bizRegNum ??
+      me?.biz_reg_num ??
+      detail?.biz_reg_num ??
       me?.shipper?.bizRegNum ??
+      detail?.shipper?.bizRegNum ??
+      me?.shipper?.biz_reg_num ??
+      detail?.shipper?.biz_reg_num ??
       me?.shipperInfo?.bizRegNum ??
+      detail?.shipperInfo?.bizRegNum ??
+      me?.shipperInfo?.biz_reg_num ??
+      detail?.shipperInfo?.biz_reg_num ??
       me?.companyName ??
+      detail?.companyName ??
+      me?.company_name ??
+      detail?.company_name ??
       me?.shipper?.companyName ??
+      detail?.shipper?.companyName ??
+      me?.shipper?.company_name ??
+      detail?.shipper?.company_name ??
       me?.shipperInfo?.companyName
   );
   return hasBizInfo ? "사업자" : "개인";
@@ -73,13 +116,89 @@ function normalizeGender(input?: string) {
   return String(input).trim();
 }
 
-function normalizeAge(input?: number | string) {
-  if (typeof input === "number" && Number.isFinite(input) && input > 0) return `${Math.floor(input)}세`;
-  if (typeof input === "string" && input.trim()) {
-    const onlyNum = Number(input.replace(/[^\d]/g, ""));
-    if (Number.isFinite(onlyNum) && onlyNum > 0) return `${Math.floor(onlyNum)}세`;
+function normalizeBirthDate(input?: string) {
+  const digits = String(input ?? "").replace(/\D/g, "");
+  if (digits.length !== 8) return "-";
+  const y = Number(digits.slice(0, 4));
+  const m = Number(digits.slice(4, 6));
+  const d = Number(digits.slice(6, 8));
+  const dt = new Date(y, m - 1, d);
+  if (dt.getFullYear() !== y || dt.getMonth() !== m - 1 || dt.getDate() !== d) return "-";
+  return `${digits.slice(0, 4)}.${digits.slice(4, 6)}.${digits.slice(6, 8)}`;
+}
+
+function normalizeBirthDateFromAny(input?: unknown) {
+  if (input == null) return "-";
+  const raw = String(input).trim();
+  if (!raw) return "-";
+  const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
+  if (iso) return normalizeBirthDate(`${iso[1]}${iso[2]}${iso[3]}`);
+  return normalizeBirthDate(raw);
+}
+
+function normalizeGenderFromAny(input?: unknown) {
+  if (input == null) return "-";
+  const raw = String(input).trim();
+  if (!raw) return "-";
+  return normalizeGender(raw);
+}
+
+async function fetchRoleDetail(role?: string) {
+  const normalized = String(role ?? "").trim().toUpperCase();
+  if (!normalized) return null;
+  try {
+    if (normalized === "SHIPPER") {
+      const res = await apiClient.get("/api/v1/shippers/me");
+      return res.data;
+    }
+    if (normalized === "DRIVER") {
+      const res = await apiClient.get("/api/v1/drivers/me");
+      return res.data;
+    }
+  } catch {
+    return null;
   }
-  return "-";
+  return null;
+}
+
+function pickBirthDate(me: any, detail: any, cached?: { birthDate?: string }) {
+  return (
+    me?.birthDate ??
+    detail?.birthDate ??
+    me?.birth_date ??
+    detail?.birth_date ??
+    me?.birthday ??
+    detail?.birthday ??
+    me?.birth ??
+    detail?.birth ??
+    me?.dateOfBirth ??
+    detail?.dateOfBirth ??
+    me?.dob ??
+    detail?.dob ??
+    detail?.user?.birthDate ??
+    detail?.user?.birth_date ??
+    detail?.user?.birthday ??
+    detail?.user?.birth ??
+    detail?.user?.dateOfBirth ??
+    detail?.user?.dob ??
+    cached?.birthDate
+  );
+}
+
+function pickGender(me: any, detail: any, cached?: { gender?: "M" | "F" }) {
+  return me?.gender ?? detail?.gender ?? me?.sex ?? detail?.sex ?? detail?.user?.gender ?? detail?.user?.sex ?? cached?.gender;
+}
+
+function normalizeEmail(input?: string) {
+  const v = String(input ?? "").trim();
+  if (!v) return "-";
+  return v;
+}
+
+function normalizeNickname(input?: string) {
+  const v = String(input ?? "").trim();
+  if (!v) return "-";
+  return v;
 }
 
 async function persistProfileImage(uri: string): Promise<string> {
@@ -104,9 +223,9 @@ export default function ProfileSettingsScreen() {
   const [profile, setProfile] = React.useState<ProfileState>({
     nickname: "-",
     gender: "-",
+    birthDate: "-",
     shipperType: "-",
     email: "-",
-    age: "-",
     imageUrl: "",
   });
   const [draftImageUri, setDraftImageUri] = React.useState("");
@@ -121,12 +240,14 @@ export default function ProfileSettingsScreen() {
 
         try {
           const me = (await UserService.getMyInfo()) as any;
+          const detail = await fetchRoleDetail(me?.role);
+          const cached = await getCurrentUserSnapshot();
           const next: ProfileState = {
-            nickname: me.nickname || "-",
-            gender: normalizeGender(me.gender ?? me.sex),
-            shipperType: resolveShipperType(me),
-            email: me.email || "-",
-            age: normalizeAge(me.age),
+            nickname: normalizeNickname(me.nickname ?? cached?.nickname),
+            gender: normalizeGenderFromAny(pickGender(me, detail, cached ?? undefined)),
+            birthDate: normalizeBirthDateFromAny(pickBirthDate(me, detail, cached ?? undefined)),
+            shipperType: resolveShipperType(me, detail),
+            email: normalizeEmail(me.email ?? cached?.email),
             imageUrl: localImageUrl || me.profileImageUrl || "",
           };
           if (!active) return;
@@ -137,11 +258,11 @@ export default function ProfileSettingsScreen() {
           const cached = await getCurrentUserSnapshot();
           if (!active) return;
           const next: ProfileState = {
-            nickname: cached?.nickname || "-",
-            gender: "-",
-            shipperType: cached?.role === "SHIPPER" ? "개인" : "-",
-            email: cached?.email || "-",
-            age: "-",
+            nickname: normalizeNickname(cached?.nickname),
+            gender: normalizeGenderFromAny(cached?.gender),
+            birthDate: normalizeBirthDateFromAny(cached?.birthDate),
+            shipperType: "-",
+            email: normalizeEmail(cached?.email),
             imageUrl: localImageUrl,
           };
           setProfile(next);
@@ -403,8 +524,8 @@ export default function ProfileSettingsScreen() {
             </View>
             <View style={s.rowDivider} />
             <View style={s.row}>
-              <Text style={s.label}>나이</Text>
-              <Text style={s.value}>{profile.age}</Text>
+              <Text style={s.label}>생년월일</Text>
+              <Text style={s.value}>{profile.birthDate}</Text>
             </View>
           </View>
         </View>

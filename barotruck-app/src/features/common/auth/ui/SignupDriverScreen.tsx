@@ -39,6 +39,21 @@ function digitsOnly(v: string) {
 function normalizePlate(v: string) {
   return v.trim().replaceAll(/\s+/g, " ");
 }
+function parseBirthDateToAge(v: string): number | undefined {
+  const only = v.replace(/[^0-9]/g, "").slice(0, 8);
+  const m = /^(\d{4})(\d{2})(\d{2})$/.exec(only);
+  if (!m) return undefined;
+  const y = Number(m[1]);
+  const mo = Number(m[2]);
+  const d = Number(m[3]);
+  const dt = new Date(y, mo - 1, d);
+  if (dt.getFullYear() !== y || dt.getMonth() !== mo - 1 || dt.getDate() !== d) return undefined;
+  const today = new Date();
+  let age = today.getFullYear() - y;
+  const hasNotHadBirthday = today.getMonth() + 1 < mo || (today.getMonth() + 1 === mo && today.getDate() < d);
+  if (hasNotHadBirthday) age -= 1;
+  return age >= 0 ? age : undefined;
+}
 
 function mapTon(v: string | null) {
   if (!v) return "1t";
@@ -217,10 +232,14 @@ export default function SignupDriverScreen() {
     email = "",
     password = "",
     phone = "",
+    gender,
+    birthDate,
   } = useLocalSearchParams<{
     email: string;
     password: string;
     phone: string;
+    gender?: "M" | "F";
+    birthDate?: string;
   }>();
 
   const [nickname, setNickname] = useState("");
@@ -309,7 +328,6 @@ export default function SignupDriverScreen() {
         paddingHorizontal: 16,
         backgroundColor: c.bg.surface,
         borderWidth: 1,
-        borderColor: c.border.default,
       },
       tfInput: { fontSize: 16, fontWeight: "800", paddingVertical: 0 },
       miniBtn: {
@@ -366,6 +384,8 @@ export default function SignupDriverScreen() {
         nickname: nickname.trim(),
         phone,
         role: "DRIVER",
+        gender,
+        age: parseBirthDateToAge(String(birthDate ?? "")),
         driver: {
           carNum: normalizePlate(plateNo),
           carType: carType || "CARGO",
@@ -381,6 +401,8 @@ export default function SignupDriverScreen() {
         email,
         nickname: nickname.trim(),
         role: "DRIVER",
+        gender,
+        birthDate: String(birthDate ?? "").trim() || undefined,
       });
 
       router.replace("/(driver)/(tabs)");
