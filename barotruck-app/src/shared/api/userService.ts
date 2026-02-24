@@ -73,10 +73,16 @@ export const UserService = {
     return res.data.isDuplicated;
   },
 
-  /** * 5. FCM 토큰 업데이트 (UsersController /api/user/fcm-token) 
+  /**
+   * FCM 토큰 서버 전송 및 저장
+   * 앱 실행 시 또는 토큰 갱신 시 호출됨
    */
-  updateFcmToken: async (fcmToken: string): Promise<void> => {
-    if (USE_MOCK) return;
-    await apiClient.post('/api/user/fcm-token', { fcmToken });
-  }
+  updateFcmToken: async (token: string): Promise<void> => {
+    // 백엔드 UsersController의 @PatchMapping("/fcm-token")과 매칭
+    await apiClient.patch('/api/user/fcm-token', null, {
+      params: { fcmToken: token }
+    });
+  },
+  
+
 };

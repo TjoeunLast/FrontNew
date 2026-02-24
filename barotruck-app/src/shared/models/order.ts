@@ -96,11 +96,15 @@ export interface OrderResponse {
   startPlace: string;
   startType: string;
   startSchedule: string;
+  puProvince?: string;
+  startNbhId?: number;
 
   endAddr: string;
   endPlace: string;
   endType: string;
   endSchedule?: string;
+  doProvince?: string;
+  endNbhId?: number;
 
   startLat?: number;
   startLng?: number;
