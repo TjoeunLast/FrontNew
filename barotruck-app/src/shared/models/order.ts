@@ -37,6 +37,8 @@ export interface OrderRequest {
   endType: string;
   endSchedule: string;
   doProvince: string;
+  endLat?: number;
+  endLng?: number;
   // --- [하차지 정보: 물건을 내리는 곳] ---
   // 하차지 전체 주소 (예: 경기도 용인시 처인구 ...)
   // 하차지 특정 명칭 (예: XX빌딩 후문 하역장)
@@ -45,6 +47,7 @@ export interface OrderRequest {
   // 하차지 광역 자치단체명 (예: 경기, 강원, 전남)
 
   cargoContent?: string;
+  memo?: string;
   loadMethod?: string;
   workType?: string;
   tonnage: number;
