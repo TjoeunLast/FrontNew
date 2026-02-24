@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import {
   Alert,
   KeyboardAvoidingView,
@@ -7,6 +7,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
   type TextStyle,
   type ViewStyle,
@@ -53,7 +54,7 @@ export default function SignupScreen() {
   const t = useAppTheme();
   const c = t.colors;
 
-
+  
   const [step, setStep] = useState<Step>("role");
   const [role, setRole] = useState<Role | null>(null);
 
@@ -71,6 +72,34 @@ export default function SignupScreen() {
   const [otpCode, setOtpCode] = useState<string | null>(null);
   const [otpInput, setOtpInput] = useState("");
   const [phoneVerified, setPhoneVerified] = useState(false);
+
+  const otpInputRef = useRef<TextInput>(null); // 1. 인증번호 입력창을 위한 ref 생성
+
+  // 2. 번호 수정 기능 추가
+  const onEditPhone = () => {
+    setPhoneVerified(false);
+    setOtpRequested(false);
+    setOtpCode(null);
+    setOtpInput("");
+  };
+
+  const onRequestOtp = () => {
+    if (!phoneFormatOk) {
+      showMsg("휴대폰 확인", "휴대폰 번호를 확인해주세요.");
+      return;
+    }
+    const code = genCode6();
+    setOtpRequested(true);
+    setOtpCode(code);
+    setOtpInput("");
+    setPhoneVerified(false);
+    showMsg("인증요청(목업)", `인증번호: ${code}\n(나중에 SMS 연동으로 교체)`);
+
+    // 3. 인증 요청 후 인증번호 입력창으로 커서 이동 (약간의 지연시간 필요)
+    setTimeout(() => {
+      otpInputRef.current?.focus();
+    }, 100);
+  };
 
   const onChangeEmail = (v: string) => {
     setEmail(v);
@@ -216,18 +245,7 @@ export default function SignupScreen() {
     phoneVerified;
 
 
-  const onRequestOtp = () => {
-    if (!phoneFormatOk) {
-      showMsg("휴대폰 확인", "휴대폰 번호를 확인해주세요.");
-      return;
-    }
-    const code = genCode6();
-    setOtpRequested(true);
-    setOtpCode(code);
-    setOtpInput("");
-    setPhoneVerified(false);
-    showMsg("인증요청(목업)", `인증번호: ${code}\n(나중에 SMS 연동으로 교체)`);
-  };
+  
 
   const onVerifyOtp = () => {
     if (!otpRequested || !otpCode) return;
@@ -393,6 +411,7 @@ export default function SignupScreen() {
                   placeholder="010-1234-5678"
                   keyboardType="phone-pad"
                   inputWrapStyle={s.tfWrap}
+                  editable={!otpRequested || phoneVerified} // 4. 인증 요청 중에는 수정 불가
                   inputStyle={s.tfInput}
                   errorText={phone.length > 0 && !phoneFormatOk ? "휴대폰 번호를 확인해주세요." : undefined}
                 />
@@ -400,7 +419,7 @@ export default function SignupScreen() {
               <View style={s.rowGap} />
               <Pressable
                 style={[s.miniBtn, (!phoneFormatOk || phoneVerified) && { opacity: 0.6 }]}
-                onPress={onRequestOtp}
+                onPress={otpRequested && !phoneVerified ? onEditPhone : onRequestOtp} // 5. 상태에 따라 '인증요청' 또는 '번호수정'
                 disabled={!phoneFormatOk || phoneVerified}
               >
                 <Text style={s.miniBtnText}>{phoneVerified ? "인증완료" : "인증요청"}</Text>
@@ -414,6 +433,7 @@ export default function SignupScreen() {
                 <View style={s.row}>
                   <View style={{ flex: 1 }}>
                     <TextField
+                      ref={otpInputRef} // 6. ref 연결
                       value={otpInput}
                       onChangeText={setOtpInput}
                       placeholder="6자리 입력"
