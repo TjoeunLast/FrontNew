@@ -2,8 +2,8 @@ import * as SecureStore from 'expo-secure-store';
 import { AuthResponse, RegisterRequest } from '../models/auth';
 import { USE_MOCK } from '@/shared/config/mock';
 import apiClient from './apiClient';
-import messaging from '@react-native-firebase/messaging';
 import { UserService } from './userService';
+import { getFirebaseMessaging } from '@/shared/utils/firebaseMessaging';
 
 export const AuthService = {
   /**
@@ -42,6 +42,11 @@ export const AuthService = {
 
       // [추가] 회원가입 직후 자동 로그인 상태이므로 FCM 토큰 전송
       try {
+        const messaging = await getFirebaseMessaging();
+        if (!messaging) {
+          return res.data;
+        }
+
         const fcmToken = await messaging().getToken();
         if (fcmToken) {
           await UserService.updateFcmToken(fcmToken);
@@ -96,6 +101,11 @@ export const AuthService = {
 
       // [추가] 로그인 성공 직후 FCM 토큰 발급 및 서버 전송
       try {
+        const messaging = await getFirebaseMessaging();
+        if (!messaging) {
+          return res.data;
+        }
+
         const fcmToken = await messaging().getToken();
         if (fcmToken) {
           await UserService.updateFcmToken(fcmToken);

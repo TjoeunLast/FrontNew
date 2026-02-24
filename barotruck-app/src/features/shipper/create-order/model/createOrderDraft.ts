@@ -31,6 +31,7 @@ export type CreateOrderDraft = {
   pay: "card" | "prepaid" | "receipt30" | "monthEnd";
 
   distanceKm: number;
+  estimatedDurationMin?: number;
   appliedFare: number;
 };
 

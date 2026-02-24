@@ -22,6 +22,8 @@ import { s as step1Styles } from "./createOrderStep1.styles";
 
 const EXCLUSIVE_LOAD_SURCHARGE_RATE = 0.1;
 const MIXED_LOAD_DISCOUNT_RATE = 0.1;
+const DRIVER_UNLOAD_SURCHARGE_RATE = 0.05;
+const CRANE_UNLOAD_SURCHARGE_RATE = 0.07;
 const PACKAGING_FEE_WON = 30000;
 const LOAD_METHOD_OPTIONS: Array<{ value: "독차" | "혼적"; label: string }> = [
   { value: "독차", label: "독차" },
@@ -87,7 +89,7 @@ export function ShipperCreateOrderStep2CargoScreen() {
   }, []);
 
   const [loadMethod, setLoadMethod] = React.useState<"독차" | "혼적">("독차");
-  const [workMode, setWorkMode] = React.useState<"수작업" | "도구 사용">("수작업");
+  const [workMode, setWorkMode] = React.useState<"직접 하차" | "기사님 하차">("직접 하차");
   const [workTool, setWorkTool] = React.useState<"지게차" | "크레인">("지게차");
   const [packaging, setPackaging] = React.useState<"미포장" | "포장">("미포장");
   const [selectedRequestTags, setSelectedRequestTags] = React.useState<string[]>(draft?.requestTags ?? []);
@@ -99,11 +101,20 @@ export function ShipperCreateOrderStep2CargoScreen() {
   const loadMethodRate = loadMethod === "독차" ? 1 + EXCLUSIVE_LOAD_SURCHARGE_RATE : 1 - MIXED_LOAD_DISCOUNT_RATE;
   const loadMethodAdjustedFare = Math.max(0, Math.round(draft.appliedFare * loadMethodRate));
   const loadMethodDelta = loadMethodAdjustedFare - draft.appliedFare;
+  const unloadSurchargeRate =
+    workMode === "기사님 하차"
+      ? (workTool === "크레인" ? CRANE_UNLOAD_SURCHARGE_RATE : DRIVER_UNLOAD_SURCHARGE_RATE)
+      : 0;
+  const unloadSurcharge = Math.max(0, Math.round(loadMethodAdjustedFare * unloadSurchargeRate));
   const packagingPrice = packaging === "포장" ? PACKAGING_FEE_WON : 0;
-  const finalFare = loadMethodAdjustedFare + packagingPrice;
+  const finalFare = loadMethodAdjustedFare + unloadSurcharge + packagingPrice;
   const fee = draft.pay === "card" ? Math.round(finalFare * 0.1) : 0;
   const totalPay = finalFare + fee;
-  const resolvedWorkType = workMode === "수작업" ? "수작업" : workTool;
+  const resolvedWorkType = workMode === "직접 하차" ? "직접 하차" : `기사님 하차(${workTool})`;
+  const unloadHintText =
+    workMode === "기사님 하차"
+      ? `${workTool === "크레인" ? "+7%" : "+5%"} (${won(unloadSurcharge)})`
+      : "추가요금 없음";
   const packagingHintText = packaging === "포장" ? `선택 시 +${won(packagingPrice)}` : "추가요금 없음";
   const payFeeHintText =
     draft.pay === "card" ? `토스 결제 수수료 +10% (${won(fee)})` : "결제 방식 수수료 없음";
@@ -149,11 +160,12 @@ export function ShipperCreateOrderStep2CargoScreen() {
         driveMode: draft.tripType,
         loadWeight: Number.parseFloat(draft.weightTon) || undefined,
         basePrice: loadMethodAdjustedFare,
+        laborFee: unloadSurcharge || undefined,
         payMethod: draft.pay,
         packagingPrice,
         instant: draft.dispatch === "instant",
         distance: draft.distanceKm,
-        duration: Math.max(30, Math.round(draft.distanceKm * 2)),
+        duration: Math.max(30, Math.round(draft.estimatedDurationMin ?? draft.distanceKm * 2)),
       };
 
       if (isEditMode) {
@@ -274,17 +286,20 @@ export function ShipperCreateOrderStep2CargoScreen() {
 
           <View style={{ height: 14 }} />
 
-          <Text style={{ fontSize: 13, fontWeight: "800", color: c.text.primary, marginBottom: 8 }}>상하차 방식</Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 }}>
+            <Text style={{ fontSize: 13, fontWeight: "800", color: c.text.primary }}>하차 방식</Text>
+            <Text style={{ color: c.text.secondary, fontSize: 12, fontWeight: "800" }}>{unloadHintText}</Text>
+          </View>
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-            {(["수작업", "도구 사용"] as const).map((x) => (
+            {(["직접 하차", "기사님 하차"] as const).map((x) => (
               <FormChip key={x} label={x} selected={workMode === x} onPress={() => setWorkMode(x)} />
             ))}
           </View>
 
-          {workMode === "도구 사용" ? (
+          {workMode === "기사님 하차" ? (
             <>
               <View style={{ height: 14 }} />
-              <Text style={{ fontSize: 13, fontWeight: "800", color: c.text.primary, marginBottom: 8 }}>사용 도구</Text>
+              <Text style={{ fontSize: 13, fontWeight: "800", color: c.text.primary, marginBottom: 8 }}>하차 도구</Text>
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
                 {(["지게차", "크레인"] as const).map((x) => (
                   <FormChip key={x} label={x} selected={workTool === x} onPress={() => setWorkTool(x)} />
@@ -383,13 +398,19 @@ export function ShipperCreateOrderStep2CargoScreen() {
           <View style={{ marginTop: 4, flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
             <Text style={{ color: c.text.secondary, fontWeight: "800" }}>조정 운임 {won(loadMethodAdjustedFare)}</Text>
             <Text style={{ color: c.text.secondary, fontWeight: "800" }}>
-              포장비 {packaging === "포장" ? `+${won(packagingPrice)}` : "0원"}
+              하차 추가 {unloadSurcharge > 0 ? `+${won(unloadSurcharge)}` : "0원"}
             </Text>
           </View>
           <View style={{ marginTop: 4, flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
             <Text style={{ color: c.text.secondary, fontWeight: "800" }}>작업 방식 {resolvedWorkType}</Text>
             <Text style={{ color: c.text.secondary, fontWeight: "800" }}>
-              {draft.pay === "card" ? `수수료 +${won(fee)}` : "수수료 0원"}
+              포장비 {packaging === "포장" ? `+${won(packagingPrice)}` : "0원"}
+            </Text>
+          </View>
+          <View style={{ marginTop: 4, flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+            <Text style={{ color: c.text.secondary, fontWeight: "800" }}>결제 수수료</Text>
+            <Text style={{ color: c.text.secondary, fontWeight: "800" }}>
+              {draft.pay === "card" ? `+${won(fee)}` : "0원"}
             </Text>
           </View>
         </View>

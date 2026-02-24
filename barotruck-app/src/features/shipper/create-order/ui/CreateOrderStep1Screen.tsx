@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { getCreateOrderDraft, setCreateOrderDraft } from "@/features/shipper/create-order/model/createOrderDraft";
 import { AddressApi } from "@/shared/api/addressService";
+import { RouteApi } from "@/shared/api/routeService";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import { Button } from "@/shared/ui/base/Button";
 import { Card } from "@/shared/ui/base/Card";
@@ -110,9 +111,13 @@ export function ShipperCreateOrderStep1Screen() {
   
   const [startAddrSuggestions, setStartAddrSuggestions] = useState<string[]>([]);
   const [endAddrSuggestions, setEndAddrSuggestions] = useState<string[]>([]);
-  const distanceKm = useMemo(
+  const fallbackDistanceKm = useMemo(
     () => getEstimatedDistanceKm(startSelected || startSearch, endAddr),
     [startSelected, startSearch, endAddr]
+  );
+  const [distanceKm, setDistanceKm] = useState(initialDraft?.distanceKm ?? fallbackDistanceKm);
+  const [estimatedDurationMin, setEstimatedDurationMin] = useState<number | undefined>(
+    initialDraft?.estimatedDurationMin
   );
   const aiFare = useMemo(() => getRecommendedFareByDistance(distanceKm), [distanceKm]);
 
@@ -147,6 +152,42 @@ export function ShipperCreateOrderStep1Screen() {
     },
     []
   );
+
+  React.useEffect(() => {
+    if (
+      startLat === undefined ||
+      startLng === undefined ||
+      endLat === undefined ||
+      endLng === undefined
+    ) {
+      setDistanceKm(fallbackDistanceKm);
+      setEstimatedDurationMin(undefined);
+      return;
+    }
+
+    let active = true;
+    void (async () => {
+      try {
+        const route = await RouteApi.estimateByCoords({
+          startLat,
+          startLng,
+          endLat,
+          endLng,
+        });
+        if (!active) return;
+        setDistanceKm(route.distanceKm);
+        setEstimatedDurationMin(route.durationMin);
+      } catch {
+        if (!active) return;
+        setDistanceKm(fallbackDistanceKm);
+        setEstimatedDurationMin(undefined);
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [endLat, endLng, fallbackDistanceKm, startLat, startLng]);
 
   React.useEffect(() => {
     const q = startSearch.trim();
@@ -310,6 +351,7 @@ export function ShipperCreateOrderStep1Screen() {
       tripType,
       pay,
       distanceKm,
+      estimatedDurationMin,
       appliedFare,
     });
 
