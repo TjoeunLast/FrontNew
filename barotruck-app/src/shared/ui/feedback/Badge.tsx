@@ -20,8 +20,6 @@ export type BadgeTone =
   | "cancel" // 취소됨 (badge.cancelBg)
   | "urgent" // 긴급/바로배차 (badge.urgentBg)
   | "direct" // 직접배차/브랜드 (brand.primary)
-  | "roundTrip" // 왕복 운행
-  | "oneWay" // 편도 운행
   | "payPrepaid" // 선착불 결제 (badge.payPrepaid)
   | "payDeferred"; // 인수증/후불 결제 (badge.payDeferred)
 
@@ -99,18 +97,6 @@ export const Badge = memo(function Badge({
           bg: c.brand.primary,
           fg: c.text.inverse,
           border: c.brand.primary,
-        };
-      case "roundTrip":
-        return {
-          bg: c.status.infoSoft,
-          fg: c.status.info,
-          border: c.status.info,
-        };
-      case "oneWay":
-        return {
-          bg: c.bg.muted,
-          fg: c.text.secondary,
-          border: c.border.default,
         };
       case "payPrepaid":
         return {
