@@ -1,5 +1,6 @@
 ﻿// src/features/common/auth/ui/SignupDriverScreen.tsx
 import React, { useMemo, useState, useCallback } from "react";
+import Postcode from 'react-native-daum-postcode'; // 주소 API 추가
 import {
   Alert,
   KeyboardAvoidingView,
@@ -250,6 +251,8 @@ export default function SignupDriverScreen() {
   const [ton, setTon] = useState<string | null>(null);
   const [expYears, setExpYears] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [address, setAddress] = useState("");
+  const [isPostcodeOpen, setIsPostcodeOpen] = useState(false);
 
   // ✅ 1. 유효성 검사 변수 추가 (에러 해결 핵심)
   const nickFormatOk = nickname.trim().length >= 2;
@@ -388,6 +391,7 @@ export default function SignupDriverScreen() {
           carType: carType || "CARGO",
           tonnage: Number.parseFloat(mapTon(ton).replace("t", "")),
           career: Number.parseInt(digitsOnly(expYears), 10) || 0, // ✅ 필드명 career로 고정
+          address: address, // 주소 필드 추가
           bankName: "",
           accountNum: "",
         },
@@ -426,6 +430,30 @@ export default function SignupDriverScreen() {
 
   return (
     <SafeAreaView style={s.screen} edges={["top", "bottom"]}>
+      {/* 주소 검색 모달 */}
+      <Modal visible={isPostcodeOpen} animationType="slide">
+        <SafeAreaView style={{ flex: 1 }}>
+          <View style={s.header}>
+            <Pressable onPress={() => setIsPostcodeOpen(false)}>
+              <Ionicons name="close" size={28} color={c.text.primary} />
+            </Pressable>
+          </View>
+          <Postcode
+            style={{ flex: 1 }}
+            jsOptions={{ animation: true }}
+            onSelected={(data) => {
+              setAddress(data.address);
+              setIsPostcodeOpen(false);
+            }}
+            onError={() => {
+              showMsg("오류", "주소 서비스를 불러올 수 없습니다.");
+              setIsPostcodeOpen(false);
+            }}
+          />
+        </SafeAreaView>
+      </Modal>
+
+
       <View style={s.header}>
         <Pressable onPress={() => router.back()} style={s.backBtn} hitSlop={10}>
           <Ionicons name="arrow-back" size={26} color={c.text.primary} />
@@ -555,6 +583,23 @@ export default function SignupDriverScreen() {
                 : undefined
             }
           />
+
+          <View style={{ height: 16 }} />
+
+          {/* 주소 입력 필드 추가 */}
+          <Text style={s.label}>활동 지역 (주소)</Text>
+          <Pressable onPress={() => setIsPostcodeOpen(true)}>
+            <View pointerEvents="none">
+              <TextField
+                value={address}
+                placeholder="주소 검색"
+                inputWrapStyle={s.tfWrap}
+                inputStyle={s.tfInput}
+              />
+            </View>
+          </Pressable>
+          <Text style={s.helper}>기사님의 활동 거점을 기준으로 오더가 추천됩니다.</Text>
+
         </ScrollView>
 
         <View style={s.bottomBar} pointerEvents="box-none">
