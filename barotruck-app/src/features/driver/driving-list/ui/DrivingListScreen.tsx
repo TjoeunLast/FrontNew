@@ -25,21 +25,22 @@ export default function DrivingListScreen() {
   const { colors: c } = useAppTheme();
   const router = useRouter();
 
-  // [추가] 외부(홈 화면 등)에서 넘어온 탭 전환 파라미터 수신
+  // 외부에서 넘어온 탭 전환 파라미터 수신
   const params = useLocalSearchParams<{ initialTab?: string }>();
 
-  // [1] 데이터 로드 및 탭 상태 관리
+  // 데이터 로드 및 탭 상태 관리
   const {
-    activeTab,
-    setActiveTab,
-    pendingOrders,
+    activeTab, // 현재 탭 상태
+    setActiveTab, // 탭을 변경하는 함수
+    pendingOrders, // 서버에서 받은 원본 데이터
     activeOrders,
     completedOrders,
-    loading,
-    refresh,
+    loading, // 데이터를 가져오는 중인지 나타내는 상태
+    refresh, // 데이터를 다시 불러오는 함수\
+    myLocation, // 내 위치 정보
   } = useDrivingList();
 
-  // [2] 운행 프로세스 로직 (취소, 상태변경, 모달 등)
+  // 운행 프로세스 로직 (취소, 상태변경, 모달 등)
   const {
     handleCancelOrder,
     handleStartTransport,
@@ -48,7 +49,7 @@ export default function DrivingListScreen() {
     setModalOpen,
   } = useDrivingProcess(refresh);
 
-  // [추가] 외부 파라미터 수신 시 탭 자동 전환 로직
+  // 외부 파라미터 수신 시 탭 자동 전환 로직
   useEffect(() => {
     if (params.initialTab) {
       const tabMapping: Record<string, string> = {
@@ -62,24 +63,24 @@ export default function DrivingListScreen() {
         setActiveTab(targetTab as any);
       }
     }
-  }, [params.initialTab]);
+  }, [params.initialTab]); // initialTab 값이 바뀔 때마다 실행
 
-  // [3] 데이터 분리 및 정렬 로직
+  // 데이터 분리 및 정렬 로직
   const orders = useMemo(() => {
     // 배차 탭 분리
-    const accepted = pendingOrders.filter((o) => o.status === "ACCEPTED");
-    const applied = pendingOrders.filter((o) => o.status === "APPLIED");
+    const accepted = pendingOrders.filter((o) => o.status === "ACCEPTED"); // 배차 확정
+    const applied = pendingOrders.filter((o) => o.status === "APPLIED"); // 승인 대기
 
     // 완료 탭 분리 (정산 완료 vs 정산 대기)
     const settled = completedOrders.filter(
       (o) => o.settlementStatus === "COMPLETED",
-    );
+    ); // 정산 완료
     const waiting = completedOrders.filter(
       (o) => o.settlementStatus !== "COMPLETED",
-    );
+    ); // 정산 대기
 
     return { accepted, applied, settled, waiting };
-  }, [pendingOrders, completedOrders]);
+  }, [pendingOrders, completedOrders]); // 원본 데이터가 바뀔 때만 다시 계산
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#F8FAFC" }}>
@@ -99,8 +100,8 @@ export default function DrivingListScreen() {
         ].map((tab) => (
           <Pressable
             key={tab.id}
-            onPress={() => setActiveTab(tab.id as any)}
-            style={[s.tabItem, activeTab === tab.id && s.activeTab]}
+            onPress={() => setActiveTab(tab.id as any)} // 클릭 시 해당 탭으로 상태 변경
+            style={[s.tabItem, activeTab === tab.id && s.activeTab]} // 선택된 탭에만 밑줄 표시
           >
             <Text
               style={[
@@ -141,7 +142,8 @@ export default function DrivingListScreen() {
                     <PendingOrderCard
                       key={order.orderId}
                       order={order}
-                      onStart={handleStartTransport}
+                      myLocation={myLocation}
+                      onStart={handleStartTransport} // 운송 시작 액션 연결
                       onDetail={(id: number) =>
                         router.push(`/(driver)/order-detail/${id}`)
                       }
@@ -167,6 +169,7 @@ export default function DrivingListScreen() {
                     <PendingOrderCard
                       key={order.orderId}
                       order={order}
+                      myLocation={myLocation}
                       onCancel={handleCancelOrder}
                       onDetail={(id: number) =>
                         router.push(`/(driver)/order-detail/${id}`)
@@ -176,7 +179,7 @@ export default function DrivingListScreen() {
                 </View>
               )}
               {pendingOrders.length === 0 && (
-                <EmptyState text="배차 대기 중인 오더가 없습니다." />
+                <EmptyState text="현재 진행 중인 오더가 없습니다." />
               )}
             </>
           )}
@@ -269,6 +272,7 @@ export default function DrivingListScreen() {
         </ScrollView>
       )}
 
+      {/* 모달 */}
       <ReceiptModal visible={modalOpen} onClose={() => setModalOpen(false)} />
     </SafeAreaView>
   );

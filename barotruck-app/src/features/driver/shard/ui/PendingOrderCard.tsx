@@ -1,24 +1,67 @@
 import React from "react";
+import { useMemo } from "react";
 import { View, Text, StyleSheet, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Badge } from "@/shared/ui/feedback/Badge";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+
+// 거리 계산 함수
+function getDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * (Math.PI / 180)) *
+      Math.cos(lat2 * (Math.PI / 180)) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
 
 export const PendingOrderCard = ({
   order,
   onCancel,
   onStart,
   onDetail,
+  myLocation,
 }: any) => {
   const { colors: c } = useAppTheme();
 
-  // 1. 비즈니스 로직: 상태 플래그 및 금액 합산
-  const isAccepted = order.status === "ACCEPTED";
-  const totalPrice = order.basePrice + (order.laborFee || 0);
+  const {
+    startSchedule,
+    reqTonnage,
+    reqCarType,
+    workType,
+    startType,
+    loadMethod,
+    instant,
+    payMethod,
+    startLat,
+    startLng,
+  } = order;
 
-  // 2. 비즈니스 로직: 주소 요약
+  // 상태 및 총 금액 계산
+  const isAccepted = order.status === "ACCEPTED";
+  const totalPrice =
+    (order.basePrice || 0) +
+    (order.laborFee || 0) +
+    (order.packagingPrice || 0);
+
+  // 주소 요약
   const getShortAddr = (addr: string) =>
     addr ? `${addr.split(" ")[0]} ${addr.split(" ")[1] || ""}` : "";
+
+  // 거리 계산 로직
+  const distanceToStart = useMemo(() => {
+    if (myLocation && startLat && startLng) {
+      const d = getDistance(myLocation.lat, myLocation.lng, startLat, startLng);
+      return `${d.toFixed(1)}km`;
+    }
+    return null;
+  }, [myLocation, startLat, startLng]);
 
   return (
     <Pressable
@@ -26,11 +69,24 @@ export const PendingOrderCard = ({
       style={[
         s.container,
         { borderColor: c.border.default, backgroundColor: c.bg.surface },
-        // [강조 스타일] 배차 확정 시 브랜드 컬러 테두리 적용
-        // isAccepted && { borderColor: c.brand.primary, borderWidth: 2 },
+        isAccepted && { borderColor: c.brand.primary, borderWidth: 1.5 },
       ]}
     >
-      {/* SECTION: 상단 영역 (배차 상태 배지 및 상세 링크) */}
+      {/* 내 위치에서 상차지 까지 거리 */}
+      {distanceToStart && (
+        <View style={s.centerDistance}>
+          <MaterialCommunityIcons
+            name="navigation-variant"
+            size={14}
+            color={c.brand.primary}
+          />
+          <Text style={[s.distanceText, { color: c.brand.primary }]}>
+            상차지까지 {distanceToStart}
+          </Text>
+        </View>
+      )}
+
+      {/* 상단 영역 */}
       <View style={s.topRow}>
         <View style={s.badgeRow}>
           <Badge
@@ -38,7 +94,6 @@ export const PendingOrderCard = ({
             tone={isAccepted ? "info" : "warning"}
             style={{ marginRight: 8 }}
           />
-          {order.instant && <Badge label="바로배차" tone="urgent" />}
         </View>
         <View style={s.detailLink}>
           <Text style={[s.detailText, { color: c.text.secondary }]}>
@@ -48,7 +103,7 @@ export const PendingOrderCard = ({
         </View>
       </View>
 
-      {/* SECTION: 중단 영역 (운송 경로 시각화) */}
+      {/* 중단 영역 */}
       <View style={s.routeRow}>
         {/* 상차지 */}
         <View style={s.locGroup}>
@@ -105,35 +160,33 @@ export const PendingOrderCard = ({
         </View>
       </View>
 
-      {/* SECTION: 하단 영역 (작업 일정 및 운송료 정보) */}
+      {/* 하단 정보 */}
       <View style={[s.bottomRow, { borderTopColor: c.bg.canvas }]}>
         <View style={s.infoColumn}>
           <Text style={[s.loadDateText, { color: c.text.primary }]}>
-            {order.startSchedule} 상차
+            {startSchedule} 상차
           </Text>
           <Text style={[s.carText, { color: c.text.secondary }]}>
-            {order.reqTonnage} {order.reqCarType} •{" "}
-            {order.cargoContent || "일반짐"}
+            {reqTonnage} {reqCarType} • {workType || "지게차"} • {startType} •{" "}
+            {loadMethod}
           </Text>
         </View>
+
         <View style={s.priceColumn}>
-          <Text
-            style={[
-              s.priceText,
-              { color: isAccepted ? c.brand.primary : c.text.primary },
-            ]}
-          >
-            {totalPrice.toLocaleString()}원
-          </Text>
+          <View style={s.priceRow}>
+            <Text style={[s.priceText, { color: c.brand.primary }]}>
+              {totalPrice.toLocaleString()}원
+            </Text>
+          </View>
           <Badge
-            label={order.payMethod === "PREPAID" ? "현금/선불" : "인수증/후불"}
-            tone={order.payMethod === "PREPAID" ? "payPrepaid" : "payDeferred"}
+            label={payMethod}
+            tone={payMethod?.includes("선착불") ? "payPrepaid" : "payDeferred"}
             style={{ marginTop: 6, alignSelf: "flex-end" }}
           />
         </View>
       </View>
 
-      {/* SECTION: 액션 버튼 영역 (신청 취소 또는 운송 시작) */}
+      {/* 액션 버튼 영역*/}
       <View style={[s.actionArea, { borderTopColor: c.bg.canvas }]}>
         {order.status === "APPLIED" ? (
           <Pressable
@@ -176,11 +229,15 @@ const s = StyleSheet.create({
     borderWidth: 1,
     marginBottom: 16,
     elevation: 4,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
   },
+  centerDistance: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 12,
+    gap: 4,
+  },
+  distanceText: { fontSize: 13, fontWeight: "800" },
   topRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -235,6 +292,11 @@ const s = StyleSheet.create({
   loadDateText: { fontSize: 14, fontWeight: "800", marginBottom: 2 },
   carText: { fontSize: 12, fontWeight: "500", opacity: 0.8 },
   priceColumn: { flex: 1.2, alignItems: "flex-end" },
+  priceRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
+  },
   priceText: { fontSize: 22, fontWeight: "900", letterSpacing: -0.5 },
   actionArea: {
     marginTop: 16,
@@ -250,14 +312,5 @@ const s = StyleSheet.create({
     gap: 6,
   },
   btnPrimaryText: { fontSize: 15, fontWeight: "700" },
-  btnSecondary: {
-    height: 50,
-    borderRadius: 14,
-    borderWidth: 1,
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    gap: 6,
-  },
-  btnSecondaryText: { fontSize: 14, fontWeight: "700" },
+  btnSecondaryText: { fontSize: 15, fontWeight: "700" }, // 기존 스타일과 통합
 });

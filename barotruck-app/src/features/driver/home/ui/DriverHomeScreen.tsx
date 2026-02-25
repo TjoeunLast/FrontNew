@@ -12,20 +12,24 @@ import { useRouter } from "expo-router";
 
 import { DrOrderCard } from "@/features/driver/shard/ui/DrOrderCard";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
-import { useDriverHome } from "../model/useDriverHome";
+import { useDriverHome } from "@/features/driver/home/model/useDriverHome";
 
 export default function DriverHomeScreen() {
   const t = useAppTheme();
   const c = t.colors;
   const router = useRouter();
 
-  const { recommendedOrders, income, statusCounts, isRefreshing, onRefresh } =
-    useDriverHome();
+  // 홈 화면 데이터 공급
+  const {
+    recommendedOrders,
+    income,
+    statusCounts,
+    isRefreshing,
+    myLocation,
+    onRefresh,
+  } = useDriverHome();
 
-  /**
-   * [함수] 운송 현황 클릭 시 해당 탭으로 이동
-   * @param tabName - READY(배차), ONGOING(운송중), DONE(완료)
-   */
+  // 대시보드 클릭 시 운행 탭 이동
   const handleStatusPress = (tabName: "READY" | "ONGOING" | "DONE") => {
     router.push({
       pathname: "/(driver)/(tabs)/driving",
@@ -35,10 +39,11 @@ export default function DriverHomeScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: c.bg.canvas }]}>
-      {/* SECTION 1: 상단 헤더 (로고 및 알림/채팅) */}
+      {/* 헤더 */}
       <View style={[styles.header, { backgroundColor: c.bg.surface }]}>
         <Text style={[styles.logoText, { color: c.brand.primary }]}>BARO</Text>
         <View style={styles.headerIcons}>
+          {/* 채팅 */}
           <Pressable onPress={() => router.push("/(chat)")}>
             <Ionicons
               name="chatbubble-outline"
@@ -46,6 +51,8 @@ export default function DriverHomeScreen() {
               color={c.text.primary}
             />
           </Pressable>
+
+          {/* 알림 */}
           <Pressable onPress={() => console.log("알림 이동")}>
             <Ionicons
               name="notifications-outline"
@@ -60,10 +67,11 @@ export default function DriverHomeScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         refreshControl={
+          // 화면 새로고침
           <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />
         }
       >
-        {/* SECTION 2: 예상 수익 카드 (목업 데이터 기반) */}
+        {/* 정산 카드  */}
         <Pressable
           onPress={() => router.push("/(driver)/(tabs)/sales")}
           style={[
@@ -109,7 +117,7 @@ export default function DriverHomeScreen() {
           </View>
         </Pressable>
 
-        {/* SECTION 3: 대시보드 (운송 단계별 현황 카운트) */}
+        {/* 대시보드 (운송 현황 카운트)*/}
         <View style={styles.dashboardContainer}>
           <Text
             style={[
@@ -241,7 +249,7 @@ export default function DriverHomeScreen() {
                 />
               </View>
               <Text style={[styles.statLabel, { color: c.text.secondary }]}>
-                운송완료
+                완료
               </Text>
               <Text style={[styles.statValue, { color: c.text.secondary }]}>
                 {statusCounts.completed}
@@ -250,7 +258,7 @@ export default function DriverHomeScreen() {
           </View>
         </View>
 
-        {/* SECTION 4: 맞춤 추천 오더 리스트 (상태: REQUESTED) */}
+        {/* 맞춤 추천 오더) */}
         <View style={styles.orderList}>
           <View style={styles.listHeader}>
             <Text style={[styles.sectionTitle, { color: c.text.primary }]}>
@@ -268,7 +276,7 @@ export default function DriverHomeScreen() {
                 router.push(`/(driver)/order-detail/${order.orderId}`)
               }
             >
-              <DrOrderCard order={order} />
+              <DrOrderCard order={order} myLocation={myLocation} />
             </Pressable>
           ))}
 
