@@ -16,10 +16,8 @@ function resolveApiBaseUrl() {
     // 보통 로컬 개발 시에는 10.0.2.2를 기본으로 두는 것이 편합니다.
     return "http://10.0.2.2:8080";
   }
-
   const hostFromExpo = Constants.expoConfig?.hostUri?.split(":").shift();
   if (hostFromExpo && hostFromExpo !== "undefined") return `http://${hostFromExpo}:8080`;
-
   if (Platform.OS === "web" && typeof window !== "undefined" && window.location?.hostname) {
     return `${window.location.protocol}//${window.location.hostname}:8080`;
   }

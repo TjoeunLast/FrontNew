@@ -1,5 +1,5 @@
-import VehicleInfoScreen from "@/features/driver/my-page/ui/VehicleInfoScreen";
-import React from "react";
+﻿import React from "react";
+import VehicleInfoScreen from "@/features/common/my/ui/VehicleInfoScreen";
 
 export default function Screen() {
   return <VehicleInfoScreen />;
