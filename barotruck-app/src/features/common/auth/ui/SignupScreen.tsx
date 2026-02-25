@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import {
   Alert,
   KeyboardAvoidingView,
@@ -7,25 +7,23 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
   type TextStyle,
   type ViewStyle,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
 
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
-import { TextField } from "@/shared/ui/form/TextField";
 import { Button } from "@/shared/ui/base/Button";
+import { TextField } from "@/shared/ui/form/TextField";
 import { withAlpha } from "@/shared/utils/color";
-import { AuthService } from "@/shared/api/authService";
-import { UserService } from "@/shared/api/userService";
 
 
 
 type Role = "shipper" | "driver";
 type Step = "role" | "account";
+type Gender = "M" | "F";
 
 function normalizeEmail(v: string) {
   return v.trim().toLowerCase();
@@ -40,6 +38,17 @@ function digitsOnly(v: string) {
 function isPhoneLike(v: string) {
   return digitsOnly(v).length >= 10;
 }
+function parseBirthDate(v: string) {
+  const m = /^(\d{4})(\d{2})(\d{2})$/.exec(digitsOnly(v).slice(0, 8));
+  if (!m) return null;
+  const y = Number(m[1]);
+  const mo = Number(m[2]);
+  const d = Number(m[3]);
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+  const dt = new Date(y, mo - 1, d);
+  if (dt.getFullYear() !== y || dt.getMonth() !== mo - 1 || dt.getDate() !== d) return null;
+  return { y, mo, d };
+}
 function genCode6() {
   return String(Math.floor(100000 + Math.random() * 900000));
 }
@@ -53,7 +62,7 @@ export default function SignupScreen() {
   const t = useAppTheme();
   const c = t.colors;
 
-
+  
   const [step, setStep] = useState<Step>("role");
   const [role, setRole] = useState<Role | null>(null);
 
@@ -62,6 +71,8 @@ export default function SignupScreen() {
   const [pw2, setPw2] = useState("");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const [gender, setGender] = useState<Gender | null>(null);
+  const [birthDate, setBirthDate] = useState("");
 
   const [emailChecked, setEmailChecked] = useState(false);
   const [emailOkChecked, setEmailOkChecked] = useState(false);
@@ -71,6 +82,34 @@ export default function SignupScreen() {
   const [otpCode, setOtpCode] = useState<string | null>(null);
   const [otpInput, setOtpInput] = useState("");
   const [phoneVerified, setPhoneVerified] = useState(false);
+
+  const otpInputRef = useRef<TextInput>(null); // 1. 인증번호 입력창을 위한 ref 생성
+
+  // 2. 번호 수정 기능 추가
+  const onEditPhone = () => {
+    setPhoneVerified(false);
+    setOtpRequested(false);
+    setOtpCode(null);
+    setOtpInput("");
+  };
+
+  const onRequestOtp = () => {
+    if (!phoneFormatOk) {
+      showMsg("휴대폰 확인", "휴대폰 번호를 확인해주세요.");
+      return;
+    }
+    const code = genCode6();
+    setOtpRequested(true);
+    setOtpCode(code);
+    setOtpInput("");
+    setPhoneVerified(false);
+    showMsg("인증요청(목업)", `인증번호: ${code}\n(나중에 SMS 연동으로 교체)`);
+
+    // 3. 인증 요청 후 인증번호 입력창으로 커서 이동 (약간의 지연시간 필요)
+    setTimeout(() => {
+      otpInputRef.current?.focus();
+    }, 100);
+  };
 
   const onChangeEmail = (v: string) => {
     setEmail(v);
@@ -144,7 +183,6 @@ export default function SignupScreen() {
         paddingHorizontal: 16,
         backgroundColor: c.bg.surface,
         borderWidth: 1,
-        borderColor: c.border.default,
       } as ViewStyle,
       tfInput: { fontSize: 16, fontWeight: "800", paddingVertical: 0 } as TextStyle,
 
@@ -159,6 +197,17 @@ export default function SignupScreen() {
         justifyContent: "center",
       } as ViewStyle,
       miniBtnText: { fontSize: 15, fontWeight: "900", color: c.text.primary } as TextStyle,
+      genderBtn: {
+        flex: 1,
+        height: 46,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: c.border.default,
+        backgroundColor: c.bg.surface,
+        alignItems: "center",
+        justifyContent: "center",
+      } as ViewStyle,
+      genderBtnText: { fontSize: 14, fontWeight: "800", color: c.text.secondary } as TextStyle,
 
       helper: { marginTop: 8, fontSize: 13, fontWeight: "800", color: c.text.secondary } as TextStyle,
 
@@ -205,6 +254,8 @@ export default function SignupScreen() {
   const pwMatch = pw.length > 0 && pw2.length > 0 && pw === pw2;
   const nameOk = name.trim().length > 0;
   const phoneFormatOk = isPhoneLike(phone);
+  const birthDateOk = parseBirthDate(birthDate) !== null;
+  const genderOk = gender !== null;
 
   const canNext =
     !!role &&
@@ -213,21 +264,12 @@ export default function SignupScreen() {
     pwMatch &&
     nameOk &&
     phoneFormatOk &&
+    genderOk &&
+    birthDateOk &&
     phoneVerified;
 
 
-  const onRequestOtp = () => {
-    if (!phoneFormatOk) {
-      showMsg("휴대폰 확인", "휴대폰 번호를 확인해주세요.");
-      return;
-    }
-    const code = genCode6();
-    setOtpRequested(true);
-    setOtpCode(code);
-    setOtpInput("");
-    setPhoneVerified(false);
-    showMsg("인증요청(목업)", `인증번호: ${code}\n(나중에 SMS 연동으로 교체)`);
-  };
+  
 
   const onVerifyOtp = () => {
     if (!otpRequested || !otpCode) return;
@@ -260,6 +302,8 @@ export default function SignupScreen() {
       name: name.trim(),
       phone: phone.trim(),
       role: role,
+      gender: gender!,
+      birthDate: birthDate.trim(),
     };
 
     // 데이터를 query params로 넘기거나, 다음 페이지에서 다시 입력받지 않도록 
@@ -380,7 +424,52 @@ export default function SignupScreen() {
             <View style={{ height: 16 }} />
 
             <Text style={s.label}>이름</Text>
-            <TextField value={name} onChangeText={setName} placeholder="실명 입력" autoCapitalize="none" inputWrapStyle={s.tfWrap} inputStyle={s.tfInput} />
+            <TextField
+              value={name}
+              onChangeText={setName}
+              placeholder="실명 입력"
+              autoCapitalize="none"
+              inputWrapStyle={s.tfWrap}
+              inputStyle={s.tfInput}
+            />
+
+            <View style={{ height: 16 }} />
+
+            <Text style={s.label}>성별</Text>
+            <View style={s.row}>
+              <Pressable
+                onPress={() => setGender("M")}
+                style={[
+                  s.genderBtn,
+                  gender === "M" && { borderColor: c.brand.primary },
+                ]}
+              >
+                <Text style={[s.genderBtnText, gender === "M" && { color: c.text.primary }]}>남성</Text>
+              </Pressable>
+              <View style={s.rowGap} />
+              <Pressable
+                onPress={() => setGender("F")}
+                style={[
+                  s.genderBtn,
+                  gender === "F" && { borderColor: c.brand.primary },
+                ]}
+              >
+                <Text style={[s.genderBtnText, gender === "F" && { color: c.text.primary }]}>여성</Text>
+              </Pressable>
+            </View>
+
+            <View style={{ height: 16 }} />
+
+            <Text style={s.label}>생년월일</Text>
+            <TextField
+              value={birthDate}
+              onChangeText={(v) => setBirthDate(digitsOnly(v).slice(0, 8))}
+              placeholder="YYYYMMDD"
+              keyboardType="number-pad"
+              inputWrapStyle={s.tfWrap}
+              inputStyle={s.tfInput}
+              errorText={birthDate.length > 0 && !birthDateOk ? "YYYYMMDD 숫자 8자리를 입력해주세요." : undefined}
+            />
 
             <View style={{ height: 16 }} />
 
@@ -393,6 +482,7 @@ export default function SignupScreen() {
                   placeholder="010-1234-5678"
                   keyboardType="phone-pad"
                   inputWrapStyle={s.tfWrap}
+                  editable={!otpRequested || phoneVerified} // 4. 인증 요청 중에는 수정 불가
                   inputStyle={s.tfInput}
                   errorText={phone.length > 0 && !phoneFormatOk ? "휴대폰 번호를 확인해주세요." : undefined}
                 />
@@ -400,7 +490,7 @@ export default function SignupScreen() {
               <View style={s.rowGap} />
               <Pressable
                 style={[s.miniBtn, (!phoneFormatOk || phoneVerified) && { opacity: 0.6 }]}
-                onPress={onRequestOtp}
+                onPress={otpRequested && !phoneVerified ? onEditPhone : onRequestOtp} // 5. 상태에 따라 '인증요청' 또는 '번호수정'
                 disabled={!phoneFormatOk || phoneVerified}
               >
                 <Text style={s.miniBtnText}>{phoneVerified ? "인증완료" : "인증요청"}</Text>
@@ -414,6 +504,7 @@ export default function SignupScreen() {
                 <View style={s.row}>
                   <View style={{ flex: 1 }}>
                     <TextField
+                      ref={otpInputRef} // 6. ref 연결
                       value={otpInput}
                       onChangeText={setOtpInput}
                       placeholder="6자리 입력"

@@ -2,6 +2,8 @@ import * as SecureStore from 'expo-secure-store';
 import { AuthResponse, RegisterRequest } from '../models/auth';
 import { USE_MOCK } from '@/shared/config/mock';
 import apiClient from './apiClient';
+import messaging from '@react-native-firebase/messaging';
+import { UserService } from './userService';
 
 export const AuthService = {
   /**
@@ -36,6 +38,18 @@ export const AuthService = {
     if (res.data.access_token) {
       await SecureStore.setItemAsync('userToken', res.data.access_token);
       await SecureStore.setItemAsync('refreshToken', res.data.refresh_token);
+      console.log("✅ 회원가입 성공 및 토큰 저장 완료");
+
+      // [추가] 회원가입 직후 자동 로그인 상태이므로 FCM 토큰 전송
+      try {
+        const fcmToken = await messaging().getToken();
+        if (fcmToken) {
+          await UserService.updateFcmToken(fcmToken);
+          console.log("✅ 회원가입 후 FCM 토큰 서버 전송 완료");
+        }
+      } catch (e) {
+        console.error("❌ 회원가입 후 FCM 토큰 전송 실패:", e);
+      }
     }
     
     return res.data;
@@ -79,6 +93,17 @@ export const AuthService = {
       await SecureStore.setItemAsync('userToken', res.data.access_token);
       await SecureStore.setItemAsync('refreshToken', res.data.refresh_token);
       console.log("✅ 토큰 저장 완료");
+
+      // [추가] 로그인 성공 직후 FCM 토큰 발급 및 서버 전송
+      try {
+        const fcmToken = await messaging().getToken();
+        if (fcmToken) {
+          await UserService.updateFcmToken(fcmToken);
+          console.log("✅ 로그인 후 FCM 토큰 서버 전송 완료");
+        }
+      } catch (e) {
+        console.error("❌ 로그인 후 FCM 토큰 전송 실패:", e);
+      }
     } else {
       // 만약 로그에 access_token이 찍히는데 여기로 들어온다면 오타를 확인해야 합니다.
       console.error("❌ 응답에 access_token이 없습니다. 필드명을 확인하세요.");
