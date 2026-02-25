@@ -123,7 +123,7 @@ async function fetchShipperDetailFromServer(baseMe: any) {
   }
 }
 
-export default function ShipperMyScreen() {
+export default function MyPageScreen() {
   const router = useRouter();
   const t = useAppTheme();
   const c = t.colors;
@@ -140,6 +140,10 @@ export default function ShipperMyScreen() {
     birthDate: "-",
   });
   const [profileImageUrl, setProfileImageUrl] = useState("");
+
+  const roleLabel = profile.role === "-" ? "회원" : profile.role;
+  const managementSectionTitle = roleLabel === "차주" ? "차주 관리" : "화주 관리";
+  const profileGreetingFallback = roleLabel === "차주" ? "차주님" : "화주님";
 
   useFocusEffect(
     React.useCallback(() => {
@@ -420,7 +424,9 @@ export default function ShipperMyScreen() {
           </View>
           <View style={s.profileInfo}>
             <View style={s.profileTopRow}>
-              <Text style={s.profileName}>{profile.nickname === "-" ? "화주님" : `${profile.nickname}님`}</Text>
+              <Text style={s.profileName}>
+                {profile.nickname === "-" ? profileGreetingFallback : `${profile.nickname}님`}
+              </Text>
               {profile.shipperType !== "-" ? (
                 <View style={s.shipperTypeBadge}>
                   <Text style={s.shipperTypeBadgeText}>{profile.shipperType}</Text>
@@ -438,7 +444,7 @@ export default function ShipperMyScreen() {
           </View>
         </Pressable>
 
-        <Text style={s.sectionTitle}>화주 관리</Text>
+        <Text style={s.sectionTitle}>{managementSectionTitle}</Text>
         <View style={s.sectionCard}>
           <Pressable style={s.row} onPress={() => router.push("/(common)/settings/shipper/payment" as any)}>
             <View style={[s.rowIconWrap, { backgroundColor: withAlpha(c.brand.primary, 0.12) }]}>
