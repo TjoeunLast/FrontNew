@@ -113,12 +113,20 @@ function normalizeOrderRow(node: any): OrderResponse | null {
       findNestedSettlementStatus(node)
   );
 
+  const driverNo = Number(
+    (node as any).driverNo ??
+      (node as any).driverId ??
+      (node as any).driver?.id ??
+      0,
+  );
+
   return {
     orderId: orderIdNum,
     status: normalizeStatus((node as any).status),
     settlementStatus,
     createdAt,
     updated: updated ? String(updated) : undefined,
+    driverNo,
     startAddr,
     startPlace,
     startType: String((node as any).startType ?? (node as any).pickupType ?? ''),
