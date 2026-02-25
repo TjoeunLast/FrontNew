@@ -18,8 +18,8 @@ import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import { Button } from "@/shared/ui/base/Button";
 import { TextField } from "@/shared/ui/form/TextField";
 import { withAlpha } from "@/shared/utils/color";
-
-
+import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 
 type Role = "shipper" | "driver";
 type Step = "role" | "account";
@@ -70,6 +70,7 @@ export default function SignupScreen() {
   const [pw, setPw] = useState("");
   const [pw2, setPw2] = useState("");
   const [name, setName] = useState("");
+  const [nickname, setNickname] = useState("");
   const [phone, setPhone] = useState("");
   const [gender, setGender] = useState<Gender | null>(null);
   const [birthDate, setBirthDate] = useState("");
@@ -253,6 +254,7 @@ export default function SignupScreen() {
   const pwOk = pw.length >= 8;
   const pwMatch = pw.length > 0 && pw2.length > 0 && pw === pw2;
   const nameOk = name.trim().length > 0;
+  const nicknameOk = nickname.trim().length > 0;
   const phoneFormatOk = isPhoneLike(phone);
   const birthDateOk = parseBirthDate(birthDate) !== null;
   const genderOk = gender !== null;
@@ -263,6 +265,7 @@ export default function SignupScreen() {
     pwOk &&
     pwMatch &&
     nameOk &&
+    nicknameOk &&
     phoneFormatOk &&
     genderOk &&
     birthDateOk &&
@@ -300,6 +303,7 @@ export default function SignupScreen() {
       email: normalizeEmail(email),
       password: pw,
       name: name.trim(),
+      nickname: nickname.trim(),
       phone: phone.trim(),
       role: role,
       gender: gender!,
@@ -419,6 +423,18 @@ export default function SignupScreen() {
               inputWrapStyle={s.tfWrap}
               inputStyle={s.tfInput}
               errorText={pw2.length > 0 && !pwMatch ? "비밀번호가 일치하지 않아요." : undefined}
+            />
+
+            <View style={{ height: 16 }} />
+
+            <Text style={s.label}>닉네임</Text>
+            <TextField
+              value={nickname}
+              onChangeText={setNickname}
+              placeholder="닉네임 입력"
+              autoCapitalize="none"
+              inputWrapStyle={s.tfWrap}
+              inputStyle={s.tfInput}
             />
 
             <View style={{ height: 16 }} />

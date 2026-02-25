@@ -2,8 +2,9 @@
  */
 export interface RegisterRequest {
   nickname: string;
+  name: string;
   email: string;
-  password?: string;
+  password: string;
   phone: string;
   role: 'DRIVER' | 'SHIPPER';
   gender?: 'M' | 'F';

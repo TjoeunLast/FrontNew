@@ -23,6 +23,7 @@ import { saveCurrentUserSnapshot } from "@/shared/utils/currentUserStorage";
 
 const ROUTES = {
   signup: "/(auth)/signup" as const,
+  findEmail: "/(auth)/find-email" as const,
   resetPw: "/(auth)/reset-password" as const,
   shipperTabs: "/(shipper)/(tabs)" as const,
   driverTabs: "/(driver)/(tabs)" as const,
@@ -142,9 +143,15 @@ export default function LoginScreen() {
                 <Text style={[s.checkboxLabel, { color: c.text.primary }]}>자동 로그인</Text>
               </Pressable>
 
-              <Pressable onPress={() => router.push(ROUTES.resetPw)} disabled={submitting}>
-                <Text style={[s.link, { color: c.text.secondary }]}>비밀번호 찾기</Text>
-              </Pressable>
+              <View style={{ flexDirection: "row", alignItems: "center" }}>
+                <Pressable onPress={() => router.push(ROUTES.findEmail)} disabled={submitting}>
+                  <Text style={[s.link, { color: c.text.secondary }]}>이메일 찾기</Text>
+                </Pressable>
+                <Text style={{ marginHorizontal: 8, color: c.border.default }}>|</Text>
+                <Pressable onPress={() => router.push(ROUTES.resetPw)} disabled={submitting}>
+                  <Text style={[s.link, { color: c.text.secondary }]}>비밀번호 찾기</Text>
+                </Pressable>
+              </View>
             </View>
 
             <Button
@@ -235,8 +242,8 @@ const s = StyleSheet.create({
     justifyContent: "center",
     marginRight: 10,
   },
-  checkboxLabel: { fontSize: 16, fontWeight: "700" },
-  link: { fontSize: 16, fontWeight: "700", textDecorationLine: "underline" },
+  checkboxLabel: { fontSize: 15, fontWeight: "700" },
+  link: { fontSize: 14, fontWeight: "700" },
 
   bottom: {
     marginTop: 22,

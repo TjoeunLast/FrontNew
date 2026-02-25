@@ -7,7 +7,6 @@ import { useRouter } from "expo-router";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import { TextField } from "@/shared/ui/form/TextField";
 import { Button } from "@/shared/ui/base/Button";
-import { UserService } from "@/shared/api/userService";
 import { AuthService } from "@/shared/api/authService";
 
 export default function ResetPasswordScreen() {
@@ -15,7 +14,12 @@ export default function ResetPasswordScreen() {
   const { colors: c } = useAppTheme();
 
   const [email, setEmail] = useState("");
-  const [isUserFound, setIsUserFound] = useState(false); // 이메일 확인 여부
+  
+  // 이메일 인증 관련 상태
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpInput, setOtpInput] = useState("");
+  const [otpVerified, setOtpVerified] = useState(false);
+
   const [pw, setPw] = useState("");
   const [pw2, setPw2] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -23,53 +27,64 @@ export default function ResetPasswordScreen() {
   const emailOk = email.includes("@") && email.includes(".");
   const pwOk = pw.length >= 8;
   const pwMatch = pw.length > 0 && pw === pw2;
-  const canSubmit = isUserFound && pwOk && pwMatch && !submitting;
+  const canSubmit = otpVerified && pwOk && pwMatch && !submitting;
 
-  // 1. 이메일 존재 여부 확인 (checkNickname 로직 응용)
-  const onCheckEmail = async () => {
+  // 1. 이메일로 인증번호 발송
+  const onSendAuthCode = async () => {
     if (!emailOk) return Alert.alert("확인", "올바른 이메일 형식을 입력해주세요.");
 
     try {
       setSubmitting(true);
-      // 백엔드의 checkNickname이 이메일 중복 체크도 겸한다면 이를 활용
-      const isDuplicated = await UserService.checkNickname(email);
+      await AuthService.requestEmailAuth(email);
       
-      if (isDuplicated) {
-        // 중복됨 = 가입된 계정이 있음
-        setIsUserFound(true);
-        Alert.alert("확인 완료", "계정이 확인되었습니다. 새 비밀번호를 입력하세요.");
-      } else {
-        Alert.alert("알림", "가입되지 않은 이메일입니다.");
-        setIsUserFound(false);
-      }
+      Alert.alert("전송 완료", "입력하신 이메일로 인증번호를 보냈습니다.");
+      setOtpSent(true);
+      setOtpVerified(false);
+      setOtpInput("");
     } catch (e) {
-      Alert.alert("오류", "사용자 확인 중 문제가 발생했습니다.");
+      Alert.alert("오류", "인증번호 전송에 실패했습니다.");
     } finally {
       setSubmitting(false);
     }
   };
 
-  // 2. 비밀번호 즉시 변경
+  // 2. 인증번호 검증
+  const onVerifyAuthCode = async () => {
+    if (otpInput.length < 6) return Alert.alert("확인", "인증번호 6자리를 입력해주세요.");
+    
+    try {
+      setSubmitting(true);
+      const isVerified = await AuthService.verifyEmailCode(email, otpInput);
+      
+      if (isVerified) {
+        setOtpVerified(true);
+        Alert.alert("인증 성공", "인증되었습니다. 새 비밀번호를 입력해주세요.");
+      } else {
+        Alert.alert("인증 실패", "인증번호가 올바르지 않습니다.");
+      }
+    } catch (e) {
+      Alert.alert("오류", "인증 확인 중 문제가 발생했습니다.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // 3. 비밀번호 변경 요청
   const onSubmit = async () => {
     if (!canSubmit) return;
 
-    // try {
-    //   setSubmitting(true);
-    //   // 인증코드 없이 이메일과 새 비번만 보내는 별도 API가 필요할 수 있습니다.
-    //   // 여기서는 기존 메서드 형식을 빌려 쓰되 코드는 빈 값이나 특정 더미값을 보낸다고 가정합니다.
-    //   await AuthService.resetPasswordWithCode({
-    //     email: email.trim().toLowerCase(),
-    //     code: "NONE", // 인증 생략용 더미 코드
-    //     newPassword: pw,
-    //   });
+    try {
+      setSubmitting(true);
+      await AuthService.resetPassword({ email, code: otpInput, newPassword: pw });
 
-    //   Alert.alert("성공", "비밀번호가 변경되었습니다.");
-    //   router.replace("/(auth)/login");
-    // } catch (e) {
-    //   Alert.alert("오류", "비밀번호 변경에 실패했습니다.");
-    // } finally {
-    //   setSubmitting(false);
-    // }
+      Alert.alert("성공", "비밀번호가 변경되었습니다.\n로그인해주세요.", [
+        { text: "확인", onPress: () => router.replace("/(auth)/login") }
+      ]);
+    } catch (e) {
+      Alert.alert("오류", "비밀번호 변경에 실패했습니다.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -92,26 +107,50 @@ export default function ResetPasswordScreen() {
             <View style={{ flex: 1 }}>
               <TextField
                 value={email}
-                onChangeText={(v) => { setEmail(v); setIsUserFound(false); }}
+                onChangeText={(v) => { 
+                  setEmail(v); 
+                  setOtpSent(false); 
+                  setOtpVerified(false); 
+                }}
                 placeholder="example@email.com"
                 keyboardType="email-address"
                 autoCapitalize="none"
-                editable={!isUserFound}
+                editable={!otpVerified && !submitting}
               />
             </View>
             <Pressable 
-              style={[s.checkBtn, isUserFound && { backgroundColor: c.brand.primary }]} 
-              onPress={onCheckEmail}
-              disabled={isUserFound || submitting}
+              style={[s.checkBtn, otpSent && { backgroundColor: "#fff", borderWidth: 1, borderColor: c.border.default }]} 
+              onPress={onSendAuthCode}
+              disabled={otpVerified || submitting}
             >
-              <Text style={{ color: isUserFound ? "#fff" : c.text.primary, fontWeight: "800" }}>
-                {isUserFound ? "확인됨" : "계정확인"}
+              <Text style={{ color: c.text.primary, fontWeight: "800", fontSize: 14 }}>
+                {otpSent ? "재전송" : "인증요청"}
               </Text>
             </Pressable>
           </View>
 
-          {/* 계정이 확인된 경우에만 비번 입력창 노출 */}
-          {isUserFound && (
+          {/* 인증번호 입력 (발송됨 && 미인증 상태) */}
+          {otpSent && !otpVerified && (
+            <View style={{ marginTop: 12 }}>
+              <Text style={s.label}>인증번호</Text>
+              <View style={{ flexDirection: "row", gap: 8 }}>
+                <View style={{ flex: 1 }}>
+                  <TextField
+                    value={otpInput}
+                    onChangeText={setOtpInput}
+                    placeholder="인증번호 6자리"
+                    keyboardType="number-pad"
+                  />
+                </View>
+                <Pressable style={[s.checkBtn, { backgroundColor: c.brand.primary }]} onPress={onVerifyAuthCode}>
+                  <Text style={{ color: "#fff", fontWeight: "800" }}>확인</Text>
+                </Pressable>
+              </View>
+            </View>
+          )}
+
+          {/* 인증 완료 시 비밀번호 입력창 노출 */}
+          {otpVerified && (
             <View style={{ marginTop: 24 }}>
               <Text style={s.label}>새 비밀번호</Text>
               <TextField
@@ -150,7 +189,7 @@ const s = StyleSheet.create({
   subtitle: { fontSize: 14, color: "#64748B", marginTop: 8 },
   label: { fontSize: 13, fontWeight: "700", marginBottom: 8 },
   checkBtn: { 
-    marginLeft: 10, 
+    marginLeft: 8, 
     width: 80, 
     height: 56, 
     backgroundColor: "#F1F5F9", 
