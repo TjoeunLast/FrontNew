@@ -9,6 +9,7 @@ import {
   SafeAreaView,
   RefreshControl,
   ActivityIndicator,
+  Alert,
 } from "react-native";
 import { DrOrderCard } from "@/features/driver/shard/ui/DrOrderCard";
 import { useOrderList } from "../model/useOrderList";
@@ -19,30 +20,35 @@ export default function OrderListScreen() {
   const { colors: c } = useAppTheme();
 
   const {
-    filteredOrders,
+    filteredOrders, // 필터와 정렬이 적용된 최종 오더 리스트
     loading,
     refreshing,
     onRefresh,
-    filter,
+    filter, // 배차 유형
     setFilter,
-    sortBy,
+    sortBy, // 정렬 기준
     setSortBy,
+    myLocation,
   } = useOrderList();
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#FFF" }}>
-      {/* HEADER */}
+      {/* 헤더 */}
       <View style={[s.header, { borderBottomColor: c.border.default }]}>
+        <View style={{ width: 40 }} />
         <Text style={s.headerTitle}>오더 목록</Text>
+        {/* 상세 필터 아이콘 */}
+        <Pressable
+          onPress={() => Alert.alert("필터", "상세 필터 모달이 열립니다.")}
+          style={s.headerFilterBtn}
+        >
+          <Ionicons name="options-outline" size={24} color={c.text.primary} />
+        </Pressable>
       </View>
 
-      {/* FILTER BAR */}
+      {/* 필터 탭 (4개 항목으로 정리) */}
       <View style={s.filterWrapper}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={s.filterScroll}
-        >
+        <View style={s.tabContainer}>
           <TabChip
             label="전체"
             active={filter.dispatchType === "ALL"}
@@ -66,19 +72,16 @@ export default function OrderListScreen() {
             active={filter.dispatchType === "DIRECT"}
             onPress={() => setFilter({ ...filter, dispatchType: "DIRECT" })}
           />
-
-          <View style={s.divider} />
-
-          <FilterSelectChip label={filter.region} />
-          <FilterSelectChip label={filter.tonnage} />
-          <FilterSelectChip label={filter.carType} />
-        </ScrollView>
+        </View>
       </View>
 
-      {/* LIST INFO & SORTING */}
+      {/* 목롤 요약 및 정렬 */}
       <View style={s.listInfoRow}>
         <Text style={s.totalText}>
-          총 <Text style={{ color: "#4E46E5" }}>{filteredOrders.length}</Text>
+          총{" "}
+          <Text style={{ color: c.brand.primary }}>
+            {filteredOrders.length}
+          </Text>
           건의 오더
         </Text>
         <View style={s.sortContainer}>
@@ -100,13 +103,15 @@ export default function OrderListScreen() {
         </View>
       </View>
 
-      {/* ORDER LIST AREA */}
+      {/* 오더 리스트 */}
       {loading && !refreshing ? (
         <ActivityIndicator style={{ flex: 1 }} color="#1A2F4B" size="large" />
       ) : (
         <FlatList
           data={filteredOrders}
-          renderItem={({ item }) => <DrOrderCard order={item} />}
+          renderItem={({ item }) => (
+            <DrOrderCard order={item} myLocation={myLocation} />
+          )}
           keyExtractor={(item) => item.orderId.toString()}
           contentContainerStyle={s.listPadding}
           refreshControl={
@@ -147,18 +152,6 @@ const TabChip = ({ label, active, onPress, isRecommend }: any) => (
   </Pressable>
 );
 
-const FilterSelectChip = ({ label }: { label: string }) => (
-  <View style={s.selectChip}>
-    <Text style={s.selectChipText}>{label}</Text>
-    <Ionicons
-      name="chevron-down"
-      size={12}
-      color="#94A3B8"
-      style={{ marginLeft: 4 }}
-    />
-  </View>
-);
-
 const SortButton = ({ label, active, onPress }: any) => (
   <Pressable onPress={onPress} style={s.sortBtn}>
     <Text style={[s.sortBtnText, active && { color: "#1A2F4B" }]}>{label}</Text>
@@ -170,42 +163,37 @@ const s = StyleSheet.create({
   header: {
     height: 56,
     backgroundColor: "#FFF",
-    justifyContent: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
     alignItems: "center",
+    paddingHorizontal: 16,
     borderBottomWidth: 1,
   },
   headerTitle: { fontSize: 18, fontWeight: "700", color: "#0F172A" },
-  headerIcons: { flexDirection: "row" },
+  headerFilterBtn: { padding: 4 },
   filterWrapper: {
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: "#F1F5F9",
   },
-  filterScroll: { paddingHorizontal: 20, alignItems: "center" },
-  chip: {
+  tabContainer: {
+    flexDirection: "row",
     paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 25,
+    justifyContent: "flex-start",
+    alignItems: "center",
+    gap: 8,
+  },
+  chip: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
     backgroundColor: "#FFF",
     borderWidth: 1,
     borderColor: "#E2E8F0",
-    marginRight: 8,
   },
   activeChip: { backgroundColor: "#1A2F4B", borderColor: "#1A2F4B" },
   activeRecommendChip: { backgroundColor: "#4E46E5", borderColor: "#4E46E5" },
   chipText: { fontSize: 15, fontWeight: "700" },
-  selectChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 25,
-    backgroundColor: "#F8FAFC",
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    marginRight: 8,
-  },
-  selectChipText: { fontSize: 14, fontWeight: "600", color: "#64748B" },
   listInfoRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -225,12 +213,6 @@ const s = StyleSheet.create({
     marginTop: 4,
   },
   listPadding: { paddingHorizontal: 20, paddingBottom: 40 },
-  divider: {
-    width: 1,
-    height: 20,
-    backgroundColor: "#E2E8F0",
-    marginHorizontal: 10,
-  },
   empty: { alignItems: "center", marginTop: 100 },
   emptyText: { color: "#94A3B8", fontSize: 15 },
 });

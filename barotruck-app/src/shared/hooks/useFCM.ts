@@ -1,14 +1,18 @@
 // 경로: src/shared/hooks/useFCM.ts
 
 import { useEffect } from 'react';
-import messaging from '@react-native-firebase/messaging';
 import { UserService } from '../api/userService';
-import { Platform } from 'react-native';
 import { tokenStorage } from '@/shared/utils/tokenStorage';
+import { getFirebaseMessaging } from '@/shared/utils/firebaseMessaging';
 
 export const useFCM = () => {
   useEffect(() => {
     const setupFCM = async () => {
+      const messaging = await getFirebaseMessaging();
+      if (!messaging) {
+        return;
+      }
+
       // 0. 로그인 여부 체크: 로그인이 안 되어 있으면 FCM 권한 요청/토큰 발급을 하지 않음
       const userToken = await tokenStorage.getItem('userToken');
       if (!userToken) {
@@ -32,6 +36,11 @@ export const useFCM = () => {
 
     const getAndSaveToken = async () => {
       try {
+        const messaging = await getFirebaseMessaging();
+        if (!messaging) {
+          return;
+        }
+
         // 2. 디바이스 토큰 가져오기
         const token = await messaging().getToken();
         if (token) {
@@ -49,17 +58,28 @@ export const useFCM = () => {
     setupFCM();
 
     // 4. 토큰 갱신 감지 (앱 사용 중 토큰이 바뀌면 다시 전송)
-    const unsubscribe = messaging().onTokenRefresh(async (token) => {
-      console.log('🔄 FCM Token 갱신됨:', token);
-      const userToken = await tokenStorage.getItem('userToken');
-      if (userToken) {
-        await UserService.updateFcmToken(token);
-        console.log('✅ 갱신된 Token 서버 전송 완료');
-      }else{
-        console.log('⚠️ 토큰 갱신 시 로그인 상태 아님, 서버 전송 생략');
-      }
-    });
+    let unsubscribe: (() => void) | undefined;
 
-    return unsubscribe;
+    void (async () => {
+      const messaging = await getFirebaseMessaging();
+      if (!messaging) {
+        return;
+      }
+
+      unsubscribe = messaging().onTokenRefresh(async (token) => {
+        console.log('🔄 FCM Token 갱신됨:', token);
+        const userToken = await tokenStorage.getItem('userToken');
+        if (userToken) {
+          await UserService.updateFcmToken(token);
+          console.log('✅ 갱신된 Token 서버 전송 완료');
+        } else {
+          console.log('⚠️ 토큰 갱신 시 로그인 상태 아님, 서버 전송 생략');
+        }
+      });
+    })();
+
+    return () => {
+      unsubscribe?.();
+    };
   }, []);
 };

@@ -134,20 +134,6 @@ export const s = StyleSheet.create({
 
   tagWrap: { flexDirection: "row", flexWrap: "wrap", gap: SP.chipGap },
 
-  photoRow: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginTop: 10 },
-  photoBox: {
-    width: "48%",
-    height: 86,
-    borderRadius: 14,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    paddingHorizontal: 10,
-  },
-  photoText: { fontSize: 12, fontWeight: "900" },
-  photoHint: { fontSize: 10, fontWeight: "800" },
-
   choiceRow: { flexDirection: "row", gap: 12, marginTop: 10 },
   choiceCard: { flex: 1, borderRadius: 16, borderWidth: 1, padding: 14 },
   emoji: { fontSize: 18, marginBottom: 8 },
@@ -229,3 +215,4 @@ export const s = StyleSheet.create({
   stickySubRow: { marginTop: 6, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   stickySub: { fontSize: 12, fontWeight: "800" },
 });
+

@@ -15,6 +15,9 @@
     },
     "ios": {
       "supportsTablet": true,
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "사용자 주변의 오더를 확인하기 위해 위치 권한이 필요합니다."
+      },
       "bundleIdentifier": "com.barotruck", // Firebase 콘솔에 등록한 Bundle ID와 일치해야 함
       "googleServicesFile": "./GoogleService-Info.plist" // ✅ 이 줄 추가
     },
@@ -23,6 +26,7 @@
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
+      "permissions": ["ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION"],
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "package": "com.barotruck", // Firebase 콘솔에 등록한 패키지명과 일치해야 함

@@ -1,4 +1,4 @@
-﻿import { Ionicons } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker, { type DateTimePickerEvent } from "@react-native-community/datetimepicker";
 import { useRouter } from "expo-router";
 import React, { useMemo, useState } from "react";
@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { getCreateOrderDraft, setCreateOrderDraft } from "@/features/shipper/create-order/model/createOrderDraft";
 import { AddressApi } from "@/shared/api/addressService";
+import { RouteApi } from "@/shared/api/routeService";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import { Button } from "@/shared/ui/base/Button";
 import { Card } from "@/shared/ui/base/Card";
@@ -14,8 +15,8 @@ import ShipperScreenHeader from "@/shared/ui/layout/ShipperScreenHeader";
 
 // 기존 import들 사이에 추가!
 import AddressSearch from "@/shared/utils/AddressSearch";
-import { RECENT_START_OPTIONS } from "./createOrderStep1.constants";
 import { SearchableAddressField } from "./createOrderStep1.components"; // InlineDropdownField 옆에 추가로 불러오세요.
+import { RECENT_START_OPTIONS } from "./createOrderStep1.constants";
 
 import {
   Chip,
@@ -26,7 +27,6 @@ import {
 } from "./createOrderStep1.components";
 import {
   CAR_TYPE_OPTIONS,
-  DEFAULT_PHOTOS,
   getEstimatedDistanceKm,
   getRecommendedFareByDistance,
   SP,
@@ -53,12 +53,19 @@ export function ShipperCreateOrderStep1Screen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const initialDraft = getCreateOrderDraft();
+  const normalizeLoadDay = (v?: string): LoadDayType => {
+    if (v === "당상(오늘)" || v === "당상") return "당상";
+    if (v === "익상(내일)" || v === "익상") return "익상";
+    return "직접 지정";
+  };
 
   const [startSelected, setStartSelected] = useState(initialDraft?.startSelected ?? "");
+  const [startLat, setStartLat] = useState<number | undefined>(initialDraft?.startLat);
+  const [startLng, setStartLng] = useState<number | undefined>(initialDraft?.startLng);
   const [startAddrDetail, setStartAddrDetail] = useState(initialDraft?.startAddrDetail ?? "");
   const [startContact, setStartContact] = useState(initialDraft?.startContact ?? "");
   const [startSearch, setStartSearch] = useState(initialDraft?.startSelected ?? "");
-  const [loadDay, setLoadDay] = useState<LoadDayType>(initialDraft?.loadDay ?? "당상(오늘)");
+  const [loadDay, setLoadDay] = useState<LoadDayType>(normalizeLoadDay(initialDraft?.loadDay));
   const [loadDate, setLoadDate] = useState(
     initialDraft?.loadDateISO ? new Date(initialDraft.loadDateISO) : new Date()
   );
@@ -66,9 +73,15 @@ export function ShipperCreateOrderStep1Screen() {
   const [startTimeHHmm, setStartTimeHHmm] = useState(initialDraft?.startTimeHHmm ?? "09:00");
   const [startTimePickerOpen, setStartTimePickerOpen] = useState(false);
   const [endAddr, setEndAddr] = useState(initialDraft?.endAddr ?? "");
+  const [endLat, setEndLat] = useState<number | undefined>(initialDraft?.endLat);
+  const [endLng, setEndLng] = useState<number | undefined>(initialDraft?.endLng);
   const [endAddrDetail, setEndAddrDetail] = useState(initialDraft?.endAddrDetail ?? "");
   const [endContact, setEndContact] = useState(initialDraft?.endContact ?? "");
-  const [endTimeHHmm, setEndTimeHHmm] = useState(initialDraft?.endTimeHHmm ?? "18:00");
+  const [endTimeHHmm, setEndTimeHHmm] = useState(initialDraft?.endTimeHHmm ?? "");
+  const [lastEndTimeHHmm, setLastEndTimeHHmm] = useState(() => {
+    const initial = (initialDraft?.endTimeHHmm ?? "").trim();
+    return /^([01]\d|2[0-3]):([0-5]\d)$/.test(initial) ? initial : "18:00";
+  });
   const [endTimePickerOpen, setEndTimePickerOpen] = useState(false);
   const [arriveType, setArriveType] = useState<ArriveType>(initialDraft?.arriveType ?? "당착");
 
@@ -76,8 +89,6 @@ export function ShipperCreateOrderStep1Screen() {
   const [ton, setTon] = useState<Option>(initialDraft?.ton ?? TON_OPTIONS[3]);
   const [cargoDetail, setCargoDetail] = useState(initialDraft?.cargoDetail ?? "");
   const [weightTon, setWeightTon] = useState(initialDraft?.weightTon ?? "0");
-
-  const [photos, setPhotos] = useState(initialDraft?.photos ?? DEFAULT_PHOTOS);
   const [dispatch, setDispatch] = useState<DispatchType>(initialDraft?.dispatch ?? "instant");
   const [tripType, setTripType] = useState<TripType>(initialDraft?.tripType ?? "oneWay");
   const [pay, setPay] = useState<PayType>(initialDraft?.pay ?? "receipt30");
@@ -92,7 +103,7 @@ export function ShipperCreateOrderStep1Screen() {
   const [carDropdownOpen, setCarDropdownOpen] = useState(false);
   const [tonDropdownOpen, setTonDropdownOpen] = useState(false);
   
-  // ✅ 여기에 새롭게 추가! (모달 및 드롭다운 열림/닫힘 상태)
+
   const [isStartModalOpen, setIsStartModalOpen] = useState(false);
   const [isEndModalOpen, setIsEndModalOpen] = useState(false);
   const [isRecentDropdownOpen, setIsRecentDropdownOpen] = useState(false);
@@ -100,9 +111,13 @@ export function ShipperCreateOrderStep1Screen() {
   
   const [startAddrSuggestions, setStartAddrSuggestions] = useState<string[]>([]);
   const [endAddrSuggestions, setEndAddrSuggestions] = useState<string[]>([]);
-  const distanceKm = useMemo(
+  const fallbackDistanceKm = useMemo(
     () => getEstimatedDistanceKm(startSelected || startSearch, endAddr),
     [startSelected, startSearch, endAddr]
+  );
+  const [distanceKm, setDistanceKm] = useState(initialDraft?.distanceKm ?? fallbackDistanceKm);
+  const [estimatedDurationMin, setEstimatedDurationMin] = useState<number | undefined>(
+    initialDraft?.estimatedDurationMin
   );
   const aiFare = useMemo(() => getRecommendedFareByDistance(distanceKm), [distanceKm]);
 
@@ -137,6 +152,42 @@ export function ShipperCreateOrderStep1Screen() {
     },
     []
   );
+
+  React.useEffect(() => {
+    if (
+      startLat === undefined ||
+      startLng === undefined ||
+      endLat === undefined ||
+      endLng === undefined
+    ) {
+      setDistanceKm(fallbackDistanceKm);
+      setEstimatedDurationMin(undefined);
+      return;
+    }
+
+    let active = true;
+    void (async () => {
+      try {
+        const route = await RouteApi.estimateByCoords({
+          startLat,
+          startLng,
+          endLat,
+          endLng,
+        });
+        if (!active) return;
+        setDistanceKm(route.distanceKm);
+        setEstimatedDurationMin(route.durationMin);
+      } catch {
+        if (!active) return;
+        setDistanceKm(fallbackDistanceKm);
+        setEstimatedDurationMin(undefined);
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [endLat, endLng, fallbackDistanceKm, startLat, startLng]);
 
   React.useEffect(() => {
     const q = startSearch.trim();
@@ -196,14 +247,6 @@ export function ShipperCreateOrderStep1Screen() {
     void fetchAddressSuggestions(endAddr, setEndAddrSuggestions, 1);
   };
 
-  const addPhoto = () => {
-    Alert.alert("TODO", "이미지 선택(Expo ImagePicker) 연결");
-  };
-
-  const removePhoto = (id: string) => {
-    setPhotos((prev) => prev.filter((p) => p.id !== id));
-  };
-
   const applyFare = () => {
     const v = parseWonInput(fareInput);
     if (v <= 0) {
@@ -259,8 +302,21 @@ export function ShipperCreateOrderStep1Screen() {
       Alert.alert("필수", "하차지 연락처를 입력해주세요.");
       return;
     }
-    if (!isValidHHmm(endTimeHHmm)) {
-      Alert.alert("필수", "하차 시간을 HH:MM 형식으로 입력해주세요.");
+    if (endTimeHHmm.trim() && !isValidHHmm(endTimeHHmm)) {
+      Alert.alert("확인", "하차 시간은 HH:MM 형식으로 입력해주세요.");
+      return;
+    }
+    if (!cargoDetail.trim()) {
+      Alert.alert("필수", "물품상세를 입력해주세요.");
+      return;
+    }
+    if (!weightTon.trim()) {
+      Alert.alert("필수", "중량(톤)을 입력해주세요.");
+      return;
+    }
+    const parsedWeightTon = Number.parseFloat(weightTon.trim());
+    if (!Number.isFinite(parsedWeightTon) || parsedWeightTon <= 0) {
+      Alert.alert("필수", "중량(톤)은 0보다 큰 숫자로 입력해주세요.");
       return;
     }
     if (appliedFare <= 0) {
@@ -271,12 +327,16 @@ export function ShipperCreateOrderStep1Screen() {
     setCreateOrderDraft({
       editOrderId: initialDraft?.editOrderId,
       startSelected: resolvedStartAddr,
+      startLat,
+      startLng,
       startAddrDetail: startAddrDetail.trim(),
       startContact: startContact.trim(),
       loadDay,
       loadDateISO: loadDate.toISOString(),
       startTimeHHmm: startTimeHHmm.trim(),
       endAddr: endAddr.trim(),
+      endLat,
+      endLng,
       endAddrDetail: endAddrDetail.trim(),
       endContact: endContact.trim(),
       endTimeHHmm: endTimeHHmm.trim(),
@@ -287,11 +347,11 @@ export function ShipperCreateOrderStep1Screen() {
       weightTon: weightTon.trim(),
       requestTags: [],
       requestText: "",
-      photos,
       dispatch,
       tripType,
       pay,
       distanceKm,
+      estimatedDurationMin,
       appliedFare,
     });
 
@@ -301,13 +361,13 @@ export function ShipperCreateOrderStep1Screen() {
   const onSelectLoadDay = (v: LoadDayType) => {
     setLoadDay(v);
 
-    if (v === "당상(오늘)") {
+    if (v === "당상") {
       setLoadDate(new Date());
       setLoadDatePickerOpen(false);
       return;
     }
 
-    if (v === "익상(내일)") {
+    if (v === "익상") {
       setLoadDate(addDays(new Date(), 1));
       setLoadDatePickerOpen(false);
       return;
@@ -323,8 +383,8 @@ export function ShipperCreateOrderStep1Screen() {
     const today = new Date();
     const tomorrow = addDays(today, 1);
 
-    if (isSameDay(picked, today)) setLoadDay("당상(오늘)");
-    else if (isSameDay(picked, tomorrow)) setLoadDay("익상(내일)");
+    if (isSameDay(picked, today)) setLoadDay("당상");
+    else if (isSameDay(picked, tomorrow)) setLoadDay("익상");
     else setLoadDay("직접 지정");
 
     setLoadDate(picked);
@@ -339,7 +399,9 @@ export function ShipperCreateOrderStep1Screen() {
   const onChangeEndTime = (event: DateTimePickerEvent, picked?: Date) => {
     if (Platform.OS === "android") setEndTimePickerOpen(false);
     if (event.type === "dismissed" || !picked) return;
-    setEndTimeHHmm(formatHHmm(picked));
+    const next = formatHHmm(picked);
+    setEndTimeHHmm(next);
+    setLastEndTimeHHmm(next);
   };
 
   const digitsOnly = (v: string) => v.replace(/[^0-9]/g, "");
@@ -401,6 +463,8 @@ export function ShipperCreateOrderStep1Screen() {
                   onSelect={(op) => {
                     setStartSelected(op.label);
                     setStartSearch(op.label); // distanceKm 계산을 위해 둘 다 세팅
+                    setStartLat(undefined);
+                    setStartLng(undefined);
                     setSelectedRecentValue(op.value);
                     setIsRecentDropdownOpen(false);
                   }}
@@ -540,12 +604,47 @@ export function ShipperCreateOrderStep1Screen() {
                   </View>
 
                   <View style={{ marginTop: 10 }}>
-                    <Text style={[s.fieldLabel, { color: c.text.primary }]}>하차 시간</Text>
+                    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                      <Text style={[s.fieldLabel, { color: c.text.primary }]}>하차 시간 (선택)</Text>
+                      <Pressable
+                        onPress={() => {
+                          if (endTimeHHmm.trim()) {
+                            setLastEndTimeHHmm(endTimeHHmm.trim());
+                            setEndTimeHHmm("");
+                            return;
+                          }
+                          setEndTimeHHmm(lastEndTimeHHmm);
+                        }}
+                        style={[
+                          {
+                            paddingHorizontal: 10,
+                            paddingVertical: 5,
+                            borderRadius: 999,
+                            borderWidth: 1,
+                          },
+                          endTimeHHmm.trim()
+                            ? { borderColor: c.border.default, backgroundColor: c.bg.surface }
+                            : { borderColor: c.brand.primary, backgroundColor: c.brand.primarySoft },
+                        ]}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 12,
+                            fontWeight: "800",
+                            color: endTimeHHmm.trim() ? c.text.secondary : c.brand.primary,
+                          }}
+                        >
+                          미정
+                        </Text>
+                      </Pressable>
+                    </View>
                     <Pressable
                       onPress={() => setEndTimePickerOpen((v) => !v)}
                       style={[s.inputWrap, { backgroundColor: c.bg.surface, borderColor: c.border.default, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }]}
                     >
-                      <Text style={[s.input, { color: c.text.primary }]}>{endTimeHHmm}</Text>
+                      <Text style={[s.input, { color: endTimeHHmm.trim() ? c.text.primary : c.text.secondary }]}>
+                        {endTimeHHmm.trim() || "하차시간 미정"}
+                      </Text>
                       <Ionicons name="time-outline" size={16} color={c.text.secondary} />
                     </Pressable>
                     {endTimePickerOpen ? (
@@ -639,49 +738,15 @@ export function ShipperCreateOrderStep1Screen() {
               </View>
             </View>
           </View>
-
-          <View style={{ height: 14 }} />
-
-          <Text style={[s.fieldLabel, { color: c.text.primary }]}>사진 첨부 (선택)</Text>
-
-          <View style={s.photoRow}>
-            <Pressable
-              onPress={addPhoto}
-              style={[
-                s.photoBox,
-                { borderColor: c.border.default, backgroundColor: c.bg.surface },
-              ]}
-            >
-              <Ionicons name="camera-outline" size={18} color={c.text.secondary} />
-              <Text style={[s.photoText, { color: c.text.secondary }]}>사진 추가</Text>
-            </Pressable>
-
-            {photos.map((p) => (
-              <Pressable
-                key={p.id}
-                onLongPress={() => removePhoto(p.id)}
-                style={[
-                  s.photoBox,
-                  { borderColor: c.border.default, backgroundColor: c.bg.muted },
-                ]}
-              >
-                <Ionicons name="image-outline" size={18} color={c.text.secondary} />
-                <Text style={[s.photoText, { color: c.text.secondary }]}>{p.name}</Text>
-                <Text style={[s.photoHint, { color: c.text.secondary }]}>길게 눌러 삭제</Text>
-              </Pressable>
-            ))}
-          </View>
         </Card>
 
         <SectionTitle title="배차 및 운임" />
         <Card padding={16} style={{ marginBottom: SP.sectionGap }}>
-          <Text style={[s.fieldLabel, { color: c.brand.primary, fontWeight: "900" }]}>배차 방식 선택</Text>
-
           <View style={s.choiceRow}>
             <ChoiceCard
               emoji="⚡"
               title="바로 배차"
-              desc="기사님이 수락하면 즉시 배차됩니다. (빠름)"
+              desc="기사님이 수락하면 즉시 배차됩니다."
               selected={dispatch === "instant"}
               onPress={() => setDispatch("instant")}
             />
@@ -771,7 +836,7 @@ export function ShipperCreateOrderStep1Screen() {
           </View>
 
           <Text style={[s.fieldLabel, { color: c.text.primary, marginTop: 16 }]}>
-            결제 및 지급 시기 <Text style={{ color: c.status.danger }}>*</Text>
+            결제 방법 <Text style={{ color: c.status.danger }}>*</Text>
           </Text>
 
           <View style={s.payGrid}>
@@ -814,7 +879,7 @@ export function ShipperCreateOrderStep1Screen() {
               }}
             >
               {pay === "card"
-                ? "카드 결제 선택 시 수수료 10%가 추가됩니다."
+                ? "토스 결제 선택 시 수수료 10%가 추가됩니다."
                 : "선택한 결제 방식은 별도 수수료가 없습니다."}
             </Text>
           </View>
@@ -825,7 +890,7 @@ export function ShipperCreateOrderStep1Screen() {
               <Text style={[s.feeValue, { color: c.text.primary }]}>{won(appliedFare)}</Text>
             </View>
             <View style={s.feeRow}>
-              <Text style={[s.feeLabel, { color: c.text.secondary }]}>수수료 (카드 10%)</Text>
+              <Text style={[s.feeLabel, { color: c.text.secondary }]}>수수료 (토스 10%)</Text>
               <Text style={[s.feeValue, { color: c.text.primary }]}>+ {won(fee)}</Text>
             </View>
             <View style={[s.hr, { backgroundColor: c.border.default }]} />
@@ -843,16 +908,22 @@ export function ShipperCreateOrderStep1Screen() {
       <AddressSearch
         visible={isStartModalOpen}
         onClose={() => setIsStartModalOpen(false)}
-        onComplete={(address) => {
+        onComplete={({ address, lat, lng }) => {
           setStartSelected(address);
           setStartSearch(address);
+          setStartLat(lat);
+          setStartLng(lng);
           setSelectedRecentValue(undefined); 
         }}
       />
       <AddressSearch
         visible={isEndModalOpen}
         onClose={() => setIsEndModalOpen(false)}
-        onComplete={(address) => setEndAddr(address)}
+        onComplete={({ address, lat, lng }) => {
+          setEndAddr(address);
+          setEndLat(lat);
+          setEndLng(lng);
+        }}
       />
       {/* ------------------------- */}
 
@@ -881,3 +952,4 @@ export function ShipperCreateOrderStep1Screen() {
     </View>
   );
 }
+

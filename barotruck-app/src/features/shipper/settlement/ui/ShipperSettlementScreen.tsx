@@ -35,6 +35,7 @@ type SettlementItem = {
   amount: number;
   actionLabel: string;
   vehicleInfo: string;
+  payMethodLabel: string;
 };
 
 const PENDING_SETTLEMENT_STORAGE_KEY = "shipper_pending_settlement_order_ids";
@@ -112,6 +113,17 @@ function toDateLabel(d: Date) {
   return `${d.getMonth() + 1}.${d.getDate()} (${w})`;
 }
 
+function toPayMethodLabel(raw?: string) {
+  const text = String(raw ?? "").trim();
+  const v = text.toLowerCase();
+  if (!text) return "-";
+  if (v.includes("card") || v.includes("토스") || v.includes("카드")) return "토스 결제";
+  if (v.includes("prepaid") || text.includes("선/착불")) return "선/착불";
+  if (v.includes("receipt") || text.includes("인수증")) return "인수증 (30일)";
+  if (v.includes("month") || text.includes("익월말")) return "익월말";
+  return text;
+}
+
 function toSettlementStatus(order: OrderResponse): SettlementStatus {
   const payMethod = String(order.payMethod ?? "").toLowerCase();
   const settlementStatus = String(order.settlementStatus ?? "").toUpperCase();
@@ -128,15 +140,6 @@ function toSettlementStatus(order: OrderResponse): SettlementStatus {
   if (settlementStatus === "COMPLETED" || settlementStatus === "PAID" || settlementStatus === "CONFIRMED") return "PAID";
   if (settlementStatus === "WAIT" || settlementStatus === "DISPUTED") return "PENDING";
   if (settlementStatus === "READY" || settlementStatus === "CANCELLED") return "UNPAID";
-
-  if (
-    payMethod.includes("card") ||
-    payMethod.includes("prepaid") ||
-    payMethod.includes("카드") ||
-    payMethod.includes("선결제")
-  ) {
-    return "PAID";
-  }
   return "UNPAID";
 }
 
@@ -183,6 +186,7 @@ function mapOrderToSettlement(order: OrderResponse, pendingOrderIds?: Set<number
     amount,
     actionLabel: toActionLabel(status),
     vehicleInfo: vehicleInfo || "-",
+    payMethodLabel: toPayMethodLabel(order.payMethod),
   };
 }
 
@@ -298,11 +302,37 @@ export default function ShipperSettlementScreen() {
       Alert.alert("결제 요청", "결제 요청이 생성되었습니다.");
     } catch (error: any) {
       const msg = error?.response?.data?.message || "결제 요청 중 오류가 발생했습니다.";
+      const msgText = String(msg);
+      const msgLower = msgText.toLowerCase();
+      const isAlreadyPaid =
+        msgLower.includes("already paid") ||
+        msgLower.includes("payment completed") ||
+        msgText.includes("결제 완료") ||
+        msgText.includes("이미 결제");
       const isDuplicate =
-        String(msg).includes("ORA-00001") ||
-        String(msg).toLowerCase().includes("unique") ||
-        String(msg).toLowerCase().includes("constraint") ||
-        String(msg).toLowerCase().includes("already");
+        msgText.includes("ORA-00001") ||
+        msgLower.includes("unique") ||
+        msgLower.includes("constraint") ||
+        msgLower.includes("already");
+
+      if (isAlreadyPaid) {
+        const pendingOrderIds = await loadPendingSettlementOrderIds();
+        if (pendingOrderIds.delete(item.orderId)) {
+          await savePendingSettlementOrderIds(pendingOrderIds);
+        }
+        const refreshed = await fetchItems().catch(() => null);
+        if (refreshed) {
+          setItems(refreshed);
+        } else {
+          setItems((prev) =>
+            prev.map((row) =>
+              row.id === item.id ? { ...row, status: "PAID", actionLabel: toActionLabel("PAID") } : row
+            )
+          );
+        }
+        Alert.alert("안내", "이미 결제완료된 건입니다.");
+        return;
+      }
 
       if (isDuplicate) {
         const pendingOrderIds = await loadPendingSettlementOrderIds();
@@ -404,7 +434,7 @@ export default function ShipperSettlementScreen() {
           paddingHorizontal: 14,
           paddingVertical: 12,
         } as ViewStyle,
-        unpaidCard: { borderLeftWidth: 4, borderLeftColor: "#E05A55" } as ViewStyle,
+        unpaidCard: { borderColor: "#E05A55" } as ViewStyle,
         itemTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" } as ViewStyle,
         dateRow: { flexDirection: "row", alignItems: "center", gap: 6 } as ViewStyle,
         dateText: { fontSize: 13, fontWeight: "700", color: "#64748B" } as TextStyle,
@@ -413,6 +443,7 @@ export default function ShipperSettlementScreen() {
         amountText: { fontSize: 16, fontWeight: "900", color: c.text.primary } as TextStyle,
         amountUnpaid: { color: "#E05A55" } as TextStyle,
         routeText: { marginTop: 10, fontSize: 14, fontWeight: "900", color: c.text.primary } as TextStyle,
+        payMethodText: { marginTop: 6, fontSize: 12, fontWeight: "700", color: c.text.secondary } as TextStyle,
         arrowText: { color: "#94A3B8" } as TextStyle,
         actionRow: { marginTop: 8, flexDirection: "row", justifyContent: "flex-end" } as ViewStyle,
         actionBtn: {
@@ -580,6 +611,7 @@ export default function ShipperSettlementScreen() {
                     <Text style={s.routeText}>
                       {item.from} <Text style={s.arrowText}>→</Text> {item.to}
                     </Text>
+                    <Text style={s.payMethodText}>결제 방식: {item.payMethodLabel}</Text>
 
                     <View style={s.actionRow}>
                       {(() => {
@@ -644,6 +676,10 @@ export default function ShipperSettlementScreen() {
               <View style={s.receiptRow}>
                 <Text style={s.receiptKey}>차량정보</Text>
                 <Text style={s.receiptVal}>{receiptItem?.vehicleInfo ?? "-"}</Text>
+              </View>
+              <View style={s.receiptRow}>
+                <Text style={s.receiptKey}>결제 방식</Text>
+                <Text style={s.receiptVal}>{receiptItem?.payMethodLabel ?? "-"}</Text>
               </View>
 
               <View style={s.receiptBlockGap} />

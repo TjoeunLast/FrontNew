@@ -3,13 +3,34 @@ import { View, Text, StyleSheet, Pressable, Linking } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Badge } from "@/shared/ui/feedback/Badge";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
+import { useMemo } from "react";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 
-export const ActiveOrderCard = ({ order, onNext, onNav, onDetail }: any) => {
+// 거리 계산 함수
+function getDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * (Math.PI / 180)) *
+      Math.cos(lat2 * (Math.PI / 180)) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+export const ActiveOrderCard = ({
+  order,
+  onNext,
+  onNav,
+  onDetail,
+  myLocation,
+}: any) => {
   const { colors: c } = useAppTheme();
 
-  /**
-   * SECTION 1: 상태별 설정
-   */
+  // 상태별 설정
   const getStatusConfig = (status: string) => {
     switch (status) {
       case "LOADING":
@@ -21,6 +42,9 @@ export const ActiveOrderCard = ({ order, onNext, onNav, onDetail }: any) => {
           next: "IN_TRANSIT",
           target: `목적지: ${order.startPlace}`,
           goal: "상차지로 이동하여 물건을 실으세요",
+          showDistance: true,
+          destLat: order.startLat,
+          destLng: order.startLng,
         };
       case "IN_TRANSIT":
         return {
@@ -31,6 +55,9 @@ export const ActiveOrderCard = ({ order, onNext, onNav, onDetail }: any) => {
           next: "UNLOADING",
           target: `목적지: ${order.endPlace}`,
           goal: "하차지로 이동하여 배송을 진행하세요",
+          showDistance: false,
+          destLat: order.endLat,
+          destLng: order.endLng,
         };
       case "UNLOADING":
         return {
@@ -41,6 +68,9 @@ export const ActiveOrderCard = ({ order, onNext, onNav, onDetail }: any) => {
           next: "COMPLETED",
           target: `목적지: ${order.endPlace}`,
           goal: "하차지에 도착했습니다. 물건을 내리세요",
+          showDistance: false,
+          destLat: order.endLat,
+          destLng: order.endLng,
         };
       default:
         return {
@@ -51,11 +81,16 @@ export const ActiveOrderCard = ({ order, onNext, onNav, onDetail }: any) => {
           next: "LOADING",
           target: `목적지: ${order.startPlace}`,
           goal: "상차지로 이동을 시작하세요",
+          showDistance: true,
+          destLat: order.startLat,
+          destLng: order.startLng,
         };
     }
   };
 
   const ui = getStatusConfig(order.status);
+
+  // 주소 요약
   const getShortAddr = (addr: string) =>
     addr ? `${addr.split(" ")[0]} ${addr.split(" ")[1] || ""}` : "";
 
@@ -67,10 +102,9 @@ export const ActiveOrderCard = ({ order, onNext, onNav, onDetail }: any) => {
       ]}
       onPress={() => onDetail(Number(order.orderId))}
     >
-      {/* SECTION: 상단 */}
+      {/* 상단  */}
       <View style={s.topRow}>
         <Badge label={ui.badge} tone="neutral" />
-
         <Pressable
           style={[
             s.callBtn,
@@ -80,9 +114,7 @@ export const ActiveOrderCard = ({ order, onNext, onNav, onDetail }: any) => {
               borderColor: c.border.default,
             },
           ]}
-          onPress={() =>
-            Linking.openURL(`tel:${order.user.phone || "01000000000"}`)
-          }
+          onPress={() => Linking.openURL(`tel:${order.user?.phone || ""}`)}
         >
           <Ionicons name="call" size={14} color={c.text.secondary} />
           <Text style={[s.callBtnText, { color: c.text.secondary }]}>
@@ -92,7 +124,7 @@ export const ActiveOrderCard = ({ order, onNext, onNav, onDetail }: any) => {
         </Pressable>
       </View>
 
-      {/* SECTION: 중단 (경로 정보) */}
+      {/* 중단 영역 */}
       <View style={s.routeRow}>
         <View style={s.locGroup}>
           <Text style={[s.locLabel, { color: c.text.secondary }]}>상차지</Text>
@@ -146,7 +178,7 @@ export const ActiveOrderCard = ({ order, onNext, onNav, onDetail }: any) => {
         </View>
       </View>
 
-      {/* SECTION: 가이드 박스 */}
+      {/* 가이드 박스 */}
       <View
         style={[
           s.goalSection,
@@ -169,31 +201,8 @@ export const ActiveOrderCard = ({ order, onNext, onNav, onDetail }: any) => {
         </Text>
       </View>
 
-      {/* SECTION: 하단 정보 */}
-      <View style={[s.bottomRow, { borderTopColor: c.bg.canvas }]}>
-        <View style={s.infoColumn}>
-          <Text style={[s.loadDateText, { color: c.text.primary }]}>
-            운송 정보
-          </Text>
-          <Text style={[s.carText, { color: c.text.secondary }]}>
-            {order.reqTonnage} {order.reqCarType} •{" "}
-            {order.cargoContent || "일반짐"}
-          </Text>
-        </View>
-        <View style={s.priceColumn}>
-          <Text style={[s.priceText, { color: c.text.primary }]}>
-            {order.basePrice?.toLocaleString()}원
-          </Text>
-          <Badge
-            label={order.payMethod === "PREPAID" ? "현금/선불" : "인수증/후불"}
-            tone="neutral"
-            style={{ marginTop: 6, alignSelf: "flex-end" }}
-          />
-        </View>
-      </View>
-
-      {/* SECTION: 하단 액션 버튼 */}
-      <View style={[s.actionRowSplit, { borderTopColor: c.border.default }]}>
+      {/* 하단 액션 버튼 */}
+      <View style={s.actionRowSplit}>
         {/* 길안내 버튼 */}
         <Pressable
           style={[s.btnNav, { borderColor: c.border.default }]}
@@ -202,12 +211,12 @@ export const ActiveOrderCard = ({ order, onNext, onNav, onDetail }: any) => {
           <Ionicons name="map-outline" size={18} color={c.text.primary} />
           <Text style={[s.btnNavText, { color: c.text.primary }]}> 길안내</Text>
         </Pressable>
-        {/* 프로세스 메인 액션 버튼 */}
+        {/* 메인 액션 버튼 */}
         <Pressable
           style={[
             s.btnPrimary,
             { backgroundColor: ui.actionColor, flex: 2, flexDirection: "row" },
-          ]} // 🚩 가로 정렬 추가
+          ]}
           onPress={() => onNext(order.orderId, ui.next)}
         >
           <Ionicons
@@ -292,24 +301,10 @@ const s = StyleSheet.create({
   },
   goalTitle: { fontSize: 13, fontWeight: "800" },
   goalTargetName: { fontSize: 16, fontWeight: "900" },
-  bottomRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-end",
-    paddingTop: 12,
-    borderTopWidth: 1,
-  },
-  infoColumn: { flex: 1.5 },
-  loadDateText: { fontSize: 14, fontWeight: "800", marginBottom: 2 },
-  carText: { fontSize: 12, fontWeight: "500", opacity: 0.8 },
-  priceColumn: { flex: 1.2, alignItems: "flex-end" },
-  priceText: { fontSize: 22, fontWeight: "900", letterSpacing: -0.5 },
   actionRowSplit: {
     flexDirection: "row",
     gap: 8,
     marginTop: 16,
-    paddingTop: 16,
-    borderTopWidth: 1,
   },
   btnNav: {
     flex: 1,
