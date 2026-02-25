@@ -2,6 +2,7 @@
 import * as Clipboard from "expo-clipboard";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
+
 import {
   ActivityIndicator,
   Alert,
@@ -18,13 +19,17 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { OrderApi } from "@/shared/api/orderService";
+import { useChatManager } from "@/shared/api/chatApi";
 import { ReviewService } from "@/shared/api/reviewService";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import type { AssignedDriverInfoResponse, OrderResponse } from "@/shared/models/order";
 import { Badge } from "@/shared/ui/feedback/Badge";
 import ShipperScreenHeader from "@/shared/ui/layout/ShipperScreenHeader";
+import apiClient from "@/shared/api/apiClient";
 
 const { width } = Dimensions.get("window");
+
+
 
 function formatAddressBig(addr?: string) {
   const parts = String(addr ?? "").trim().split(/\s+/).filter(Boolean);
@@ -413,6 +418,35 @@ export default function OrderDetailScreen() {
     }
   };
 
+  const handleStartChat = async () => {
+    const driverId = Number(order?.driverNo);
+  // 1. 배정된 기사가 있는지 확인
+  if (!driverId) {
+    Alert.alert("안내", "배차된 기사가 없습니다.");
+    return;
+  }
+
+  setActionLoading(true);
+  try {
+    // 2. 채팅방 생성 또는 기존 방 ID 가져오기
+    // 이미 chatApi나 apiClient가 설정되어 있다고 가정합니다.
+    const res = await apiClient.post<number>(`/api/chat/room/personal/${driverId}`);
+    const roomId = res.data;
+
+    // 3. 채팅방 화면으로 이동 (roomId와 상대방 닉네임을 전달)
+    router.push({
+      pathname: "/(chat)/[roomId]",
+      params: { roomId: String(roomId) },
+    });
+  } catch (err) {
+    console.error("채팅방 생성 실패:", err);
+    Alert.alert("오류", "채팅방을 열 수 없습니다.");
+  } finally {
+    setActionLoading(false);
+  }
+};
+
+
   return (
     <View style={[s.container, { backgroundColor: c.bg.canvas }]}>
       <ShipperScreenHeader
@@ -640,7 +674,7 @@ export default function OrderDetailScreen() {
               <View style={s.iconBtnGroup}>
                 <Pressable
                   style={s.circleBtn}
-                  onPress={() => Alert.alert("안내", "채팅 기능은 준비 중입니다.")}
+                  onPress={() => void handleStartChat()}
                 >
                   <Ionicons
                     name="chatbubble-ellipses-outline"

@@ -56,6 +56,7 @@ export const useOrderDetail = () => {
     handleStartTransport,
     modalOpen,
     setModalOpen,
+    handleAcceptOrder,
   } = useDrivingProcess(fetchDetail);
 
   /**
@@ -95,7 +96,7 @@ export const useOrderDetail = () => {
           icon: "checkmark-circle-outline",
           color: order.instant ? c.badge.urgentBg : c.brand.primary,
           onPress: async () => {
-            await handleUpdateStatus(order.orderId, "APPLIED");
+            await handleAcceptOrder(order.orderId);
           },
         };
       case "APPLIED":

@@ -13,7 +13,7 @@ export default function Index() {
   const router = useRouter(); // Expo Router 네비게이션 도구
   const [checkingAutoLogin, setCheckingAutoLogin] = React.useState(true);
 
-  useFCM(); // FCM 훅 실행
+  // useFCM(); // FCM 훅 실행
 
   React.useEffect(() => {
     let active = true;

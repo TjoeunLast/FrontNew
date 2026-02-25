@@ -93,6 +93,7 @@ export interface OrderResponse {
 
   createdAt: string;
   updated?: string;
+  driverNo: number;  
   // OrderSnapshot 대응 데이터
 
   startAddr: string;

@@ -117,6 +117,20 @@ export const UserService = {
   deleteProfileImage: async (): Promise<void> => {
     await apiClient.delete('/api/user/profile-image');
   },
+
+  /**
+   * 10. 차주/화주 전용 중복 체크 (선택 사항)
+   * 백엔드 DriverService/ShipperService의 중복 체크 로직과 연결
+   */
+  checkCarNum: async (carNum: string): Promise<boolean> => {
+    const res = await apiClient.get('/api/v1/drivers/check-car-num', { params: { carNum } });
+    return res.data;
+  },
+
+  checkBizNum: async (bizRegNum: string): Promise<boolean> => {
+    const res = await apiClient.get('/api/v1/shippers/check-biz-num', { params: { bizRegNum } });
+    return res.data;
+  }
   
 
 };
