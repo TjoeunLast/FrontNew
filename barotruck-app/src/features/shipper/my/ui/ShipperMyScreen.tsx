@@ -10,7 +10,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   View,
   type ImageStyle,
@@ -319,6 +318,27 @@ export default function ShipperMyScreen() {
       rowLabel: { flex: 1, fontSize: 14, fontWeight: "800", color: c.text.primary } as TextStyle,
       rowValue: { marginRight: 8, fontSize: 13, fontWeight: "700", color: c.text.secondary } as TextStyle,
       rowValueActive: { color: c.brand.primary } as TextStyle,
+      headerAlertBtn: {
+        width: 52,
+        height: 30,
+        borderRadius: 15,
+        alignItems: "center",
+        justifyContent: "center",
+        flexDirection: "row",
+        gap: 3,
+        borderWidth: 1,
+      } as ViewStyle,
+      headerAlertBtnOn: {
+        borderColor: withAlpha(c.brand.primary, 0.36),
+        backgroundColor: withAlpha(c.brand.primary, 0.14),
+      } as ViewStyle,
+      headerAlertBtnOff: {
+        borderColor: c.border.default,
+        backgroundColor: c.bg.surface,
+      } as ViewStyle,
+      headerAlertText: { fontSize: 10, fontWeight: "900" } as TextStyle,
+      headerAlertTextOn: { color: c.brand.primary } as TextStyle,
+      headerAlertTextOff: { color: c.text.secondary } as TextStyle,
       divider: { height: 1, backgroundColor: withAlpha(c.border.default, 0.9), marginLeft: 54 } as ViewStyle,
       logoutRow: { marginTop: 22, paddingVertical: 8 } as ViewStyle,
       logoutText: {
@@ -366,7 +386,29 @@ export default function ShipperMyScreen() {
 
   return (
     <View style={s.page}>
-      <ShipperScreenHeader title="내 정보" hideBackButton />
+      <ShipperScreenHeader
+        title="내 정보"
+        hideBackButton
+        right={
+          <Pressable
+            onPress={() => setReceiveDispatchAlert((prev) => !prev)}
+            style={[
+              s.headerAlertBtn,
+              receiveDispatchAlert ? s.headerAlertBtnOn : s.headerAlertBtnOff,
+            ]}
+            hitSlop={8}
+          >
+            <Ionicons
+              name={receiveDispatchAlert ? "notifications" : "notifications-off-outline"}
+              size={12}
+              color={receiveDispatchAlert ? c.brand.primary : c.text.secondary}
+            />
+            <Text style={[s.headerAlertText, receiveDispatchAlert ? s.headerAlertTextOn : s.headerAlertTextOff]}>
+              {receiveDispatchAlert ? "ON" : "OFF"}
+            </Text>
+          </Pressable>
+        }
+      />
       <ScrollView contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
         <Pressable style={s.profileCard} onPress={() => router.push("/(common)/settings/profile" as any)}>
           <View style={s.profileIcon}>
@@ -436,22 +478,9 @@ export default function ShipperMyScreen() {
           </Pressable>
         </View>
 
-        <Text style={s.sectionTitle}>앱 설정</Text>
+        <Text style={s.sectionTitle}>서비스 정보</Text>
         <View style={s.sectionCard}>
-          <View style={s.row}>
-            <View style={[s.rowIconWrap, { backgroundColor: withAlpha(c.text.secondary, 0.12) }]}>
-              <Ionicons name="notifications-outline" size={18} color={c.text.secondary} />
-            </View>
-            <Text style={s.rowLabel}>배차 알림 받기</Text>
-            <Switch
-              value={receiveDispatchAlert}
-              onValueChange={setReceiveDispatchAlert}
-              trackColor={{ false: withAlpha(c.text.secondary, 0.24), true: withAlpha(c.brand.primary, 0.45) }}
-              thumbColor={receiveDispatchAlert ? c.brand.primary : c.bg.surface}
-            />
-          </View>
-          <View style={s.divider} />
-          <Pressable style={s.row} onPress={() => router.push("/(common)/settings/index" as any)}>
+          <Pressable style={s.row} onPress={() => router.push("/(common)/terms-policies" as any)}>
             <View style={[s.rowIconWrap, { backgroundColor: withAlpha(c.text.secondary, 0.12) }]}>
               <Ionicons name="document-text-outline" size={18} color={c.text.secondary} />
             </View>

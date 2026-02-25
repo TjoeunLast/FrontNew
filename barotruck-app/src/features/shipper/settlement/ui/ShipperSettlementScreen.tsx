@@ -434,7 +434,7 @@ export default function ShipperSettlementScreen() {
           paddingHorizontal: 14,
           paddingVertical: 12,
         } as ViewStyle,
-        unpaidCard: { borderLeftWidth: 4, borderLeftColor: "#E05A55" } as ViewStyle,
+        unpaidCard: { borderColor: "#E05A55" } as ViewStyle,
         itemTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" } as ViewStyle,
         dateRow: { flexDirection: "row", alignItems: "center", gap: 6 } as ViewStyle,
         dateText: { fontSize: 13, fontWeight: "700", color: "#64748B" } as TextStyle,

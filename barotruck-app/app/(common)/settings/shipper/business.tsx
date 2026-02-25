@@ -1,5 +1,5 @@
-﻿import SettingsPlaceholderScreen from "@/features/common/settings/ui/SettingsPlaceholderScreen";
+﻿import ShipperTaxInvoiceScreen from "@/features/common/settings/ui/ShipperTaxInvoiceScreen";
 
 export default function Screen() {
-  return <SettingsPlaceholderScreen title="세금계산서 관리" description="세금계산서 페이지 (임시)" />;
+  return <ShipperTaxInvoiceScreen />;
 }

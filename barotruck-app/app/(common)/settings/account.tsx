@@ -1,5 +1,5 @@
-﻿import SettingsPlaceholderScreen from "@/features/common/settings/ui/SettingsPlaceholderScreen";
+﻿import AccountInquiryScreen from "@/features/common/settings/ui/AccountInquiryScreen";
 
 export default function Screen() {
-  return <SettingsPlaceholderScreen title="1:1 문의" description="문의 접수 페이지 (임시)" />;
+  return <AccountInquiryScreen />;
 }
