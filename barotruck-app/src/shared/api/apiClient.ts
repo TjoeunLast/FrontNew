@@ -8,7 +8,8 @@ import { tokenStorage } from "@/shared/utils/tokenStorage";
 function resolveApiBaseUrl() {
   const envBase = String(process.env.EXPO_PUBLIC_API_BASE_URL ?? "").trim();
   if (envBase) return envBase;
-// 2. 안드로이드 에뮬레이터인 경우 10.0.2.2 적용
+
+  // 2. 안드로이드 에뮬레이터인 경우 10.0.2.2 적용
   // __DEV__는 개발 모드일 때 true입니다.
   if (__DEV__ && Platform.OS === "android") {
     // 실제 기기(Physical Device)가 아닌 에뮬레이터인지 체크가 필요할 수 있지만, 
@@ -17,7 +18,6 @@ function resolveApiBaseUrl() {
   }
   const hostFromExpo = Constants.expoConfig?.hostUri?.split(":").shift();
   if (hostFromExpo && hostFromExpo !== "undefined") return `http://${hostFromExpo}:8080`;
-
   if (Platform.OS === "web" && typeof window !== "undefined" && window.location?.hostname) {
     return `${window.location.protocol}//${window.location.hostname}:8080`;
   }
