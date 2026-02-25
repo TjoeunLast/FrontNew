@@ -6,29 +6,24 @@ import { tokenStorage } from "@/shared/utils/tokenStorage";
 
 
 function resolveApiBaseUrl() {
-  // 1. .env 파일에 강제로 설정된 값이 있으면 최우선 사용
   const envBase = String(process.env.EXPO_PUBLIC_API_BASE_URL ?? "").trim();
   if (envBase) return envBase;
 
-  // 2. Expo Metro Bundler가 실행 중인 호스트 PC의 IP (예: 192.168.0.x)
-  const hostFromExpo = Constants.expoConfig?.hostUri?.split(":").shift();
-
-  // 3. Android 환경에 대한 특수 처리
-  if (Platform.OS === 'android') {
-    // Expo Go나 Dev Client로 실행 중이라 호스트 IP가 감지된 경우 -> 해당 IP 사용
-    if (hostFromExpo && hostFromExpo !== "undefined") {
-      return `http://${hostFromExpo}:8080`;
-    }
-    // 에뮬레이터인데 호스트 IP를 못 찾은 경우 -> 에뮬레이터 전용 루프백 주소 사용
+  // 2. 안드로이드 에뮬레이터인 경우 10.0.2.2 적용
+  // __DEV__는 개발 모드일 때 true입니다.
+  if (__DEV__ && Platform.OS === "android") {
+    // 실제 기기(Physical Device)가 아닌 에뮬레이터인지 체크가 필요할 수 있지만, 
+    // 보통 로컬 개발 시에는 10.0.2.2를 기본으로 두는 것이 편합니다.
     return "http://10.0.2.2:8080";
   }
 
-  // 4. 웹 환경 처리
+  const hostFromExpo = Constants.expoConfig?.hostUri?.split(":").shift();
+  if (hostFromExpo && hostFromExpo !== "undefined") return `http://${hostFromExpo}:8080`;
+
   if (Platform.OS === "web" && typeof window !== "undefined" && window.location?.hostname) {
     return `${window.location.protocol}//${window.location.hostname}:8080`;
   }
 
-  // 5. iOS 시뮬레이터 또는 그 외 환경 (localhost 사용 가능
   return "http://localhost:8080";
 }
 

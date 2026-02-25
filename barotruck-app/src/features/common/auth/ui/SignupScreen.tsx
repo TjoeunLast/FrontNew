@@ -242,7 +242,14 @@ export default function SignupScreen() {
       setStep("role");
       return;
     }
-    router.back();
+    // 2. 뒤로 갈 수 있는 스택이 있는지 확인
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      // 3. 뒤로 갈 스택이 없다면 초기 화면('/')으로 이동
+      // replace를 사용하면 현재 스택을 대체하므로 다시 뒤로 가기를 눌러도 오류가 나지 않습니다.
+      router.replace('/'); 
+    }
   };
 
   const chooseRole = (r: Role) => {
