@@ -13,9 +13,9 @@ export const useChatManager = () => {
   const [rooms, setRooms] = useState<ChatRoomResponse[]>([]);
   const [messages, setMessages] = useState<ChatMessageResponse[]>([]);
   const [hasNext, setHasNext] = useState(false);
-  const stompClient = useRef<Client | null>(null);
   const [userId, setUserId] = useState<number | null>(null);
-
+  
+  const stompClient = useRef<Client | null>(null);
     
     useEffect(() => {
     const fetchAndStoreUser = async () => {

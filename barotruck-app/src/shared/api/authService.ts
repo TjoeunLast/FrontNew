@@ -25,6 +25,7 @@ export const AuthService = {
           userId: mockRes.user_id,
           email: data.email,
           nickname: data.nickname || '목업사용자',
+          name: data.name || '목업이름',
           phone: data.phone || '01000000000',
           role: data.role || 'SHIPPER',
         })
@@ -127,5 +128,58 @@ export const AuthService = {
     await SecureStore.deleteItemAsync('userToken');
     await SecureStore.deleteItemAsync('refreshToken');
     await SecureStore.deleteItemAsync('baro_mock_auth_session');
-  }
+  },
+
+
+  /**
+   * 5. 이메일 인증 코드 발송 요청 (POST /api/auth/email-request)
+   */
+  requestEmailAuth: async (email: string): Promise<boolean> => {
+    // 쿼리 스트링(?email=...) 방식으로 전달
+    const res = await apiClient.post('/api/auth/email-request', null, {
+      params: { email }
+    });
+    return res.data; // 성공 시 true 반환
+  },
+
+  /**
+   * 6. 이메일 인증 코드 검증 (POST /api/auth/email-verify)
+   */
+  verifyEmailCode: async (email: string, code: string): Promise<boolean> => {
+    // 쿼리 스트링(?email=...&code=...) 방식으로 전달
+    const res = await apiClient.post('/api/auth/email-verify', null, {
+      params: { email, code }
+    });
+    return res.data; // 인증 성공 여부 (true/false) 반환
+  },
+
+
+  /**
+   * 7. 이메일 찾기 (POST /api/v1/auth/find-email)
+   */
+  findEmail: async (name: string, phone: string): Promise<string> => {
+    if (USE_MOCK) {
+      return new Promise((resolve, reject) => {
+        setTimeout(() => {
+          if (name) resolve("mock_user@baro.local");
+          else reject(new Error("일치하는 회원 정보를 찾을 수 없습니다."));
+        }, 500);
+      });
+    }
+    const res = await apiClient.post('/api/v1/auth/find-email', { name, phone });
+    return res.data; // 이메일 문자열 반환 가정
+  },
+
+  /**
+   * 8. 비밀번호 재설정 (POST /api/v1/auth/reset-password)
+   */
+  resetPassword: async (data: { email: string; code: string; newPassword: string }): Promise<void> => {
+    if (USE_MOCK) {
+      return new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+    await apiClient.post('/api/v1/auth/reset-password', data);
+  },
 };
+
+
+  

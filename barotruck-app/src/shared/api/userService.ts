@@ -1,5 +1,5 @@
 import apiClient from './apiClient';
-import { UserProfile, DriverInfo, ShipperInfo } from '../models/user';
+import { UserProfile, DriverInfo, ShipperInfo, ChangePasswordRequest } from '../models/user';
 import * as SecureStore from "expo-secure-store";
 import { USE_MOCK } from "@/shared/config/mock";
 
@@ -81,7 +81,42 @@ export const UserService = {
     console.log("🌐 [UserService] 서버로 FCM 토큰 전송 시도:", token);
     // .patch 대신 .post 사용
     await apiClient.post('/api/user/fcm-token', { fcmToken: token });
-},
+  },
+
+  /** * 5. 비밀번호 변경 (POST /api/user/change-password) */
+  changePassword: async (data: ChangePasswordRequest): Promise<string> => {
+    const res = await apiClient.post('/api/user/change-password', data);
+    return res.data;
+  },
+
+  /** * 6. 회원 탈퇴 (POST /api/user/delete) */
+  deleteUser: async (): Promise<string> => {
+    const res = await apiClient.post('/api/user/delete');
+    return res.data;
+  },
+
+  /** * 7. 회원 복구 (POST /api/user/restore) */
+  restoreUser: async (): Promise<string> => {
+    const res = await apiClient.post('/api/user/restore');
+    return res.data;
+  },
+
+  /** * 8. 프로필 이미지 업로드 (POST /api/user/profile-image) 
+   * 백엔드 UsersService.uploadProfileImage 로직 대응
+   */
+  uploadProfileImage: async (file: File | any): Promise<void> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    await apiClient.post('/api/user/profile-image', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+
+  /** * 9. 프로필 이미지 삭제 (DELETE /api/user/profile-image) */
+  deleteProfileImage: async (): Promise<void> => {
+    await apiClient.delete('/api/user/profile-image');
+  },
   
 
 };

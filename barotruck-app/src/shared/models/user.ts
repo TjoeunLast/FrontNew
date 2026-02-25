@@ -12,6 +12,14 @@ export interface UserProfile {
   ratingAvg: number;
 }
 
+/** * 비밀번호 변경 요청 데이터 (ChangePasswordRequest.java 대응) 
+ */
+export interface ChangePasswordRequest {
+  currentPassword: string;
+  newPassword: string;
+  confirmationPassword: string;
+}
+
 /**
  * 차주 상세 정보 (DriverRequest.java 대응)
  */
