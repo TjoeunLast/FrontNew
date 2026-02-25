@@ -198,8 +198,6 @@ export const DrOrderCard = ({
             {` · ${order.loadMethod || "독차"}`}
             {/* 3. 수작업 여부 (laborFee가 존재하고 0이 아닐 때만 '수작업' 표시) */}
             {order.laborFee && order.laborFee !== 0 ? " · 수작업" : ""}
-            {/* 4. 차종 정보 */}
-            {` · ${order.reqTonnage} ${order.reqCarType}`}
           </Text>
         </View>
 
