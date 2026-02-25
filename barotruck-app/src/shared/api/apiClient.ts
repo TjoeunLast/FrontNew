@@ -8,6 +8,14 @@ function resolveApiBaseUrl() {
   const envBase = String(process.env.EXPO_PUBLIC_API_BASE_URL ?? "").trim();
   if (envBase) return envBase;
 
+  // 2. 안드로이드 에뮬레이터인 경우 10.0.2.2 적용
+  // __DEV__는 개발 모드일 때 true입니다.
+  if (__DEV__ && Platform.OS === "android") {
+    // 실제 기기(Physical Device)가 아닌 에뮬레이터인지 체크가 필요할 수 있지만,
+    // 보통 로컬 개발 시에는 10.0.2.2를 기본으로 두는 것이 편합니다.
+    return "http://10.0.2.2:8080";
+  }
+
   const hostFromExpo = Constants.expoConfig?.hostUri?.split(":").shift();
   if (hostFromExpo && hostFromExpo !== "undefined")
     return `http://${hostFromExpo}:8080`;
