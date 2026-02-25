@@ -1,5 +1,5 @@
-﻿import ShipperMyScreen from "@/features/shipper/my/ui/ShipperMyScreen";
+﻿import MyPageScreen from "@/features/common/my/ui/MyPageScreen";
 
 export default function Screen() {
-  return <ShipperMyScreen />;
+  return <MyPageScreen />;
 }

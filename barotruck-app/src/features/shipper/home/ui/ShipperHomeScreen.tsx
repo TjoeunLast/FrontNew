@@ -78,6 +78,7 @@ useFocusEffect(
 
   // 페이지 이동 함수들
   const goCreateOrder = () => router.push("/(shipper)/create-order/step1-route" as any);
+  const goChat = () => router.push("/(chat)" as any);
   const goNotificationsTab = () => router.push("/(shipper)/(tabs)/notifications" as any);
   const goDispatchTab = (targetTab: "WAITING" | "PROGRESS" | "DONE") => {
     router.push({ pathname: "/(shipper)/(tabs)/orders", params: { tab: targetTab } } as any);
@@ -117,7 +118,7 @@ useFocusEffect(
         <View style={s.topRow}>
           <Text style={s.brandText}>BARO</Text>
           <View style={s.topActions}>
-            <IconButton onPress={() => {}} variant="ghost">
+            <IconButton onPress={goChat} variant="ghost">
               <Ionicons name="chatbubble-outline" size={22} color={c.text.primary} />
             </IconButton>
             <IconButton onPress={goNotificationsTab} variant="ghost">
