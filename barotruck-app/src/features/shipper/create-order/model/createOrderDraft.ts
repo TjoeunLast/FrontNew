@@ -1,13 +1,17 @@
-﻿export type CreateOrderDraft = {
+export type CreateOrderDraft = {
   editOrderId?: string;
   startSelected: string;
+  startLat?: number;
+  startLng?: number;
   startAddrDetail: string;
   startContact: string;
-  loadDay: "당상(오늘)" | "익상(내일)" | "직접 지정";
+  loadDay: "당상" | "익상" | "직접 지정";
   loadDateISO: string;
   startTimeHHmm: string;
 
   endAddr: string;
+  endLat?: number;
+  endLng?: number;
   endAddrDetail: string;
   endContact: string;
   endTimeHHmm: string;
@@ -22,13 +26,12 @@
   requestTags: string[];
   requestText: string;
 
-  photos: { id: string; name: string }[];
-
   dispatch: "instant" | "direct";
   tripType: "oneWay" | "roundTrip";
   pay: "card" | "prepaid" | "receipt30" | "monthEnd";
 
   distanceKm: number;
+  estimatedDurationMin?: number;
   appliedFare: number;
 };
 
@@ -43,3 +46,4 @@ export function getCreateOrderDraft() {
 export function clearCreateOrderDraft() {
   draft = null;
 }
+

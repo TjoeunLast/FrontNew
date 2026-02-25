@@ -12,17 +12,37 @@ interface AddressData {
   [key: string]: any;
 }
 
+export interface SelectedAddress {
+  address: string;
+  lat?: number;
+  lng?: number;
+}
+
 // 부모 컴포넌트로부터 받을 Props 정의
 interface AddressSearchProps {
   visible: boolean;                  // 모달 열림/닫힘 상태
   onClose: () => void;               // 모달 닫기 함수
-  onComplete: (address: string) => void; // 완료 시 주소 텍스트를 넘겨줄 함수
+  onComplete: (result: SelectedAddress) => void; // 완료 시 주소/좌표를 넘겨줄 함수
 }
 
 const AddressSearch = ({ visible, onClose, onComplete }: AddressSearchProps) => {
+  const parseCoordinate = (value: unknown): number | undefined => {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : undefined;
+  };
+
+  const pickCoordinate = (data: AddressData, keys: string[]): number | undefined => {
+    for (const key of keys) {
+      const parsed = parseCoordinate(data[key]);
+      if (parsed !== undefined) return parsed;
+    }
+    return undefined;
+  };
+
   const handleComplete = (data: AddressData) => {
-    // 요구하신 대로 상세 주소 조합 없이 기본 주소만 깔끔하게 넘깁니다.
-    onComplete(data.address); 
+    const lat = pickCoordinate(data, ["y", "lat", "latitude"]);
+    const lng = pickCoordinate(data, ["x", "lng", "longitude"]);
+    onComplete({ address: data.address, lat, lng });
     // 주소를 넘겨준 뒤 모달 닫기
     onClose(); 
   };

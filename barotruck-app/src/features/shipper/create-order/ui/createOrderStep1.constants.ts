@@ -51,7 +51,6 @@ export const PRESET_REQUEST_TAGS: string[] = [
 export const DEFAULT_SELECTED_REQUEST_TAGS: string[] = [
 ];
 
-export const DEFAULT_PHOTOS = [{ id: "p1", name: "IMG_01" }];
 
 export const DISTANCE_KM = 340;
 
@@ -61,31 +60,91 @@ function normalizeDistrictKey(addr: string) {
   return parts.slice(0, 2).join(" ");
 }
 
-function hashSeed(text: string) {
-  let h = 0;
-  for (let i = 0; i < text.length; i += 1) {
-    h = (h * 31 + text.charCodeAt(i)) >>> 0;
-  }
-  return h;
+function normalizeProvince(raw: string) {
+  const t = raw.trim();
+  if (!t) return "";
+  if (t.startsWith("서울")) return "서울";
+  if (t.startsWith("부산")) return "부산";
+  if (t.startsWith("대구")) return "대구";
+  if (t.startsWith("인천")) return "인천";
+  if (t.startsWith("광주")) return "광주";
+  if (t.startsWith("대전")) return "대전";
+  if (t.startsWith("울산")) return "울산";
+  if (t.startsWith("세종")) return "세종";
+  if (t.startsWith("경기")) return "경기";
+  if (t.startsWith("강원")) return "강원";
+  if (t.startsWith("충북")) return "충북";
+  if (t.startsWith("충남")) return "충남";
+  if (t.startsWith("전북")) return "전북";
+  if (t.startsWith("전남")) return "전남";
+  if (t.startsWith("경북")) return "경북";
+  if (t.startsWith("경남")) return "경남";
+  if (t.startsWith("제주")) return "제주";
+  return "";
 }
 
-function between(min: number, max: number, seed: number) {
-  const span = Math.max(1, max - min + 1);
-  return min + (seed % span);
+const PROVINCE_CENTROID: Record<string, { lat: number; lng: number }> = {
+  서울: { lat: 37.5665, lng: 126.9780 },
+  부산: { lat: 35.1796, lng: 129.0756 },
+  대구: { lat: 35.8714, lng: 128.6014 },
+  인천: { lat: 37.4563, lng: 126.7052 },
+  광주: { lat: 35.1595, lng: 126.8526 },
+  대전: { lat: 36.3504, lng: 127.3845 },
+  울산: { lat: 35.5384, lng: 129.3114 },
+  세종: { lat: 36.4800, lng: 127.2890 },
+  경기: { lat: 37.2636, lng: 127.0286 },
+  강원: { lat: 37.8813, lng: 127.7298 },
+  충북: { lat: 36.6424, lng: 127.4890 },
+  충남: { lat: 36.6588, lng: 126.6728 },
+  전북: { lat: 35.8242, lng: 127.1480 },
+  전남: { lat: 34.8161, lng: 126.4630 },
+  경북: { lat: 36.5760, lng: 128.5057 },
+  경남: { lat: 35.2285, lng: 128.6811 },
+  제주: { lat: 33.4996, lng: 126.5312 },
+};
+
+function toRad(deg: number) {
+  return (deg * Math.PI) / 180;
+}
+
+function haversineKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {
+  const R = 6371;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const lat1 = toRad(a.lat);
+  const lat2 = toRad(b.lat);
+  const sin1 = Math.sin(dLat / 2);
+  const sin2 = Math.sin(dLng / 2);
+  const x = sin1 * sin1 + Math.cos(lat1) * Math.cos(lat2) * sin2 * sin2;
+  const c = 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+  return R * c;
 }
 
 export function getEstimatedDistanceKm(startAddr: string, endAddr: string) {
   const from = normalizeDistrictKey(startAddr);
   const to = normalizeDistrictKey(endAddr);
-  if (!from || !to) return DISTANCE_KM;
+  if (!from || !to) return 60;
   if (from === to) return 12;
 
-  const fromCity = from.split(" ")[0];
-  const toCity = to.split(" ")[0];
-  const seed = hashSeed(`${from}|${to}`);
+  const fromParts = from.split(" ");
+  const toParts = to.split(" ");
+  const fromProvince = normalizeProvince(fromParts[0] ?? "");
+  const toProvince = normalizeProvince(toParts[0] ?? "");
+  const fromDistrict = fromParts[1] ?? "";
+  const toDistrict = toParts[1] ?? "";
 
-  if (fromCity === toCity) return between(18, 55, seed);
-  return between(70, 380, seed);
+  if (fromProvince && toProvince && fromProvince === toProvince) {
+    if (fromDistrict && toDistrict && fromDistrict === toDistrict) return 12;
+    return 28;
+  }
+
+  const fromCenter = PROVINCE_CENTROID[fromProvince];
+  const toCenter = PROVINCE_CENTROID[toProvince];
+  if (!fromCenter || !toCenter) return 80;
+
+  // 직선거리보다 도로거리가 길어지는 점을 반영해 보정
+  const roadKm = haversineKm(fromCenter, toCenter) * 1.35;
+  return Math.max(20, Math.min(420, Math.round(roadKm)));
 }
 
 function roundToThousand(v: number) {
@@ -98,3 +157,4 @@ export function getRecommendedFareByDistance(distanceKm: number) {
   const perKmFare = 850;
   return roundToThousand(baseFare + Math.max(0, distanceKm) * perKmFare);
 }
+
