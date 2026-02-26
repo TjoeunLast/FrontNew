@@ -1,6 +1,6 @@
 ﻿import React from "react";
-import MyPageScreen from "@/features/common/my/ui/MyPageScreen";
+import DriverMyPageScreen from "@/features/driver/my/ui/DriverMyPageScreen";
 
 export default function Page() {
-  return <MyPageScreen />;
+  return <DriverMyPageScreen />;
 }

@@ -31,6 +31,7 @@ type ProfileState = {
   gender: string;
   birthDate: string;
   shipperType: string;
+  role: string;
   email: string;
   imageUrl: string;
 };
@@ -225,6 +226,7 @@ export default function ProfileSettingsScreen() {
     gender: "-",
     birthDate: "-",
     shipperType: "-",
+    role: "",
     email: "-",
     imageUrl: "",
   });
@@ -247,6 +249,7 @@ export default function ProfileSettingsScreen() {
             gender: normalizeGenderFromAny(pickGender(me, detail, cached ?? undefined)),
             birthDate: normalizeBirthDateFromAny(pickBirthDate(me, detail, cached ?? undefined)),
             shipperType: resolveShipperType(me, detail),
+            role: String(me?.role ?? cached?.role ?? "").trim().toUpperCase(),
             email: normalizeEmail(me.email ?? cached?.email),
             imageUrl: localImageUrl || me.profileImageUrl || "",
           };
@@ -262,6 +265,7 @@ export default function ProfileSettingsScreen() {
             gender: normalizeGenderFromAny(cached?.gender),
             birthDate: normalizeBirthDateFromAny(cached?.birthDate),
             shipperType: "-",
+            role: String(cached?.role ?? "").trim().toUpperCase(),
             email: normalizeEmail(cached?.email),
             imageUrl: localImageUrl,
           };
@@ -512,11 +516,15 @@ export default function ProfileSettingsScreen() {
               <Text style={s.label}>성별</Text>
               <Text style={s.value}>{profile.gender}</Text>
             </View>
-            <View style={s.rowDivider} />
-            <View style={s.row}>
-              <Text style={s.label}>화주 구분</Text>
-              <Text style={s.value}>{profile.shipperType}</Text>
-            </View>
+            {profile.role !== "DRIVER" ? (
+              <>
+                <View style={s.rowDivider} />
+                <View style={s.row}>
+                  <Text style={s.label}>화주 구분</Text>
+                  <Text style={s.value}>{profile.shipperType}</Text>
+                </View>
+              </>
+            ) : null}
             <View style={s.rowDivider} />
             <View style={s.row}>
               <Text style={s.label}>이메일</Text>

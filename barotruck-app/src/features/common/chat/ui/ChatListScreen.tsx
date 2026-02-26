@@ -1,52 +1,91 @@
-import React, { useCallback } from 'react'; // useCallback 추가
+import React, { useCallback, useEffect } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet } from 'react-native';
-import { useChatManager } from '../../../../shared/api/chatApi'; 
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter, useFocusEffect, useNavigation } from 'expo-router';
+
+import { useChatManager } from '../../../../shared/api/chatApi';
 import { ChatRoomResponse } from '../../../../shared/models/chat';
-import { useRouter, useFocusEffect } from "expo-router"; // useFocusEffect 추가
 
-// navigation 프롭은 더 이상 필요하지 않습니다.
 const ChatListScreen = () => {
-  const router = useRouter(); 
+  const router = useRouter();
+  const navigation = useNavigation();
   const { userId, rooms, fetchMyRooms } = useChatManager();
-  console.log("리스트 userId:", userId);
 
-  // Expo Router 방식의 화면 포스크 시 데이터 갱신
+  useEffect(() => {
+    navigation.setOptions({
+      headerShown: true,
+      title: '채팅',
+    });
+  }, [navigation]);
+
   useFocusEffect(
     useCallback(() => {
-      fetchMyRooms(); // 백엔드 getMyRooms 호출
+      fetchMyRooms();
     }, [])
   );
 
+  const getDisplayTime = (lastMessageTime?: string) => {
+    if (!lastMessageTime) return '';
+
+    const date = new Date(lastMessageTime);
+    if (Number.isNaN(date.getTime())) return '';
+
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const targetStart = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const diffDays = Math.floor((todayStart.getTime() - targetStart.getTime()) / (1000 * 60 * 60 * 24));
+    const diffMs = now.getTime() - date.getTime();
+
+    if (diffMs < 60 * 1000) return '방금 전';
+    if (diffDays === 0) {
+      return date.toLocaleTimeString('ko-KR', {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+      });
+    }
+    if (diffDays === 1) return '어제';
+
+    return `${date.getMonth() + 1}월 ${date.getDate()}일`;
+  };
+
   const renderItem = ({ item }: { item: ChatRoomResponse }) => {
-    // 날짜 포맷팅 (예: 2026-02-11T17:30 -> 17:30)
-    const displayTime = item.lastMessageTime 
-      ? new Date(item.lastMessageTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      : "";
+    const displayTime = getDisplayTime(item.lastMessageTime);
+    const hasUnread = item.unreadCount > 0;
 
     return (
-      <TouchableOpacity 
-      style={styles.roomItem}
+      <TouchableOpacity
+        style={styles.roomItem}
         onPress={() => {
-          // ✨ userId가 로드되었는지 확인 (undefined 에러 원천 차단)
-          if (item.roomId && userId) { 
+          if (item.roomId && userId) {
             router.push({
-              pathname: "/(chat)/[roomId]",
-              params: { roomId: item.roomId.toString() } // userId는 상세 페이지가 직접 가져오면 됨
+              pathname: '/(chat)/[roomId]',
+              params: { roomId: item.roomId.toString() },
             });
           }
         }}
-     >
+      >
+        <View style={styles.avatarWrap}>
+          <View style={styles.avatarCircle}>
+            <Ionicons
+              name={hasUnread ? 'person-outline' : 'business-outline'}
+              size={22}
+              color={hasUnread ? '#5a5ce1' : '#97a3b7'}
+            />
+          </View>
+          {hasUnread && <View style={styles.onlineDot} />}
+        </View>
+
         <View style={styles.roomInfo}>
           <Text style={styles.roomName}>{item.roomName}</Text>
-          {/* 최근 메시지 표시 */}
           <Text style={styles.lastMessage} numberOfLines={1}>
-            {item.lastMessage || "메시지가 없습니다."}
+            {item.lastMessage || '메시지가 없습니다.'}
           </Text>
         </View>
+
         <View style={styles.metaInfo}>
-          <Text style={styles.time}>{displayTime}</Text>
-          {/* 안 읽은 메시지 배지 */}
-          {item.unreadCount > 0 && (
+          <Text style={[styles.time, hasUnread && styles.timeUnread]}>{displayTime}</Text>
+          {hasUnread && (
             <View style={styles.badge}>
               <Text style={styles.badgeText}>{item.unreadCount}</Text>
             </View>
@@ -58,26 +97,68 @@ const ChatListScreen = () => {
 
   return (
     <View style={styles.container}>
-      <FlatList 
-        data={rooms} 
-        keyExtractor={(item) => item.roomId?.toString() || Math.random().toString()} 
+      <FlatList
+        data={rooms}
+        keyExtractor={(item) => item.roomId?.toString() || Math.random().toString()}
         renderItem={renderItem}
+        contentContainerStyle={styles.listContent}
       />
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
-  roomItem: { flexDirection: 'row', padding: 15, borderBottomWidth: 1, borderColor: '#eee' },
-  roomInfo: { flex: 1 },
-  roomName: { fontSize: 16, fontWeight: 'bold' },
-  lastMessage: { color: '#666', marginTop: 5 },
-  metaInfo: { alignItems: 'flex-end' },
-  time: { fontSize: 12, color: '#999' },
-  badge: { backgroundColor: 'red', borderRadius: 10, paddingHorizontal: 6, marginTop: 5 },
-  badgeText: { color: '#fff', fontSize: 12 },
-
+  container: { flex: 1, backgroundColor: '#eef0f5' },
+  listContent: { paddingHorizontal: 12, paddingVertical: 12, gap: 10 },
+  roomItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    backgroundColor: '#f8f9fb',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#eaedf3',
+  },
+  avatarWrap: { width: 64, alignItems: 'center', justifyContent: 'center' },
+  avatarCircle: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#eef1f7',
+    borderWidth: 1,
+    borderColor: '#e3e8f1',
+  },
+  onlineDot: {
+    position: 'absolute',
+    right: 8,
+    bottom: 4,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#4fb37f',
+    borderWidth: 2,
+    borderColor: '#f8f9fb',
+  },
+  roomInfo: { flex: 1, paddingRight: 8 },
+  roomName: { fontSize: 16, fontWeight: '700', color: '#1f2430' },
+  lastMessage: { color: '#5e6b80', marginTop: 4, fontSize: 13, fontWeight: '500' },
+  metaInfo: { alignItems: 'flex-end', justifyContent: 'flex-start', minHeight: 50 },
+  time: { fontSize: 12, color: '#9ba6b8', fontWeight: '600' },
+  timeUnread: { color: '#5a5ce1' },
+  badge: {
+    minWidth: 24,
+    height: 24,
+    borderRadius: 12,
+    paddingHorizontal: 6,
+    marginTop: 8,
+    backgroundColor: '#de5048',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  badgeText: { color: '#fff', fontSize: 12, fontWeight: '800' },
 });
 
 export default ChatListScreen;

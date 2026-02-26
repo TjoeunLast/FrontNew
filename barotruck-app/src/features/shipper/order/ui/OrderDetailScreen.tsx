@@ -1,4 +1,5 @@
 ﻿import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Clipboard from "expo-clipboard";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
@@ -19,13 +20,12 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { OrderApi } from "@/shared/api/orderService";
-import { useChatManager } from "@/shared/api/chatApi";
-import { ReviewService } from "@/shared/api/reviewService";
+import { ReportService, ReviewService } from "@/shared/api/reviewService";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import type { AssignedDriverInfoResponse, OrderResponse } from "@/shared/models/order";
 import { Badge } from "@/shared/ui/feedback/Badge";
-import ShipperScreenHeader from "@/shared/ui/layout/ShipperScreenHeader";
 import apiClient from "@/shared/api/apiClient";
+import OrderDetailPageFrame from "@/features/driver/order-detail/ui/OrderDetailPageFrame";
 
 const { width } = Dimensions.get("window");
 
@@ -80,15 +80,16 @@ function formatSchedule(v?: string) {
 
 function parseCargoAndRequests(raw?: string) {
   const text = String(raw ?? "").trim();
-  if (!text) return { cargo: "", requests: [] as string[], pickupContact: "", tags: [] as string[] };
+  if (!text) return { cargo: "", requests: [] as string[], pickupContact: "", tags: [] as string[], packaging: "" };
 
-  const parts = text.split(" | ").map((x) => x.trim()).filter(Boolean);
-  if (parts.length <= 1) return { cargo: text, requests: [] as string[], pickupContact: "", tags: [] as string[] };
+  const parts = text.split(/\s*\|\s*/).map((x) => x.trim()).filter(Boolean);
+  if (parts.length <= 1) return { cargo: text, requests: [] as string[], pickupContact: "", tags: [] as string[], packaging: "" };
 
   let cargo = "";
   const requests: string[] = [];
   let pickupContact = "";
   const tags: string[] = [];
+  let packaging = "";
 
   for (const part of parts) {
     if (part.startsWith("화물:")) {
@@ -120,11 +121,11 @@ function parseCargoAndRequests(raw?: string) {
       continue;
     }
     if (part.startsWith("상하차방식:")) {
-      requests.push(`상하차 방식: ${part.replace(/^상하차방식:/, "").trim()}`);
+      // 상하차 방식은 요청사항 카드에서 제외
       continue;
     }
     if (part.startsWith("포장:")) {
-      requests.push(`포장: ${part.replace(/^포장:/, "").trim()}`);
+      packaging = part.replace(/^포장:/, "").trim();
       continue;
     }
   }
@@ -133,7 +134,14 @@ function parseCargoAndRequests(raw?: string) {
     cargo = parts.find((x) => !x.includes(":")) ?? "";
   }
 
-  return { cargo, requests, pickupContact, tags };
+  return { cargo, requests, pickupContact, tags, packaging };
+}
+
+function normalizeDisplayText(v?: string) {
+  const s = String(v ?? "").trim();
+  if (!s) return "";
+  if (s.toLowerCase() === "null" || s.toLowerCase() === "undefined") return "";
+  return s;
 }
 
 type ActionButtonConfig = {
@@ -141,14 +149,60 @@ type ActionButtonConfig = {
   icon: keyof typeof Ionicons.glyphMap;
   color: string;
   disabled?: boolean;
-  isInstantStyle?: boolean;
 };
 
-function GridItem({ label, value }: { label: string; value: string }) {
+type ReportType = "ACCIDENT" | "NO_SHOW" | "RUDE" | "ETC";
+
+const REVIEWED_ORDER_IDS_STORAGE_KEY = "baro_shipper_reviewed_order_ids_v1";
+
+async function loadReviewedOrderIds() {
+  try {
+    const raw = await AsyncStorage.getItem(REVIEWED_ORDER_IDS_STORAGE_KEY);
+    if (!raw) return new Set<number>();
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return new Set<number>();
+    return new Set(parsed.map((x) => Number(x)).filter((x) => Number.isFinite(x)));
+  } catch {
+    return new Set<number>();
+  }
+}
+
+async function saveReviewedOrderIds(ids: Set<number>) {
+  try {
+    const arr = Array.from(ids.values()).filter((x) => Number.isFinite(x));
+    await AsyncStorage.setItem(REVIEWED_ORDER_IDS_STORAGE_KEY, JSON.stringify(arr));
+  } catch {
+    // noop
+  }
+}
+
+function getStatusInfo(status?: string) {
+  switch (String(status ?? "").toUpperCase()) {
+    case "APPLIED":
+      return { label: "확인 대기", tone: "warning" as const };
+    case "ACCEPTED":
+      return { label: "배차 확정", tone: "info" as const };
+    case "LOADING":
+      return { label: "상차 작업 중", tone: "neutral" as const };
+    case "IN_TRANSIT":
+      return { label: "이동 중", tone: "neutral" as const };
+    case "UNLOADING":
+      return { label: "하차 작업 중", tone: "neutral" as const };
+    case "COMPLETED":
+      return { label: "운송 완료", tone: "neutral" as const };
+    case "CANCELLED":
+      return { label: "취소", tone: "warning" as const };
+    default:
+      return { label: "배차 대기", tone: "warning" as const };
+  }
+}
+
+function GridItem({ label, value, subValue }: { label: string; value: string; subValue?: string }) {
   return (
     <View style={s.gridItem}>
       <Text style={s.gridLabel}>{label}</Text>
       <Text style={s.gridValue}>{value}</Text>
+      {!!subValue && <Text style={s.gridSubValue}>{subValue}</Text>}
     </View>
   );
 }
@@ -178,6 +232,10 @@ export default function OrderDetailScreen() {
   const [reviewContent, setReviewContent] = useState("");
   const [reviewLoading, setReviewLoading] = useState(false);
   const [reviewSubmitted, setReviewSubmitted] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportType, setReportType] = useState<ReportType>("ETC");
+  const [reportDescription, setReportDescription] = useState("");
+  const [reportLoading, setReportLoading] = useState(false);
 
   const applicantsFromParam = useMemo(() => {
     const raw = Array.isArray(applicants) ? applicants[0] : applicants;
@@ -218,6 +276,57 @@ export default function OrderDetailScreen() {
     };
   }, [resolvedOrderId]);
 
+  useEffect(() => {
+    let active = true;
+
+    void (async () => {
+      const idNum = Number(order?.orderId ?? resolvedOrderId);
+      if (!Number.isFinite(idNum)) return;
+      if (order?.status && order.status !== "COMPLETED") {
+        if (active) setReviewSubmitted(false);
+        return;
+      }
+
+      const reviewedIds = await loadReviewedOrderIds();
+      if (!active) return;
+
+      if (reviewedIds.has(idNum)) {
+        setReviewSubmitted(true);
+        return;
+      }
+
+      try {
+        const myReviews = await ReviewService.getMyReviews();
+        if (!active || !Array.isArray(myReviews)) return;
+
+        const matched = myReviews.some((row: any) => {
+          const candidateOrderId = Number(
+            row?.orderId ??
+              row?.orderNo ??
+              row?.order?.orderId ??
+              row?.order?.orderNo ??
+              row?.order?.id ??
+              row?.targetOrderId ??
+              row?.targetId
+          );
+          return Number.isFinite(candidateOrderId) && candidateOrderId === idNum;
+        });
+
+        if (matched) {
+          setReviewSubmitted(true);
+          reviewedIds.add(idNum);
+          await saveReviewedOrderIds(reviewedIds);
+        }
+      } catch {
+        // noop
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [order?.orderId, order?.status, resolvedOrderId]);
+
   const isWaiting = order?.status === "REQUESTED" || order?.status === "PENDING";
   const hasApplicants = useMemo(() => {
     if (!isWaiting) return false;
@@ -239,11 +348,27 @@ export default function OrderDetailScreen() {
   const requestSummary = useMemo(() => {
     const rows = [
       ...parsedCargo.requests,
-      String(order?.remark ?? "").trim(),
-      String(order?.memo ?? "").trim(),
+      normalizeDisplayText(order?.remark),
+      normalizeDisplayText(order?.memo),
     ].filter(Boolean);
     return rows.join("\n");
   }, [order?.memo, order?.remark, parsedCargo.requests]);
+  const cargoName = useMemo(() => {
+    const clean = normalizeDisplayText(parsedCargo.cargo);
+    if (clean && !clean.includes("요청태그:") && !clean.includes("상하차방식:")) return clean;
+    return "일반화물";
+  }, [parsedCargo.cargo]);
+  const requestTags = useMemo(() => {
+    const tags = Array.isArray(order?.tag) ? order!.tag!.map((x) => String(x).trim()).filter(Boolean) : [];
+    if (tags.length > 0) return tags;
+    return parsedCargo.tags;
+  }, [order?.tag, parsedCargo.tags]);
+  const packagingOx = useMemo(() => {
+    const v = normalizeDisplayText(parsedCargo.packaging).toLowerCase();
+    if (!v) return "X";
+    if (v.includes("없") || v.includes("미포장") || v === "x" || v === "n" || v === "no") return "X";
+    return "O";
+  }, [parsedCargo.packaging]);
   const shipperInfo = useMemo(() => {
     const userAny = order?.user as any;
     const businessName = String(
@@ -255,6 +380,9 @@ export default function OrderDetailScreen() {
     const phone = parsedCargo.pickupContact || "-";
     return { label, name, phone };
   }, [order?.user, parsedCargo.pickupContact]);
+  const isCompleted = order?.status === "COMPLETED";
+  const isSettled = order?.settlementStatus === "COMPLETED";
+  const statusInfo = getStatusInfo(order?.status);
 
   const buttonConfig = useMemo<ActionButtonConfig | null>(() => {
     if (!order) return null;
@@ -266,7 +394,6 @@ export default function OrderDetailScreen() {
           icon: "time-outline",
           color: "#94A3B8",
           disabled: true,
-          isInstantStyle: false,
         };
       }
       return {
@@ -274,7 +401,6 @@ export default function OrderDetailScreen() {
         icon: "people-outline",
         color: c.brand.primary,
         disabled: !hasApplicants,
-        isInstantStyle: false,
       };
     }
 
@@ -376,6 +502,7 @@ export default function OrderDetailScreen() {
   const handleSelectDriver = async (driver: AssignedDriverInfoResponse) => {
     if (!order) return;
     const driverNo = Number(driver.driverId ?? driver.userId);
+    const driverUserId = Number(driver.userId);
     if (!Number.isFinite(driverNo)) {
       Alert.alert("오류", "기사 정보를 확인할 수 없습니다.");
       return;
@@ -384,7 +511,13 @@ export default function OrderDetailScreen() {
     try {
       await OrderApi.selectDriver(order.orderId, driverNo);
       setApplicantsOpen(false);
-      setOrder({ ...order, status: "ACCEPTED", user: order.user ?? driver });
+      setOrder({
+        ...order,
+        status: "ACCEPTED",
+        driverNo,
+        driverUserId: Number.isFinite(driverUserId) && driverUserId > 0 ? driverUserId : order.driverUserId,
+        user: order.user ?? driver,
+      });
       Alert.alert("완료", `${driver.nickname} 기사로 배차가 확정되었습니다.`);
     } catch {
       Alert.alert("오류", "기사 선택에 실패했습니다. 다시 시도해주세요.");
@@ -409,6 +542,11 @@ export default function OrderDetailScreen() {
         content,
       });
       setReviewSubmitted(true);
+      {
+        const reviewedIds = await loadReviewedOrderIds();
+        reviewedIds.add(Number(order.orderId));
+        await saveReviewedOrderIds(reviewedIds);
+      }
       setReviewOpen(false);
       Alert.alert("완료", "평점이 등록되었습니다.");
     } catch {
@@ -418,38 +556,130 @@ export default function OrderDetailScreen() {
     }
   };
 
+  const resolveDriverChatTargetId = async () => {
+    if (!order) return null;
+
+    const toPositiveNumber = (v: unknown) => {
+      const n = Number(v);
+      return Number.isFinite(n) && n > 0 ? n : null;
+    };
+
+    const candidateIds = [
+      (order as any)?.driverUserId,
+      (order as any)?.driverNo,
+      (order as any)?.driverId,
+      (order as any)?.driver_id,
+      (order as any)?.assignedDriverId,
+      (order as any)?.assigned_driver_id,
+      (order as any)?.driver?.userId,
+      (order as any)?.driver?.user?.id,
+      (order as any)?.driver?.id,
+      (order as any)?.assignedDriver?.userId,
+      (order as any)?.assignedDriver?.id,
+    ];
+    for (const id of candidateIds) {
+      const numeric = toPositiveNumber(id);
+      if (numeric) return numeric;
+    }
+
+    const source = applicantList.length > 0 ? applicantList : await loadApplicants(order.orderId);
+    if (source.length > 0) {
+      const driverNo = toPositiveNumber(order.driverNo);
+      if (driverNo) {
+        const matched =
+          source.find((d) => Number(d.driverId) === driverNo || Number(d.userId) === driverNo) ??
+          source.find((d: any) => d?.selected === true || d?.assigned === true || d?.status === "ACCEPTED") ??
+          (source.length === 1 ? source[0] : undefined);
+        const matchedUserId = toPositiveNumber(matched?.userId);
+        if (matchedUserId) return matchedUserId;
+        const matchedDriverId = toPositiveNumber(matched?.driverId);
+        if (matchedDriverId) return matchedDriverId;
+      } else if (source.length === 1) {
+        const onlyUserId = toPositiveNumber(source[0]?.userId);
+        if (onlyUserId) return onlyUserId;
+        const onlyDriverId = toPositiveNumber(source[0]?.driverId);
+        if (onlyDriverId) return onlyDriverId;
+      }
+    }
+
+    const driverNoFallback = toPositiveNumber(order.driverNo);
+    if (driverNoFallback) {
+      if (source.length > 0) {
+        const matched =
+          source.find((d) => Number(d.driverId) === driverNoFallback || Number(d.userId) === driverNoFallback) ??
+          (source.length === 1 ? source[0] : undefined);
+        const matchedUserId = toPositiveNumber(matched?.userId);
+        if (matchedUserId) return matchedUserId;
+      }
+      return driverNoFallback;
+    }
+
+    return null;
+  };
+
+  const handleReport = () => {
+    setReportOpen(true);
+  };
+
+  const handleSubmitReport = async () => {
+    const id = Number(order?.orderId);
+    const description = reportDescription.trim();
+
+    if (!Number.isFinite(id) || id <= 0) {
+      Alert.alert("오류", "오더 정보를 확인할 수 없습니다.");
+      return;
+    }
+    if (!description) {
+      Alert.alert("안내", "신고 내용을 입력해주세요.");
+      return;
+    }
+
+    setReportLoading(true);
+    try {
+      await ReportService.createReport({
+        orderId: id,
+        reportType,
+        description,
+      });
+      setReportOpen(false);
+      setReportType("ETC");
+      setReportDescription("");
+      Alert.alert("완료", "신고가 접수되었습니다.");
+    } catch (err) {
+      console.error("신고 접수 실패:", err);
+      Alert.alert("오류", "신고 접수에 실패했습니다. 다시 시도해주세요.");
+    } finally {
+      setReportLoading(false);
+    }
+  };
+
   const handleStartChat = async () => {
-    const driverId = Number(order?.driverNo);
-  // 1. 배정된 기사가 있는지 확인
-  if (!driverId) {
-    Alert.alert("안내", "배차된 기사가 없습니다.");
-    return;
-  }
+    const targetId = await resolveDriverChatTargetId();
+    if (!targetId) {
+      Alert.alert("안내", "배차된 기사 정보를 아직 확인할 수 없습니다.");
+      return;
+    }
 
-  setActionLoading(true);
-  try {
-    // 2. 채팅방 생성 또는 기존 방 ID 가져오기
-    // 이미 chatApi나 apiClient가 설정되어 있다고 가정합니다.
-    const res = await apiClient.post<number>(`/api/chat/room/personal/${driverId}`);
-    const roomId = res.data;
-
-    // 3. 채팅방 화면으로 이동 (roomId와 상대방 닉네임을 전달)
-    router.push({
-      pathname: "/(chat)/[roomId]",
-      params: { roomId: String(roomId) },
-    });
-  } catch (err) {
-    console.error("채팅방 생성 실패:", err);
-    Alert.alert("오류", "채팅방을 열 수 없습니다.");
-  } finally {
-    setActionLoading(false);
-  }
-};
+    setActionLoading(true);
+    try {
+      const res = await apiClient.post<number>(`/api/chat/room/personal/${targetId}`);
+      const roomId = res.data;
+      router.push({
+        pathname: "/(chat)/[roomId]",
+        params: { roomId: String(roomId) },
+      });
+    } catch (err) {
+      console.error("채팅방 생성 실패:", err);
+      Alert.alert("오류", "채팅방을 열 수 없습니다.");
+    } finally {
+      setActionLoading(false);
+    }
+  };
 
 
   return (
     <View style={[s.container, { backgroundColor: c.bg.canvas }]}>
-      <ShipperScreenHeader
+      <OrderDetailPageFrame
         title={order ? `오더 #${order.orderId}` : "오더 상세"}
         onPressBack={() => {
           if (router.canGoBack()) {
@@ -458,7 +688,17 @@ export default function OrderDetailScreen() {
           }
           router.replace("/(shipper)/(tabs)/orders" as any);
         }}
-      />
+        isCompleted={isCompleted}
+        isSettled={isSettled}
+        surfaceColor={c.bg.surface}
+        borderColor={c.border.default}
+        textPrimary={c.text.primary}
+        textSecondary={c.text.secondary}
+        successSoft={c.status.successSoft}
+        warningSoft={c.status.warningSoft}
+        success={c.status.success}
+        warning={c.status.warning}
+      >
 
       {loading ? (
         <View style={s.loadingWrap}>
@@ -476,16 +716,44 @@ export default function OrderDetailScreen() {
             showsVerticalScrollIndicator={false}
             contentContainerStyle={[
               s.scrollContent,
+              isCompleted && { paddingTop: 10 },
               { paddingBottom: 112 + Math.max(insets.bottom, 10) },
             ]}
           >
-            <View style={s.card}>
+            <View
+              style={[
+                s.card,
+                {
+                  backgroundColor: c.bg.surface,
+                  borderColor: c.border.default,
+                  borderWidth: 1,
+                },
+              ]}
+            >
               <View style={s.cardTop}>
-                <Badge
-                  label={order.instant ? "바로배차" : "직접배차"}
-                  tone={order.instant ? "urgent" : "direct"}
-                />
-                <Text style={s.dateText}>{formatYmd(order.createdAt)}</Text>
+                <View style={s.badgeGroup}>
+                  {isCompleted ? (
+                    <Badge
+                      label={isSettled ? "정산완료" : "정산대기"}
+                      tone={isSettled ? "success" : "warning"}
+                      style={s.unifiedBadge}
+                    />
+                  ) : (
+                    <>
+                      <Badge
+                        label={statusInfo.label}
+                        tone={statusInfo.tone}
+                        style={s.unifiedBadge}
+                      />
+                      <Badge
+                        label={order.instant ? "바로배차" : "직접배차"}
+                        tone={order.instant ? "urgent" : "direct"}
+                        style={s.unifiedBadge}
+                      />
+                    </>
+                  )}
+                </View>
+                <Text style={[s.dateText, { color: c.text.secondary }]}>{formatYmd(order.createdAt)}</Text>
               </View>
 
               <View style={s.routeBigRow}>
@@ -601,18 +869,21 @@ export default function OrderDetailScreen() {
               <Text style={s.sectionTitle}>화물 정보</Text>
               <View style={s.gridContainer}>
                 <GridItem
-                  label="차종/톤수"
-                  value={`${order.reqTonnage || "-"} ${order.reqCarType || ""}`.trim()}
-                />
-                <GridItem label="운행구분" value={order.driveMode || "독차"} />
-                <GridItem
                   label="화물종류"
-                  value={parsedCargo.cargo || "-"}
+                  value={cargoName}
+                  subValue={`포장 여부 ${packagingOx}`}
                 />
                 <GridItem
-                  label="중량"
-                  value={order.loadWeight ? `${order.loadWeight}kg` : "정보 없음"}
+                  label="운송방식"
+                  value={order.driveMode || "독차"}
                 />
+                <GridItem
+                  label="상하차방법"
+                  value={order.loadMethod || "지게차"}
+                />
+                <GridItem label="요청차종" value={order.reqCarType || "카고"} />
+                <GridItem label="요청톤수" value={order.reqTonnage || `${Math.max(1, Number(order.tonnage || 1))}톤`} />
+                <GridItem label="작업유형" value={order.workType || "일반"} />
               </View>
             </View>
 
@@ -648,9 +919,9 @@ export default function OrderDetailScreen() {
 
             <View style={s.sectionCard}>
               <Text style={s.sectionTitle}>요청사항</Text>
-              {parsedCargo.tags.length > 0 ? (
+              {requestTags.length > 0 ? (
                 <View style={s.requestTagWrap}>
-                  {parsedCargo.tags.map((tag, idx) => (
+                  {requestTags.map((tag, idx) => (
                     <View key={`${tag}-${idx}`} style={s.requestTagChip}>
                       <Text style={s.requestTagText}>#{tag}</Text>
                     </View>
@@ -658,10 +929,10 @@ export default function OrderDetailScreen() {
                 </View>
               ) : null}
               {requestSummary ? (
-                <View style={[s.remarkBox, parsedCargo.tags.length > 0 && { marginTop: 10 }]}>
+                <View style={[s.remarkBox, requestTags.length > 0 && { marginTop: 10 }]}>
                   <Text style={s.remarkText}>{requestSummary}</Text>
                 </View>
-              ) : parsedCargo.tags.length === 0 ? (
+              ) : requestTags.length === 0 ? (
                 <View style={s.remarkBox}>
                   <Text style={s.remarkText}>요청사항 없음</Text>
                 </View>
@@ -672,19 +943,27 @@ export default function OrderDetailScreen() {
           <View style={[s.bottomBar, { height: 84 + insets.bottom, paddingBottom: insets.bottom || 10 }]}>
             {!isWaiting ? (
               <View style={s.iconBtnGroup}>
-                <Pressable
-                  style={s.circleBtn}
-                  onPress={() => void handleStartChat()}
-                >
-                  <Ionicons
-                    name="chatbubble-ellipses-outline"
-                    size={24}
-                    color="#333"
-                  />
-                </Pressable>
-                <Pressable style={s.circleBtn} onPress={() => void handleCall()}>
-                  <Ionicons name="call-outline" size={24} color="#333" />
-                </Pressable>
+                {order.status === "COMPLETED" ? (
+                  <Pressable style={s.circleBtn} onPress={handleReport}>
+                    <Ionicons name="notifications-outline" size={24} color="#DC2626" />
+                  </Pressable>
+                ) : (
+                  <>
+                    <Pressable
+                      style={s.circleBtn}
+                      onPress={() => void handleStartChat()}
+                    >
+                      <Ionicons
+                        name="chatbubble-ellipses-outline"
+                        size={24}
+                        color="#333"
+                      />
+                    </Pressable>
+                    <Pressable style={s.circleBtn} onPress={() => void handleCall()}>
+                      <Ionicons name="call-outline" size={24} color="#333" />
+                    </Pressable>
+                  </>
+                )}
               </View>
             ) : null}
 
@@ -774,6 +1053,87 @@ export default function OrderDetailScreen() {
           </Modal>
 
           <Modal
+            visible={reportOpen}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setReportOpen(false)}
+          >
+            <View style={s.modalBackdrop}>
+              <View style={[s.modalCard, { backgroundColor: c.bg.surface }]}>
+                <View style={s.modalHeader}>
+                  <Text style={[s.modalTitle, { color: c.text.primary }]}>신고 접수</Text>
+                  <Pressable onPress={() => setReportOpen(false)} style={s.modalCloseBtn}>
+                    <Ionicons name="close" size={20} color={c.text.secondary} />
+                  </Pressable>
+                </View>
+
+                <Text style={[s.reviewLabel, { color: c.text.primary }]}>신고 유형</Text>
+                <View style={s.reportTypeWrap}>
+                  {[
+                    { key: "ACCIDENT" as ReportType, label: "사고" },
+                    { key: "NO_SHOW" as ReportType, label: "노쇼" },
+                    { key: "RUDE" as ReportType, label: "불친절" },
+                    { key: "ETC" as ReportType, label: "기타" },
+                  ].map((item) => {
+                    const active = reportType === item.key;
+                    return (
+                      <Pressable
+                        key={item.key}
+                        onPress={() => setReportType(item.key)}
+                        style={[
+                          s.reportTypeChip,
+                          {
+                            borderColor: active ? c.brand.primary : c.border.default,
+                            backgroundColor: active ? "#EEF2FF" : c.bg.canvas,
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={{
+                            color: active ? c.brand.primary : c.text.secondary,
+                            fontWeight: active ? "800" : "600",
+                            fontSize: 13,
+                          }}
+                        >
+                          {item.label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+
+                <Text style={[s.reviewLabel, { color: c.text.primary, marginTop: 8 }]}>상세 내용</Text>
+                <TextInput
+                  value={reportDescription}
+                  onChangeText={setReportDescription}
+                  placeholder="신고 사유를 구체적으로 입력해주세요."
+                  placeholderTextColor="#94A3B8"
+                  style={[s.reviewInput, { color: c.text.primary, borderColor: c.border.default }]}
+                  multiline
+                />
+
+                <Pressable
+                  onPress={() => void handleSubmitReport()}
+                  disabled={reportLoading}
+                  style={({ pressed }) => [
+                    s.reviewSubmitBtn,
+                    {
+                      backgroundColor: "#DC2626",
+                      opacity: pressed || reportLoading ? 0.75 : 1,
+                    },
+                  ]}
+                >
+                  {reportLoading ? (
+                    <ActivityIndicator color="#FFF" />
+                  ) : (
+                    <Text style={s.reviewSubmitText}>신고 접수</Text>
+                  )}
+                </Pressable>
+              </View>
+            </View>
+          </Modal>
+
+          <Modal
             visible={reviewOpen}
             transparent
             animationType="fade"
@@ -833,38 +1193,24 @@ export default function OrderDetailScreen() {
           </Modal>
         </>
       )}
+      </OrderDetailPageFrame>
     </View>
   );
 }
 
 const s = StyleSheet.create({
   container: { flex: 1 },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingBottom: 10,
-    backgroundColor: "#fff",
-  },
-  headerBtn: { padding: 8 },
-  headerTitle: { fontSize: 16, fontWeight: "700", color: "#1E293B" },
   loadingWrap: { flex: 1, alignItems: "center", justifyContent: "center" },
   scrollContent: { padding: 16 },
   card: {
     backgroundColor: "#FFF",
-    borderRadius: 20,
+    borderRadius: 24,
     padding: 20,
     marginBottom: 16,
-    elevation: 3,
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 8,
   },
   sectionCard: {
     backgroundColor: "#FFF",
-    borderRadius: 20,
+    borderRadius: 24,
     padding: 20,
     marginBottom: 16,
   },
@@ -877,8 +1223,11 @@ const s = StyleSheet.create({
   cardTop: {
     flexDirection: "row",
     justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 20,
   },
+  badgeGroup: { flexDirection: "row", gap: 6, flexWrap: "wrap", flex: 1 },
+  unifiedBadge: { alignItems: "center" },
   dateText: { fontSize: 12, color: "#94A3B8", marginTop: 6 },
   routeBigRow: {
     flexDirection: "row",
@@ -975,6 +1324,7 @@ const s = StyleSheet.create({
   },
   gridLabel: { fontSize: 12, color: "#94A3B8", marginBottom: 4 },
   gridValue: { fontSize: 15, fontWeight: "700", color: "#334155" },
+  gridSubValue: { fontSize: 12, color: "#94A3B8", marginTop: 4 },
   managerBox: {
     padding: 16,
     borderRadius: 12,
@@ -1122,6 +1472,18 @@ const s = StyleSheet.create({
   },
   starBtn: {
     marginRight: 8,
+  },
+  reportTypeWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 8,
+  },
+  reportTypeChip: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
   },
   reviewInput: {
     borderWidth: 1,

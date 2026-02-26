@@ -5,8 +5,6 @@ import {
   StyleSheet,
   FlatList,
   Pressable,
-  ScrollView,
-  SafeAreaView,
   RefreshControl,
   ActivityIndicator,
   Alert,
@@ -15,6 +13,7 @@ import { DrOrderCard } from "@/features/driver/shard/ui/DrOrderCard";
 import { useOrderList } from "../model/useOrderList";
 import { Ionicons } from "@expo/vector-icons";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
+import ShipperScreenHeader from "@/shared/ui/layout/ShipperScreenHeader";
 
 export default function OrderListScreen() {
   const { colors: c } = useAppTheme();
@@ -32,19 +31,16 @@ export default function OrderListScreen() {
   } = useOrderList();
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#FFF" }}>
-      {/* 헤더 */}
-      <View style={[s.header, { borderBottomColor: c.border.default }]}>
-        <View style={{ width: 40 }} />
-        <Text style={s.headerTitle}>오더 목록</Text>
-        {/* 상세 필터 아이콘 */}
-        <Pressable
-          onPress={() => Alert.alert("필터", "상세 필터 모달이 열립니다.")}
-          style={s.headerFilterBtn}
-        >
-          <Ionicons name="options-outline" size={24} color={c.text.primary} />
-        </Pressable>
-      </View>
+    <View style={{ flex: 1, backgroundColor: "#FFF" }}>
+      <ShipperScreenHeader
+        title="오더 목록"
+        hideBackButton
+        right={
+          <Pressable onPress={() => Alert.alert("필터", "상세 필터 모달이 열립니다.")} style={s.headerFilterBtn}>
+            <Ionicons name="options-outline" size={24} color={c.text.primary} />
+          </Pressable>
+        }
+      />
 
       {/* 필터 탭 (4개 항목으로 정리) */}
       <View style={s.filterWrapper}>
@@ -124,7 +120,7 @@ export default function OrderListScreen() {
           }
         />
       )}
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -160,16 +156,6 @@ const SortButton = ({ label, active, onPress }: any) => (
 );
 
 const s = StyleSheet.create({
-  header: {
-    height: 56,
-    backgroundColor: "#FFF",
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    borderBottomWidth: 1,
-  },
-  headerTitle: { fontSize: 18, fontWeight: "700", color: "#0F172A" },
   headerFilterBtn: { padding: 4 },
   filterWrapper: {
     paddingVertical: 12,
