@@ -40,6 +40,31 @@ export const useDrivingProcess = (onRefresh?: () => void) => {
     }
   };
 
+  /**
+   * 1. 배차 신청 (새로 추가)
+   * 오더 목록에서 '배차 신청' 버튼을 눌렀을 때 호출합니다.
+   * 백엔드의 /api/v1/orders/{orderId}/accept 를 호출합니다.
+   */
+  const handleAcceptOrder = async (orderId: number) => {
+    try {
+      setIsLoading(true);
+      await OrderService.acceptOrder(orderId); // 새로 만든 API 함수 호출
+      
+      Alert.alert("성공", "배차 신청이 완료되었습니다.");
+      
+      if (onRefresh) onRefresh(); // 목록 새로고침
+    } catch (error: any) {
+      const errorMsg = error.response?.data?.message || "배차 신청에 실패했습니다.";
+      Alert.alert("오류", errorMsg);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+
+
+
+
   // 배차 신청 취소
   const handleCancelOrder = async (orderId: string | number) => {
     Alert.alert("배차 신청 취소", "정말로 이 배차 신청을 취소하시겠습니까?", [
@@ -90,5 +115,6 @@ export const useDrivingProcess = (onRefresh?: () => void) => {
     handleUpdateStatus,
     handleCancelOrder,
     handleStartTransport,
+    handleAcceptOrder,
   };
 };
