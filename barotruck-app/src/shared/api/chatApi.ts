@@ -66,7 +66,7 @@ export const useChatManager = () => {
     }
     try {
       const res = await apiClient.get<ChatRoomResponse[]>('/api/chat/room');
-      setRooms(res.data);
+      setRooms(extractChatRooms(res.data));
     } catch (err) {
       console.error("목록 로드 실패:", err);
     }
@@ -153,3 +153,45 @@ const loadHistory = async (roomId: number, page: number = 0) => {
     connectSocket, sendMessage, disconnect 
   };
 };
+
+function extractChatRooms(payload: unknown): ChatRoomResponse[] {
+  if (Array.isArray(payload)) return payload as ChatRoomResponse[];
+  const root = payload as any;
+  if (Array.isArray(root?.rooms)) return root.rooms as ChatRoomResponse[];
+  if (Array.isArray(root?.data)) return root.data as ChatRoomResponse[];
+  if (Array.isArray(root?.content)) return root.content as ChatRoomResponse[];
+  if (Array.isArray(root?.result)) return root.result as ChatRoomResponse[];
+  return [];
+}
+
+function resolveUnreadCount(room: any): number {
+  const candidates = [
+    room?.unreadCount,
+    room?.unread_count,
+    room?.unreadCnt,
+    room?.notReadCount,
+    room?.unreadMessageCount,
+    room?.unread?.count,
+    room?.unread?.messageCount,
+  ];
+  for (const value of candidates) {
+    const n = Number(value);
+    if (Number.isFinite(n)) return Math.max(0, n);
+  }
+  return 0;
+}
+
+export async function fetchMyChatRooms(): Promise<ChatRoomResponse[]> {
+  if (USE_MOCK) return [];
+  try {
+    const res = await apiClient.get('/api/chat/room');
+    return extractChatRooms(res.data);
+  } catch {
+    return [];
+  }
+}
+
+export async function fetchMyUnreadChatCount(): Promise<number> {
+  const rooms = await fetchMyChatRooms();
+  return rooms.reduce((acc, room) => acc + resolveUnreadCount(room), 0);
+}

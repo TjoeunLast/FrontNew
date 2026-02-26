@@ -7,9 +7,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { OrderApi } from "@/shared/api/orderService";
 import { UserService } from "@/shared/api/userService";
+import { fetchMyUnreadChatCount } from "@/shared/api/chatApi";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import { Button } from "@/shared/ui/base/Button";
-import { IconButton } from "@/shared/ui/base/IconButton";
 import { RecommendedOrderCard } from "@/shared/ui/business/RecommendedOrderCard";
 import {
   isWithinNextHour,
@@ -32,6 +32,12 @@ export function ShipperHomeScreen() {
   const [displayName, setDisplayName] = useState("화주");
   const [liveOrders, setLiveOrders] = useState<LiveOrderItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [hasUnreadChat, setHasUnreadChat] = useState(false);
+
+  const syncUnread = React.useCallback(async () => {
+    const unreadCount = await fetchMyUnreadChatCount();
+    setHasUnreadChat(unreadCount > 0);
+  }, []);
 
   // 1. 사용자 닉네임 조회
   useFocusEffect(
@@ -75,6 +81,21 @@ useFocusEffect(
   }, [])
 );
 
+  useFocusEffect(
+    React.useCallback(() => {
+      let timer: ReturnType<typeof setInterval> | null = null;
+
+      void syncUnread();
+      timer = setInterval(() => {
+        void syncUnread();
+      }, 3000);
+
+      return () => {
+        if (timer) clearInterval(timer);
+      };
+    }, [syncUnread])
+  );
+
 
   // 페이지 이동 함수들
   const goCreateOrder = () => router.push("/(shipper)/create-order/step1-route" as any);
@@ -111,22 +132,26 @@ useFocusEffect(
 
   return (
     <View style={[s.page, { backgroundColor: c.bg.canvas }]}>
+      <View style={[s.header, { backgroundColor: c.bg.surface, paddingTop: Math.max(16, insets.top + 8) }]}>
+        <Text style={[s.logoText, { color: c.brand.primary }]}>BARO</Text>
+        <View style={s.headerIcons}>
+          <Pressable onPress={goChat} style={s.chatIconWrap}>
+            <Ionicons name="chatbubble-outline" size={24} color={c.text.primary} />
+            {hasUnreadChat ? (
+              <View style={s.chatUnreadBadge}>
+                <Text style={s.chatUnreadText}>1</Text>
+              </View>
+            ) : null}
+          </Pressable>
+          <Pressable onPress={goNotificationsTab}>
+            <Ionicons name="notifications-outline" size={24} color={c.text.primary} />
+          </Pressable>
+        </View>
+      </View>
       <ScrollView
-        contentContainerStyle={[s.container, { paddingTop: Math.max(18, insets.top + 10) }]}
+        contentContainerStyle={s.container}
         showsVerticalScrollIndicator={false}
       >
-        <View style={s.topRow}>
-          <Text style={s.brandText}>BARO</Text>
-          <View style={s.topActions}>
-            <IconButton onPress={goChat} variant="ghost">
-              <Ionicons name="chatbubble-outline" size={22} color={c.text.primary} />
-            </IconButton>
-            <IconButton onPress={goNotificationsTab} variant="ghost">
-              <Ionicons name="notifications-outline" size={22} color={c.text.primary} />
-            </IconButton>
-          </View>
-        </View>
-
         <View style={s.dashboardContainer}>
           <Text style={[s.dashboardTitle, { color: c.text.primary }]}>운송 현황</Text>
           <View style={s.summaryRow}>
@@ -238,11 +263,30 @@ useFocusEffect(
 
 const s = StyleSheet.create({
   page: { flex: 1 },
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+  },
+  logoText: { fontSize: 22, fontWeight: "900" },
+  headerIcons: { flexDirection: "row", gap: 15 },
+  chatIconWrap: { position: "relative" },
+  chatUnreadBadge: {
+    position: "absolute",
+    top: -6,
+    right: -8,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: "#EF4444",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 3,
+  },
+  chatUnreadText: { color: "#FFFFFF", fontSize: 10, fontWeight: "900", lineHeight: 12 },
   container: { paddingHorizontal: 20, paddingTop: 18, paddingBottom: 40 },
-
-  topRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 14 },
-  brandText: { fontSize: 22, fontWeight: "900", color: "#4F46E5", letterSpacing: -0.4 },
-  topActions: { flexDirection: "row", alignItems: "center", gap: 8 },
 
   dashboardContainer: { marginBottom: 14 },
   dashboardTitle: { fontSize: 18, fontWeight: "800", marginBottom: 10 },

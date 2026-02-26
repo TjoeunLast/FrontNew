@@ -17,6 +17,39 @@ import * as ImagePicker from 'expo-image-picker';
 import { useChatManager } from '../../../../shared/api/chatApi';
 import { ChatMessageResponse } from '../../../../shared/models/chat';
 
+function resolveOutgoingReadState(
+  item: ChatMessageResponse,
+  myUserId: number | null,
+  sortedMessages: ChatMessageResponse[]
+): 'READ' | 'UNREAD' | null {
+  const myId = Number(myUserId);
+  const senderId = Number((item as any)?.senderId);
+  if (!Number.isFinite(myId) || !Number.isFinite(senderId) || senderId !== myId) return null;
+  const row = item as any;
+
+  const explicitBool = row?.isRead ?? row?.read ?? row?.seen ?? row?.isSeen;
+  if (typeof explicitBool === 'boolean') return explicitBool ? 'READ' : 'UNREAD';
+
+  const readAt = String(row?.readAt ?? row?.seenAt ?? '').trim();
+  if (readAt) return 'READ';
+
+  const unreadCount = Number(row?.unreadCount ?? row?.unreadCnt ?? row?.notReadCount);
+  if (Number.isFinite(unreadCount)) return unreadCount <= 0 ? 'READ' : 'UNREAD';
+
+  const readCount = Number(row?.readCount ?? row?.readCnt);
+  if (Number.isFinite(readCount)) return readCount > 0 ? 'READ' : 'UNREAD';
+
+  const itemTime = new Date(item.createdAt).getTime();
+  const hasLaterOtherMessage = sortedMessages.some((msg) => {
+    const msgSenderId = Number((msg as any)?.senderId);
+    if (Number.isFinite(msgSenderId) && msgSenderId === myId) return false;
+    const t = new Date(msg.createdAt).getTime();
+    if (Number.isFinite(itemTime) && Number.isFinite(t) && t > itemTime) return true;
+    return msg.messageId > item.messageId;
+  });
+  return hasLaterOtherMessage ? 'READ' : 'UNREAD';
+}
+
 const ChatRoomScreen = () => {
   const { roomId } = useLocalSearchParams<{ roomId: string }>();
   const navigation = useNavigation();
@@ -64,6 +97,16 @@ const ChatRoomScreen = () => {
       return a.messageId - b.messageId;
     });
   }, [messages]);
+
+  const latestMyMessageId = useMemo(() => {
+    const myId = Number(userId);
+    if (!Number.isFinite(myId)) return null;
+    for (let i = sortedMessages.length - 1; i >= 0; i -= 1) {
+      const senderId = Number((sortedMessages[i] as any)?.senderId);
+      if (Number.isFinite(senderId) && senderId === myId) return sortedMessages[i].messageId;
+    }
+    return null;
+  }, [sortedMessages, userId]);
 
   const formatKoreanTime = (dateString: string) => {
     const date = new Date(dateString);
@@ -124,10 +167,19 @@ const ChatRoomScreen = () => {
   };
 
   const renderItem = ({ item }: { item: ChatMessageResponse }) => {
-    const isMine = item.senderId === userId;
+    const myId = Number(userId);
+    const senderId = Number((item as any)?.senderId);
+    const isMine = Number.isFinite(myId) && Number.isFinite(senderId) && senderId === myId;
+    const readState = resolveOutgoingReadState(item, userId, sortedMessages);
+    const readLabel = item.messageId === latestMyMessageId && readState === 'READ' ? '읽음' : item.messageId === latestMyMessageId && readState === 'UNREAD' ? '1' : '';
     return (
       <View style={[styles.messageRow, isMine ? styles.myMessageRow : styles.otherMessageRow]}>
-        {isMine && <Text style={styles.timeText}>{formatKoreanTime(item.createdAt)}</Text>}
+        {isMine ? (
+          <View style={styles.myMetaCol}>
+            {!!readLabel && <Text style={styles.readStateText}>{readLabel}</Text>}
+            <Text style={styles.timeText}>{formatKoreanTime(item.createdAt)}</Text>
+          </View>
+        ) : null}
         <View style={[styles.bubble, isMine ? styles.myBubble : styles.otherBubble]}>
           <Text style={[styles.messageText, isMine && styles.myMessageText]}>{item.content}</Text>
         </View>
@@ -249,6 +301,8 @@ const styles = StyleSheet.create({
   messageText: { fontSize: 14, lineHeight: 20, color: '#1f2430', fontWeight: '500' },
   myMessageText: { color: '#ffffff' },
   timeText: { fontSize: 11, color: '#9aa4b6', marginHorizontal: 7, marginBottom: 3 },
+  myMetaCol: { alignItems: 'flex-end', justifyContent: 'flex-end', marginRight: 6, marginBottom: 2 },
+  readStateText: { fontSize: 11, color: '#5a5ce1', fontWeight: '700', marginBottom: 1 },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
