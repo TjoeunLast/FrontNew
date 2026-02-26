@@ -10,6 +10,8 @@ import {
   Alert,
 } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
+import apiClient from "@/shared/api/apiClient";
 
 import { useOrderDetail } from "../model/useOrderDetail";
 import { Badge } from "@/shared/ui/feedback/Badge";
@@ -20,6 +22,7 @@ const { width } = Dimensions.get("window");
 
 export default function OrderDetailScreen() {
   const { colors: c } = useAppTheme();
+  const router = useRouter();
 
   // 데이터 밒 기능 로드
   const {
@@ -87,6 +90,31 @@ export default function OrderDetailScreen() {
   };
 
   const statusInfo = getStatusInfo(order.status);
+
+  const handleStartChat = async () => {
+    // targetId는 오더의 화주 ID (userId)
+    const targetId = (order as any)?.userId ?? (order as any)?.user.userId;
+    console.log("채팅 시작 시도 - targetId:", targetId);
+    if (!targetId) {
+      Alert.alert("안내", "대화할 상대방 정보를 찾을 수 없습니다.");
+      return;
+    }
+
+    try {
+      const res = await apiClient.post<number>(`/api/chat/room/personal/${targetId}`);
+      const roomId = res.data;
+      router.push({
+        pathname: "/(chat)/[roomId]",
+        params: { roomId: String(roomId) },
+      });
+    } catch (err) {
+      console.error("채팅방 생성 실패:", err);
+      Alert.alert("오류", "채팅방을 열 수 없습니다.");
+    }
+  };
+  
+  
+
 
   return (
     <View style={[s.container, { backgroundColor: c.bg.canvas }]}>
@@ -440,6 +468,7 @@ export default function OrderDetailScreen() {
             <View style={s.iconBtnGroup}>
               <Pressable
                 style={[s.circleBtn, { borderColor: c.border.default }]}
+                onPress={handleStartChat}
               >
                 <Ionicons
                   name="chatbubble-outline"
