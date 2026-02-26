@@ -17,6 +17,7 @@ import { useOrderDetail } from "../model/useOrderDetail";
 import { Badge } from "@/shared/ui/feedback/Badge";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import { ReceiptModal } from "@/features/driver/driving/ui/ReceiptModal";
+import OrderDetailPageFrame from "./OrderDetailPageFrame";
 
 const { width } = Dimensions.get("window");
 
@@ -118,58 +119,20 @@ export default function OrderDetailScreen() {
 
   return (
     <View style={[s.container, { backgroundColor: c.bg.canvas }]}>
-      {/* 헤더 */}
-      <View
-        style={[
-          s.header,
-          {
-            backgroundColor: c.bg.surface,
-            borderBottomWidth: isCompleted ? 0 : 1,
-            borderBottomColor: c.border.default,
-          },
-        ]}
+      <OrderDetailPageFrame
+        title={`오더 #${order.orderId}`}
+        onPressBack={actions.goBack}
+        isCompleted={isCompleted}
+        isSettled={isSettled}
+        surfaceColor={c.bg.surface}
+        borderColor={c.border.default}
+        textPrimary={c.text.primary}
+        textSecondary={c.text.secondary}
+        successSoft={c.status.successSoft}
+        warningSoft={c.status.warningSoft}
+        success={c.status.success}
+        warning={c.status.warning}
       >
-        <Pressable onPress={actions.goBack} style={s.headerBtn} hitSlop={15}>
-          <Ionicons name="arrow-back" size={24} color={c.text.secondary} />
-        </Pressable>
-        <Text style={[s.headerTitle, { color: c.text.primary }]}>
-          오더 #{order.orderId}
-        </Text>
-        <View style={{ width: 40 }} />
-      </View>
-
-      {/* 정산 알림바(운송 완료 탭에서만 보임) */}
-      {/* 백엔드 정산 상태 추가 후 다시 수정 */}
-      {isCompleted && (
-        <View
-          style={[
-            s.statusHeader,
-            {
-              backgroundColor: isSettled
-                ? c.status.successSoft
-                : c.status.warningSoft,
-            },
-          ]}
-        >
-          <View style={s.statusHeaderRow}>
-            <Ionicons
-              name={isSettled ? "cash-outline" : "time-outline"}
-              size={18}
-              color={isSettled ? c.status.success : c.status.warning}
-            />
-            <Text
-              style={[
-                s.statusHeaderText,
-                { color: isSettled ? c.status.success : c.status.warning },
-              ]}
-            >
-              {isSettled
-                ? "운송료 정산이 완료되었습니다"
-                : "운송은 종료되었으며, 정산 대기 중입니다"}
-            </Text>
-          </View>
-        </View>
-      )}
 
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -526,6 +489,7 @@ export default function OrderDetailScreen() {
         )}
       </View>
       <ReceiptModal visible={modalOpen} onClose={() => setModalOpen(false)} />
+      </OrderDetailPageFrame>
     </View>
   );
 }

@@ -5,7 +5,6 @@ import {
   StyleSheet,
   Pressable,
   ScrollView,
-  SafeAreaView,
   StatusBar,
   ActivityIndicator,
 } from "react-native";
@@ -20,6 +19,7 @@ import { useDrivingList } from "@/features/driver/driving-list/model/useDrivingL
 import { useDrivingProcess } from "@/features/driver/driving/model/useDrivingProcess";
 import { ReceiptModal } from "@/features/driver/driving/ui/ReceiptModal";
 import { Ionicons } from "@expo/vector-icons";
+import ShipperScreenHeader from "@/shared/ui/layout/ShipperScreenHeader";
 
 export default function DrivingListScreen() {
   const { colors: c } = useAppTheme();
@@ -83,13 +83,9 @@ export default function DrivingListScreen() {
   }, [pendingOrders, completedOrders]); // 원본 데이터가 바뀔 때만 다시 계산
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#F8FAFC" }}>
+    <View style={{ flex: 1, backgroundColor: "#F8FAFC" }}>
       <StatusBar barStyle="dark-content" />
-
-      {/* 헤더 */}
-      <View style={[s.header, { borderBottomColor: c.border.default }]}>
-        <Text style={s.headerTitle}>운행 관리</Text>
-      </View>
+      <ShipperScreenHeader title="운행 관리" hideBackButton />
 
       {/* 탭 메뉴 */}
       <View style={[s.tabHeader, { borderBottomColor: c.border.default }]}>
@@ -274,7 +270,7 @@ export default function DrivingListScreen() {
 
       {/* 모달 */}
       <ReceiptModal visible={modalOpen} onClose={() => setModalOpen(false)} />
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -286,14 +282,6 @@ const EmptyState = ({ text }: { text: string }) => (
 );
 
 const s = StyleSheet.create({
-  header: {
-    height: 56,
-    backgroundColor: "#FFF",
-    justifyContent: "center",
-    alignItems: "center",
-    borderBottomWidth: 1,
-  },
-  headerTitle: { fontSize: 18, fontWeight: "700", color: "#0F172A" },
   tabHeader: {
     flexDirection: "row",
     height: 50,

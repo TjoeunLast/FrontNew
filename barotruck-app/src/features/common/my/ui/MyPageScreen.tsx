@@ -475,6 +475,14 @@ export default function MyPageScreen() {
 
         <Text style={s.sectionTitle}>고객 지원</Text>
         <View style={s.sectionCard}>
+          <Pressable style={s.row} onPress={() => router.push("/(common)/settings/reviews" as any)}>
+            <View style={[s.rowIconWrap, { backgroundColor: withAlpha(c.brand.primary, 0.12) }]}>
+              <Ionicons name="chatbox-ellipses-outline" size={18} color={c.brand.primary} />
+            </View>
+            <Text style={s.rowLabel}>리뷰 관리</Text>
+            <Ionicons name="chevron-forward" size={20} color={c.text.secondary} />
+          </Pressable>
+          <View style={s.divider} />
           <Pressable style={s.row} onPress={() => router.push("/(common)/settings/account" as any)}>
             <View style={[s.rowIconWrap, { backgroundColor: withAlpha(c.text.secondary, 0.12) }]}>
               <Ionicons name="headset-outline" size={18} color={c.text.secondary} />
@@ -482,10 +490,7 @@ export default function MyPageScreen() {
             <Text style={s.rowLabel}>1:1 문의하기</Text>
             <Ionicons name="chevron-forward" size={20} color={c.text.secondary} />
           </Pressable>
-        </View>
-
-        <Text style={s.sectionTitle}>서비스 정보</Text>
-        <View style={s.sectionCard}>
+          <View style={s.divider} />
           <Pressable style={s.row} onPress={() => router.push("/(common)/terms-policies" as any)}>
             <View style={[s.rowIconWrap, { backgroundColor: withAlpha(c.text.secondary, 0.12) }]}>
               <Ionicons name="document-text-outline" size={18} color={c.text.secondary} />

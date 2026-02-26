@@ -70,6 +70,21 @@ function findNestedSettlementStatus(node: any, depth = 0): OrderResponse['settle
   return undefined;
 }
 
+function normalizeTagList(raw: any): string[] | undefined {
+  if (raw === undefined || raw === null) return undefined;
+  if (Array.isArray(raw)) {
+    const tags = raw.map((x) => String(x ?? '').trim()).filter(Boolean);
+    return tags.length > 0 ? tags : undefined;
+  }
+  const text = String(raw).trim();
+  if (!text) return undefined;
+  const tags = text
+    .split(/[,\|]/)
+    .map((x) => x.trim())
+    .filter(Boolean);
+  return tags.length > 0 ? tags : undefined;
+}
+
 function normalizeOrderRow(node: any): OrderResponse | null {
   if (!node || typeof node !== 'object') return null;
   const orderIdRaw = (node as any).orderId ?? (node as any).id ?? (node as any).orderNo;
@@ -119,6 +134,18 @@ function normalizeOrderRow(node: any): OrderResponse | null {
       (node as any).driver?.id ??
       0,
   );
+  const driverUserIdRaw =
+    (node as any).driverUserId ??
+    (node as any).driver?.userId ??
+    (node as any).driver?.id ??
+    (node as any).assignedDriver?.userId;
+  const driverUserId = Number(driverUserIdRaw ?? 0);
+  const tag = normalizeTagList(
+    (node as any).tag ??
+    (node as any).tags ??
+    (node as any).requestTags ??
+    (node as any).requestTag
+  );
 
   return {
     orderId: orderIdNum,
@@ -127,6 +154,7 @@ function normalizeOrderRow(node: any): OrderResponse | null {
     createdAt,
     updated: updated ? String(updated) : undefined,
     driverNo,
+    driverUserId: Number.isFinite(driverUserId) && driverUserId > 0 ? driverUserId : undefined,
     startAddr,
     startPlace,
     startType: String((node as any).startType ?? (node as any).pickupType ?? ''),
@@ -154,6 +182,7 @@ function normalizeOrderRow(node: any): OrderResponse | null {
     payMethod: String((node as any).payMethod ?? ''),
     memo: (node as any).memo !== undefined ? String((node as any).memo) : undefined,
     remark: (node as any).remark !== undefined ? String((node as any).remark) : undefined,
+    tag,
     instant: Boolean((node as any).instant),
     distance: Number((node as any).distance ?? 0),
     duration: Number((node as any).duration ?? 0),
@@ -168,6 +197,7 @@ function mergeOrderRows(prev: OrderResponse, next: OrderResponse): OrderResponse
     ...prev,
     ...next,
     settlementStatus: pickDefined(prev.settlementStatus, next.settlementStatus),
+    tag: pickDefined(prev.tag, next.tag),
     payMethod: next.payMethod || prev.payMethod,
     updated: next.updated || prev.updated,
     createdAt: next.createdAt || prev.createdAt,

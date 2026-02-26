@@ -47,6 +47,7 @@ export interface OrderRequest {
   // 하차지 광역 자치단체명 (예: 경기, 강원, 전남)
 
   cargoContent?: string;
+  tag?: string[];
   memo?: string;
   loadMethod?: string;
   workType?: string;
@@ -93,7 +94,8 @@ export interface OrderResponse {
 
   createdAt: string;
   updated?: string;
-  driverNo: number;  
+  driverNo: number;
+  driverUserId?: number;
   // OrderSnapshot 대응 데이터
 
   startAddr: string;
