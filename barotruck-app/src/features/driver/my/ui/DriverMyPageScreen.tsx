@@ -25,18 +25,11 @@ type DriverProfileView = {
   vehicleLabel: string;
   carNum: string;
   bankName: string;
-  rating: number;
 };
 
 function toText(v: unknown, fallback = "-") {
   const text = String(v ?? "").trim();
   return text || fallback;
-}
-
-function toRating(v: unknown) {
-  const n = Number(v);
-  if (!Number.isFinite(n)) return 4.9;
-  return Math.max(0, Math.min(5, n));
 }
 
 function toVehicleLabel(inputType?: unknown, inputTonnage?: unknown) {
@@ -67,7 +60,6 @@ export default function DriverMyPageScreen() {
     vehicleLabel: "1톤 윙바디",
     carNum: "-",
     bankName: "-",
-    rating: 4.9,
   });
 
   useFocusEffect(
@@ -95,7 +87,6 @@ export default function DriverMyPageScreen() {
             ),
             carNum: toText(detail?.carNum ?? detail?.driver?.carNum),
             bankName: toText(detail?.bankName ?? detail?.driver?.bankName),
-            rating: toRating(me?.ratingAvg ?? detail?.ratingAvg),
           });
         } catch {
           if (!active) return;
@@ -164,15 +155,15 @@ export default function DriverMyPageScreen() {
         profileName: { fontSize: 16, fontWeight: "800", color: "#111827", letterSpacing: -0.1 } as TextStyle,
         profileSubRow: { flexDirection: "row", alignItems: "center", marginTop: 4, gap: 8 } as ViewStyle,
         profileSub: { fontSize: 12, fontWeight: "700", color: "#6B7280", letterSpacing: 0 } as TextStyle,
-        rateBadge: {
+        driverBadge: {
           borderRadius: 7,
           paddingHorizontal: 7,
           height: 22,
           alignItems: "center",
           justifyContent: "center",
-          backgroundColor: "#FDECC7",
+          backgroundColor: "#E0E7FF",
         } as ViewStyle,
-        rateText: { fontSize: 11, fontWeight: "900", color: "#9A6700" } as TextStyle,
+        driverBadgeText: { fontSize: 11, fontWeight: "900", color: "#3730A3" } as TextStyle,
         profileChevronWrap: {
           width: 36,
           height: 36,
@@ -268,15 +259,15 @@ export default function DriverMyPageScreen() {
           <View style={s.profileAvatar}>
             <MaterialCommunityIcons name="steering" size={28} color="#4E46E5" />
           </View>
-          <View style={s.profileInfo}>
-            <Text style={s.profileName}>{profile.nickname} 님</Text>
-            <View style={s.profileSubRow}>
-              <Text style={s.profileSub}>{profile.vehicleLabel}</Text>
-              <View style={s.rateBadge}>
-                <Text style={s.rateText}>{profile.rating.toFixed(1)}</Text>
+            <View style={s.profileInfo}>
+              <Text style={s.profileName}>{profile.nickname} 님</Text>
+              <View style={s.profileSubRow}>
+                <Text style={s.profileSub}>{profile.vehicleLabel}</Text>
+                <View style={s.driverBadge}>
+                  <Text style={s.driverBadgeText}>차주</Text>
+                </View>
               </View>
             </View>
-          </View>
           <View style={s.profileChevronWrap}>
             <Ionicons name="chevron-forward" size={20} color="#7C8797" />
           </View>
