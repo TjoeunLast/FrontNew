@@ -400,7 +400,7 @@ export default function OrderDetailScreen() {
         text: "기사 선택",
         icon: "people-outline",
         color: c.brand.primary,
-        disabled: !hasApplicants,
+        disabled: false,
       };
     }
 
@@ -433,7 +433,7 @@ export default function OrderDetailScreen() {
     if (!Number.isFinite(idNum)) return [];
     setApplicantsLoading(true);
     try {
-      const list = await OrderApi.getApplicants(idNum);
+      const list = await OrderApi.getApplicantsInfo(idNum);
       setApplicantList(list ?? []);
       return list ?? [];
     } catch {
@@ -480,13 +480,11 @@ export default function OrderDetailScreen() {
         Alert.alert("안내", "운송 현황 기능은 준비 중입니다.");
         return;
       }
-      if (!hasApplicants) return;
-      if (!applicantList.length) {
-        await loadApplicants(order.orderId);
-      }
+      await loadApplicants(order.orderId);
       setApplicantsOpen(true);
       return;
     }
+
     if (order.status === "COMPLETED") {
       setReviewOpen(true);
       return;
@@ -501,8 +499,7 @@ export default function OrderDetailScreen() {
 
   const handleSelectDriver = async (driver: AssignedDriverInfoResponse) => {
     if (!order) return;
-    const driverNo = Number(driver.driverId ?? driver.userId);
-    const driverUserId = Number(driver.userId);
+    const driverNo = Number(driver.userId);
     if (!Number.isFinite(driverNo)) {
       Alert.alert("오류", "기사 정보를 확인할 수 없습니다.");
       return;
@@ -514,12 +511,13 @@ export default function OrderDetailScreen() {
       setOrder({
         ...order,
         status: "ACCEPTED",
-        driverNo,
-        driverUserId: Number.isFinite(driverUserId) && driverUserId > 0 ? driverUserId : order.driverUserId,
-        user: order.user ?? driver,
+        driverNo
       });
       Alert.alert("완료", `${driver.nickname} 기사로 배차가 확정되었습니다.`);
-    } catch {
+    } catch(err) {
+      console.log("기사 선택 실패:", err);
+      console.log(order);
+      console.log(driverNo);
       Alert.alert("오류", "기사 선택에 실패했습니다. 다시 시도해주세요.");
     } finally {
       setActionLoading(false);
@@ -565,8 +563,6 @@ export default function OrderDetailScreen() {
     };
 
     const candidateIds = [
-      (order as any)?.driverUserId,
-      (order as any)?.driverNo,
       (order as any)?.driverId,
       (order as any)?.driver_id,
       (order as any)?.assignedDriverId,

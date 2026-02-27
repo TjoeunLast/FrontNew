@@ -129,17 +129,10 @@ function normalizeOrderRow(node: any): OrderResponse | null {
   );
 
   const driverNo = Number(
-    (node as any).driverNo ??
-      (node as any).driverId ??
+      (node as any).driverNo ??
       (node as any).driver?.id ??
       0,
   );
-  const driverUserIdRaw =
-    (node as any).driverUserId ??
-    (node as any).driver?.userId ??
-    (node as any).driver?.id ??
-    (node as any).assignedDriver?.userId;
-  const driverUserId = Number(driverUserIdRaw ?? 0);
   const tag = normalizeTagList(
     (node as any).tag ??
     (node as any).tags ??
@@ -154,7 +147,7 @@ function normalizeOrderRow(node: any): OrderResponse | null {
     createdAt,
     updated: updated ? String(updated) : undefined,
     driverNo,
-    driverUserId: Number.isFinite(driverUserId) && driverUserId > 0 ? driverUserId : undefined,
+    driverList: (node as any).driverList ?? [],
     startAddr,
     startPlace,
     startType: String((node as any).startType ?? (node as any).pickupType ?? ''),
@@ -324,7 +317,8 @@ export const OrderApi = {
     return res.data;
   },
 
-  getApplicants: async (orderId: number): Promise<AssignedDriverInfoResponse[]> => {
+  // 지원자들 정보 확인 API (차주가 오더에 지원한 기사들의 목록과 정보를 조회)
+  getApplicantsInfo: async (orderId: number): Promise<AssignedDriverInfoResponse[]> => {
     const res = await apiClient.get(`${API_BASE}/${orderId}/applicants`);
     return res.data;
   },
