@@ -20,22 +20,48 @@ export const useDrivingList = () => {
     lng: number;
   } | null>(null);
 
-  // 현재 내 위치 가져오기(GPS 권한 허용 여부, 좌표 저장)
+// 현재 내 위치 가져오기 (최대 5초 대기)
   const getMyLocation = async () => {
     try {
+      // 1. 권한 확인
       const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") return; // 권한 없으면 중단
+      if (status !== "granted") {
+        console.log("위치 권한 거부됨");
+        return;
+      }
 
-      const location = await Location.getCurrentPositionAsync({});
+      // 2. 위치 서비스 활성화 확인 (GPS 스위치)
+      const enabled = await Location.hasServicesEnabledAsync();
+      if (!enabled) {
+        console.log("위치 서비스 비활성화 상태");
+        return;
+      }
+
+      console.log("위치 획득 시도 (최대 5초)...");
+
+      // 3. 5초 타임아웃과 위치 획득 간의 경주(Race)
+      const location = await Promise.race([
+        Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        }),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error("timeout")), 3000)
+        )
+      ]) as Location.LocationObject;
+
+      console.log("위치 획득 성공:", location.coords);
       setMyLocation({
         lat: location.coords.latitude,
         lng: location.coords.longitude,
       });
+
     } catch (error) {
-      console.error("위치 획득 실패:", error);
+      // 5초가 지났거나 기타 에러 발생 시
+      console.log("위치 정보를 가져올 수 없어 기본 목록만 표시합니다.");
+      // myLocation은 null로 유지됨
     }
   };
-
+  
   // 전체 목록 로드(위치 정보 파악 후 서버에서 오더 목록 가져오기)
   const fetchMyOrders = async () => {
     try {
