@@ -19,6 +19,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import apiClient from "@/shared/api/apiClient";
+import { ReviewService } from "@/shared/api/reviewService";
 import { UserService } from "@/shared/api/userService";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import ShipperScreenHeader from "@/shared/ui/layout/ShipperScreenHeader";
@@ -31,8 +32,11 @@ type ProfileState = {
   gender: string;
   birthDate: string;
   shipperType: string;
+  role: string;
   email: string;
   imageUrl: string;
+  ratingAvg: number;
+  ratingCount: number;
 };
 
 function toShipperTypeLabel(raw?: string) {
@@ -201,6 +205,12 @@ function normalizeNickname(input?: string) {
   return v;
 }
 
+function normalizeRating(input: unknown): number {
+  const n = Number(input);
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(0, Math.min(5, n));
+}
+
 async function persistProfileImage(uri: string): Promise<string> {
   const docDir = FileSystem.documentDirectory;
   if (!docDir) return uri;
@@ -225,8 +235,11 @@ export default function ProfileSettingsScreen() {
     gender: "-",
     birthDate: "-",
     shipperType: "-",
+    role: "",
     email: "-",
     imageUrl: "",
+    ratingAvg: 0,
+    ratingCount: 0,
   });
   const [draftImageUri, setDraftImageUri] = React.useState("");
   const [loadingImage, setLoadingImage] = React.useState(false);
@@ -240,15 +253,29 @@ export default function ProfileSettingsScreen() {
 
         try {
           const me = (await UserService.getMyInfo()) as any;
-          const detail = await fetchRoleDetail(me?.role);
+          const [detail, receivedReviews] = await Promise.all([
+            fetchRoleDetail(me?.role),
+            me?.userId ? ReviewService.getReviewsByTarget(Number(me.userId)).catch(() => []) : Promise.resolve([]),
+          ]);
           const cached = await getCurrentUserSnapshot();
+          const validRatings = (Array.isArray(receivedReviews) ? receivedReviews : [])
+            .map((row: any) => Number(row?.rating))
+            .filter((value: number) => Number.isFinite(value));
+          const reviewBasedAvg =
+            validRatings.length > 0
+              ? validRatings.reduce((acc: number, cur: number) => acc + cur, 0) / validRatings.length
+              : null;
+          const ratingAvg = normalizeRating(reviewBasedAvg ?? me?.ratingAvg ?? detail?.ratingAvg ?? 0);
           const next: ProfileState = {
             nickname: normalizeNickname(me.nickname ?? cached?.nickname),
             gender: normalizeGenderFromAny(pickGender(me, detail, cached ?? undefined)),
             birthDate: normalizeBirthDateFromAny(pickBirthDate(me, detail, cached ?? undefined)),
             shipperType: resolveShipperType(me, detail),
+            role: String(me?.role ?? cached?.role ?? "").trim().toUpperCase(),
             email: normalizeEmail(me.email ?? cached?.email),
             imageUrl: localImageUrl || me.profileImageUrl || "",
+            ratingAvg,
+            ratingCount: validRatings.length,
           };
           if (!active) return;
           setProfile(next);
@@ -262,8 +289,11 @@ export default function ProfileSettingsScreen() {
             gender: normalizeGenderFromAny(cached?.gender),
             birthDate: normalizeBirthDateFromAny(cached?.birthDate),
             shipperType: "-",
+            role: String(cached?.role ?? "").trim().toUpperCase(),
             email: normalizeEmail(cached?.email),
             imageUrl: localImageUrl,
+            ratingAvg: 0,
+            ratingCount: 0,
           };
           setProfile(next);
           setDraftImageUri(next.imageUrl);
@@ -462,6 +492,7 @@ export default function ProfileSettingsScreen() {
         rowDivider: { height: 1, backgroundColor: c.border.default } as ViewStyle,
         label: { color: c.text.secondary, fontSize: 13, fontWeight: "700" } as TextStyle,
         value: { color: c.text.primary, fontSize: 14, fontWeight: "800" } as TextStyle,
+        valueRating: { color: "#B45309" } as TextStyle,
       }),
     [c, hasImageChange, loadingImage]
   );
@@ -509,14 +540,25 @@ export default function ProfileSettingsScreen() {
             </View>
             <View style={s.rowDivider} />
             <View style={s.row}>
-              <Text style={s.label}>성별</Text>
-              <Text style={s.value}>{profile.gender}</Text>
+              <Text style={s.label}>평점</Text>
+              <Text style={[s.value, s.valueRating]}>
+                {`${profile.ratingAvg.toFixed(1)}점 (${profile.ratingCount}개 리뷰)`}
+              </Text>
             </View>
             <View style={s.rowDivider} />
             <View style={s.row}>
-              <Text style={s.label}>화주 구분</Text>
-              <Text style={s.value}>{profile.shipperType}</Text>
+              <Text style={s.label}>성별</Text>
+              <Text style={s.value}>{profile.gender}</Text>
             </View>
+            {profile.role !== "DRIVER" ? (
+              <>
+                <View style={s.rowDivider} />
+                <View style={s.row}>
+                  <Text style={s.label}>화주 구분</Text>
+                  <Text style={s.value}>{profile.shipperType}</Text>
+                </View>
+              </>
+            ) : null}
             <View style={s.rowDivider} />
             <View style={s.row}>
               <Text style={s.label}>이메일</Text>

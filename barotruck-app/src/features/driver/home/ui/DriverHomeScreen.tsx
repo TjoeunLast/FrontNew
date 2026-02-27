@@ -9,15 +9,23 @@ import {
 } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import { useFocusEffect } from "@react-navigation/native";
 
 import { DrOrderCard } from "@/features/driver/shard/ui/DrOrderCard";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import { useDriverHome } from "@/features/driver/home/model/useDriverHome";
+import { fetchMyUnreadChatCount } from "@/shared/api/chatApi";
 
 export default function DriverHomeScreen() {
   const t = useAppTheme();
   const c = t.colors;
   const router = useRouter();
+  const [hasUnreadChat, setHasUnreadChat] = React.useState(false);
+
+  const syncUnread = React.useCallback(async () => {
+    const unreadCount = await fetchMyUnreadChatCount();
+    setHasUnreadChat(unreadCount > 0);
+  }, []);
 
   // 홈 화면 데이터 공급
   const {
@@ -37,6 +45,21 @@ export default function DriverHomeScreen() {
     });
   };
 
+  useFocusEffect(
+    React.useCallback(() => {
+      let timer: ReturnType<typeof setInterval> | null = null;
+
+      void syncUnread();
+      timer = setInterval(() => {
+        void syncUnread();
+      }, 3000);
+
+      return () => {
+        if (timer) clearInterval(timer);
+      };
+    }, [syncUnread])
+  );
+
   return (
     <View style={[styles.container, { backgroundColor: c.bg.canvas }]}>
       {/* 헤더 */}
@@ -44,12 +67,13 @@ export default function DriverHomeScreen() {
         <Text style={[styles.logoText, { color: c.brand.primary }]}>BARO</Text>
         <View style={styles.headerIcons}>
           {/* 채팅 */}
-          <Pressable onPress={() => router.push("/(chat)")}>
-            <Ionicons
-              name="chatbubble-outline"
-              size={24}
-              color={c.text.primary}
-            />
+          <Pressable onPress={() => router.push("/(chat)")} style={styles.chatIconWrap}>
+            <Ionicons name="chatbubble-outline" size={24} color={c.text.primary} />
+            {hasUnreadChat ? (
+              <View style={styles.chatUnreadBadge}>
+                <Text style={styles.chatUnreadText}>1</Text>
+              </View>
+            ) : null}
           </Pressable>
 
           {/* 알림 */}
@@ -310,6 +334,20 @@ const styles = StyleSheet.create({
   },
   logoText: { fontSize: 22, fontWeight: "900" },
   headerIcons: { flexDirection: "row", gap: 15 },
+  chatIconWrap: { position: "relative" },
+  chatUnreadBadge: {
+    position: "absolute",
+    top: -6,
+    right: -8,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: "#EF4444",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 3,
+  },
+  chatUnreadText: { color: "#FFFFFF", fontSize: 10, fontWeight: "900", lineHeight: 12 },
   bgPatternContainer: { ...StyleSheet.absoluteFillObject, zIndex: 0 },
   bgShape: {
     position: "absolute",

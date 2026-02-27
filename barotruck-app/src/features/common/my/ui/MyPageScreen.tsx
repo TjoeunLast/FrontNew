@@ -31,6 +31,7 @@ import {
 } from "@/shared/utils/currentUserStorage";
 
 const PROFILE_IMAGE_STORAGE_KEY = "baro_profile_image_url_v1";
+const SHIPPER_PAYMENT_METHODS_KEY = "baro_shipper_payment_methods_v1";
 
 type ProfileView = {
   email: string;
@@ -41,6 +42,20 @@ type ProfileView = {
   gender: string;
   birthDate: string;
 };
+
+function readDefaultCardCompany(raw: string | null) {
+  if (!raw) return "미등록";
+  try {
+    const parsed = JSON.parse(raw) as { cards?: Array<{ cardCompany?: unknown; isDefault?: unknown }> };
+    const cards = Array.isArray(parsed?.cards) ? parsed.cards : [];
+    if (cards.length === 0) return "미등록";
+    const defaultCard = cards.find((card) => Boolean(card?.isDefault)) ?? cards[0];
+    const company = String(defaultCard?.cardCompany ?? "").trim();
+    return company || "등록 카드";
+  } catch {
+    return "미등록";
+  }
+}
 
 function roleToKorean(role: string) {
   if (role === "SHIPPER") return "화주";
@@ -140,6 +155,7 @@ export default function MyPageScreen() {
     birthDate: "-",
   });
   const [profileImageUrl, setProfileImageUrl] = useState("");
+  const [paymentMethodLabel, setPaymentMethodLabel] = useState("미등록");
 
   const roleLabel = profile.role === "-" ? "회원" : profile.role;
   const managementSectionTitle = roleLabel === "차주" ? "차주 관리" : "화주 관리";
@@ -150,7 +166,12 @@ export default function MyPageScreen() {
       let active = true;
 
       void (async () => {
-        const localImageUrl = (await AsyncStorage.getItem(PROFILE_IMAGE_STORAGE_KEY)) ?? "";
+        const [localImageUrl, paymentStoreRaw] = await Promise.all([
+          AsyncStorage.getItem(PROFILE_IMAGE_STORAGE_KEY),
+          AsyncStorage.getItem(SHIPPER_PAYMENT_METHODS_KEY),
+        ]);
+        if (!active) return;
+        setPaymentMethodLabel(readDefaultCardCompany(paymentStoreRaw));
 
         try {
           const me = (await UserService.getMyInfo()) as any;
@@ -200,7 +221,7 @@ export default function MyPageScreen() {
           };
           if (!active) return;
           setProfile(next);
-          setProfileImageUrl(localImageUrl || me.profileImageUrl || "");
+          setProfileImageUrl((localImageUrl ?? "") || me.profileImageUrl || "");
           try {
             await saveCurrentUserSnapshot({
               email: me.email,
@@ -226,7 +247,7 @@ export default function MyPageScreen() {
         } catch {
           const cached = await getCurrentUserSnapshot();
           if (!active) return;
-          setProfileImageUrl(localImageUrl);
+          setProfileImageUrl(localImageUrl ?? "");
           if (!cached) return;
           setProfile({
             email: cached.email || "-",
@@ -451,7 +472,7 @@ export default function MyPageScreen() {
               <Ionicons name="card-outline" size={18} color={c.brand.primary} />
             </View>
             <Text style={s.rowLabel}>결제 수단 관리</Text>
-            <Text style={[s.rowValue, s.rowValueActive]}>신한카드</Text>
+            <Text style={[s.rowValue, paymentMethodLabel !== "미등록" && s.rowValueActive]}>{paymentMethodLabel}</Text>
             <Ionicons name="chevron-forward" size={20} color={c.text.secondary} />
           </Pressable>
           <View style={s.divider} />
@@ -460,7 +481,6 @@ export default function MyPageScreen() {
               <Ionicons name="location-outline" size={18} color={c.status.success} />
             </View>
             <Text style={s.rowLabel}>자주 쓰는 주소지</Text>
-            <Text style={s.rowValue}>3곳</Text>
             <Ionicons name="chevron-forward" size={20} color={c.text.secondary} />
           </Pressable>
           <View style={s.divider} />
@@ -475,6 +495,14 @@ export default function MyPageScreen() {
 
         <Text style={s.sectionTitle}>고객 지원</Text>
         <View style={s.sectionCard}>
+          <Pressable style={s.row} onPress={() => router.push("/(common)/settings/reviews" as any)}>
+            <View style={[s.rowIconWrap, { backgroundColor: withAlpha(c.brand.primary, 0.12) }]}>
+              <Ionicons name="chatbox-ellipses-outline" size={18} color={c.brand.primary} />
+            </View>
+            <Text style={s.rowLabel}>리뷰 관리</Text>
+            <Ionicons name="chevron-forward" size={20} color={c.text.secondary} />
+          </Pressable>
+          <View style={s.divider} />
           <Pressable style={s.row} onPress={() => router.push("/(common)/settings/account" as any)}>
             <View style={[s.rowIconWrap, { backgroundColor: withAlpha(c.text.secondary, 0.12) }]}>
               <Ionicons name="headset-outline" size={18} color={c.text.secondary} />
@@ -482,10 +510,7 @@ export default function MyPageScreen() {
             <Text style={s.rowLabel}>1:1 문의하기</Text>
             <Ionicons name="chevron-forward" size={20} color={c.text.secondary} />
           </Pressable>
-        </View>
-
-        <Text style={s.sectionTitle}>서비스 정보</Text>
-        <View style={s.sectionCard}>
+          <View style={s.divider} />
           <Pressable style={s.row} onPress={() => router.push("/(common)/terms-policies" as any)}>
             <View style={[s.rowIconWrap, { backgroundColor: withAlpha(c.text.secondary, 0.12) }]}>
               <Ionicons name="document-text-outline" size={18} color={c.text.secondary} />
