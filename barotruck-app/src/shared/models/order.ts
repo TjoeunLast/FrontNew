@@ -95,7 +95,7 @@ export interface OrderResponse {
   createdAt: string;
   updated?: string;
   driverNo: number;
-  driverUserId?: number;
+  driverList?: number[];
   // OrderSnapshot 대응 데이터
 
   startAddr: string;
@@ -177,18 +177,18 @@ export interface DriverDashboardResponse {
 export interface AssignedDriverInfoResponse {
   // --- 유저(기사) 기본 정보 ---
   userId: number;
-  email: string;
   nickname: string;
   phone: string;
+  email?: string;
   profileImage?: ImageInfo;
-  ratingAvg: number; // 기사 평균 별점
+  ratingAvg?: number; // 기사 평균 별점
 
   // --- 차주 전용 상세 정보 (Driver 엔티티 대응) ---
   driverId: number;
   carNum: string; // 차량 번호 (예: 80아 1234)
   carType: string; // 차종 (예: CARGO, WING)
-  tonnage: string; // 차량 톤수 (예: 1t, 5t)
-  career: number; // 경력 (년 단위)
+  tonnage: number; // 차량 톤수 (BigDecimal -> number)
+  career?: number; // 경력 (년 단위)
   bankName?: string; // 정산용 은행명
   accountNum?: string; // 정산용 계좌번호
   type?: string; // 개별/용달/법인 구분
