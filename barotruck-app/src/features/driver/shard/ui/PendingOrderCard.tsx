@@ -6,21 +6,6 @@ import { Badge } from "@/shared/ui/feedback/Badge";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 
-// 거리 계산 함수
-function getDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
-  const R = 6371;
-  const dLat = (lat2 - lat1) * (Math.PI / 180);
-  const dLon = (lon2 - lon1) * (Math.PI / 180);
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(lat1 * (Math.PI / 180)) *
-      Math.cos(lat2 * (Math.PI / 180)) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
-}
-
 export const PendingOrderCard = ({
   order,
   onCancel,
@@ -54,15 +39,6 @@ export const PendingOrderCard = ({
   const getShortAddr = (addr: string) =>
     addr ? `${addr.split(" ")[0]} ${addr.split(" ")[1] || ""}` : "";
 
-  // 거리 계산 로직
-  const distanceToStart = useMemo(() => {
-    if (myLocation && startLat && startLng) {
-      const d = getDistance(myLocation.lat, myLocation.lng, startLat, startLng);
-      return `${d.toFixed(1)}km`;
-    }
-    return null;
-  }, [myLocation, startLat, startLng]);
-
   return (
     <Pressable
       onPress={() => onDetail(Number(order.orderId))}
@@ -72,20 +48,6 @@ export const PendingOrderCard = ({
         isAccepted && { borderColor: c.brand.primary, borderWidth: 1.5 },
       ]}
     >
-      {/* 내 위치에서 상차지 까지 거리 */}
-      {distanceToStart && (
-        <View style={s.centerDistance}>
-          <MaterialCommunityIcons
-            name="navigation-variant"
-            size={14}
-            color={c.brand.primary}
-          />
-          <Text style={[s.distanceText, { color: c.brand.primary }]}>
-            상차지까지 {distanceToStart}
-          </Text>
-        </View>
-      )}
-
       {/* 상단 영역 */}
       <View style={s.topRow}>
         <View style={s.badgeRow}>

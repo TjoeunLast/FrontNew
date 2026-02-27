@@ -24,9 +24,11 @@ function getDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
 export const DrOrderCard = ({
   order,
   myLocation,
+  hideDistance,
 }: {
   order: OrderResponse;
   myLocation?: any;
+  hideDistance?: boolean;
 }) => {
   // 데이터 구조 분해 할당
   const {
@@ -97,7 +99,7 @@ export const DrOrderCard = ({
       ]}
     >
       {/* 내 위치 거리 표시 */}
-      {distanceText && (
+      {distanceText && !hideDistance && (
         <View style={s.centerDistance}>
           <MaterialCommunityIcons
             name="navigation-variant"
