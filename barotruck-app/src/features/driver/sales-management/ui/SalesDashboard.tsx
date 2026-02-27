@@ -1,13 +1,21 @@
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import React, { useCallback, useMemo, useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import {
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { OrderService } from "@/shared/api/orderService";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import type { OrderResponse } from "@/shared/models/order";
 import ShipperScreenHeader from "@/shared/ui/layout/ShipperScreenHeader";
+import { SalesSummaryCard } from "@/features/driver/shard/ui/SalesSummaryCard";
 
 type SettlementRow = {
   id: string;
@@ -31,7 +39,8 @@ function addMonth(d: Date, diff: number) {
 }
 
 function compareMonth(a: Date, b: Date) {
-  if (a.getFullYear() !== b.getFullYear()) return a.getFullYear() - b.getFullYear();
+  if (a.getFullYear() !== b.getFullYear())
+    return a.getFullYear() - b.getFullYear();
   return a.getMonth() - b.getMonth();
 }
 
@@ -80,7 +89,8 @@ function toPayMethodLabel(raw?: string) {
   const text = String(raw ?? "").trim();
   const v = text.toLowerCase();
   if (!text) return "-";
-  if (v.includes("card") || v.includes("토스") || v.includes("카드")) return "토스 결제";
+  if (v.includes("card") || v.includes("토스") || v.includes("카드"))
+    return "토스 결제";
   if (v.includes("prepaid") || text.includes("선/착불")) return "선/착불";
   if (v.includes("receipt") || text.includes("인수증")) return "인수증 (30일)";
   if (v.includes("month") || text.includes("익월말")) return "익월말";
@@ -88,10 +98,18 @@ function toPayMethodLabel(raw?: string) {
 }
 
 function mapRow(order: OrderResponse): SettlementRow | null {
-  if (order.status === "CANCELLED" || order.status === "REQUESTED" || order.status === "PENDING") return null;
+  if (
+    order.status === "CANCELLED" ||
+    order.status === "REQUESTED" ||
+    order.status === "PENDING"
+  )
+    return null;
 
   const scheduledAt =
-    parseDate(order.endSchedule) || parseDate(order.startSchedule) || parseDate(order.updated) || parseDate(order.createdAt);
+    parseDate(order.endSchedule) ||
+    parseDate(order.startSchedule) ||
+    parseDate(order.updated) ||
+    parseDate(order.createdAt);
   if (!scheduledAt) return null;
 
   return {
@@ -102,8 +120,10 @@ function mapRow(order: OrderResponse): SettlementRow | null {
     from: toShortPlace(order.startAddr || order.startPlace),
     to: toShortPlace(order.endAddr || order.endPlace),
     amount: getAmount(order),
-    isSettled: String(order.settlementStatus ?? "").toUpperCase() === "COMPLETED",
-    vehicleInfo: `${order.reqCarType || "차량"} ${order.reqTonnage || ""}`.trim() || "-",
+    isSettled:
+      String(order.settlementStatus ?? "").toUpperCase() === "COMPLETED",
+    vehicleInfo:
+      `${order.reqCarType || "차량"} ${order.reqTonnage || ""}`.trim() || "-",
     payMethodLabel: toPayMethodLabel(order.payMethod),
   };
 }
@@ -132,7 +152,9 @@ export default function SalesDashboard() {
         : [];
       return mapped;
     } catch {
-      const fallbackRaw = await OrderService.getMyDrivingOrders().catch(() => []);
+      const fallbackRaw = await OrderService.getMyDrivingOrders().catch(
+        () => [],
+      );
       const fallback = Array.isArray(fallbackRaw) ? fallbackRaw : [];
       return fallback
         .map((o) => mapRow(o))
@@ -160,22 +182,45 @@ export default function SalesDashboard() {
       return () => {
         active = false;
       };
-    }, [fetchRows, viewMonth])
+    }, [fetchRows, viewMonth]),
   );
 
   const isNextDisabled = compareMonth(viewMonth, currentMonth) >= 0;
   const viewMonthNumber = viewMonth.getMonth() + 1;
-  const settledAmount = useMemo(() => rows.filter((x) => x.isSettled).reduce((acc, cur) => acc + cur.amount, 0), [rows]);
-  const totalAmount = useMemo(() => rows.reduce((acc, cur) => acc + cur.amount, 0), [rows]);
+  const settledAmount = useMemo(
+    () =>
+      rows.filter((x) => x.isSettled).reduce((acc, cur) => acc + cur.amount, 0),
+    [rows],
+  );
+  const totalAmount = useMemo(
+    () => rows.reduce((acc, cur) => acc + cur.amount, 0),
+    [rows],
+  );
   const pendingAmount = Math.max(0, totalAmount - settledAmount);
 
   return (
     <View style={s.page}>
       <ShipperScreenHeader title="매출/정산" hideBackButton />
 
-      <ScrollView contentContainerStyle={[s.content, { paddingBottom: Math.max(16, insets.bottom + 10) }]}>
-        <View style={[s.monthRow, { borderBottomColor: c.border.default, backgroundColor: c.bg.surface }]}>
-          <Pressable style={s.monthNavBtn} onPress={() => setViewMonth((prev) => addMonth(prev, -1))}>
+      <ScrollView
+        contentContainerStyle={[
+          s.content,
+          { paddingBottom: Math.max(16, insets.bottom + 10) },
+        ]}
+      >
+        <View
+          style={[
+            s.monthRow,
+            {
+              borderBottomColor: c.border.default,
+              backgroundColor: c.bg.surface,
+            },
+          ]}
+        >
+          <Pressable
+            style={s.monthNavBtn}
+            onPress={() => setViewMonth((prev) => addMonth(prev, -1))}
+          >
             <Ionicons name="chevron-back" size={24} color={c.text.primary} />
           </Pressable>
           <Text style={s.monthText}>{toMonthLabel(viewMonth)}</Text>
@@ -183,29 +228,28 @@ export default function SalesDashboard() {
             style={s.monthNavBtn}
             disabled={isNextDisabled}
             onPress={() =>
-              setViewMonth((prev) => (compareMonth(prev, currentMonth) >= 0 ? prev : addMonth(prev, 1)))
+              setViewMonth((prev) =>
+                compareMonth(prev, currentMonth) >= 0
+                  ? prev
+                  : addMonth(prev, 1),
+              )
             }
           >
-            <Ionicons name="chevron-forward" size={24} color={isNextDisabled ? "#CBD5E1" : c.text.primary} />
+            <Ionicons
+              name="chevron-forward"
+              size={24}
+              color={isNextDisabled ? "#CBD5E1" : c.text.primary}
+            />
           </Pressable>
         </View>
 
-        <View style={s.summaryCard}>
-          <Text style={s.summaryCaption}>{viewMonthNumber}월 총 운송 매출</Text>
-          <Text style={s.summaryAmount}>{toWon(totalAmount)}</Text>
-          <View style={s.summaryDivider} />
-          <View style={s.summaryBottomRow}>
-            <View style={s.summaryCol}>
-              <Text style={s.summarySmall}>입금 완료</Text>
-              <Text style={s.summaryGreen}>{toWon(settledAmount)}</Text>
-            </View>
-            <View style={s.summaryColDivider} />
-            <View style={s.summaryCol}>
-              <Text style={[s.summarySmall, s.summaryRight]}>입금 예정</Text>
-              <Text style={[s.summaryWhite, s.summaryRight]}>{toWon(pendingAmount)}</Text>
-            </View>
-          </View>
-        </View>
+        <SalesSummaryCard
+          monthNumber={viewMonthNumber}
+          totalAmount={totalAmount}
+          settledAmount={settledAmount}
+          pendingAmount={pendingAmount}
+          style={{ marginTop: 14, marginHorizontal: 16 }}
+        />
 
         <View style={s.sectionHeader}>
           <Text style={s.sectionTitle}>상세 내역 ({rows.length}건)</Text>
@@ -226,8 +270,18 @@ export default function SalesDashboard() {
                 <View style={s.itemTop}>
                   <View style={s.dateRow}>
                     <Text style={s.dateText}>{item.dateLabel}</Text>
-                    <View style={[s.badge, item.isSettled ? s.badgeDone : s.badgePending]}>
-                      <Text style={[s.badgeText, item.isSettled ? s.badgeDoneText : s.badgePendingText]}>
+                    <View
+                      style={[
+                        s.badge,
+                        item.isSettled ? s.badgeDone : s.badgePending,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          s.badgeText,
+                          item.isSettled ? s.badgeDoneText : s.badgePendingText,
+                        ]}
+                      >
                         {item.isSettled ? "입금완료" : "정산예정"}
                       </Text>
                     </View>
@@ -240,8 +294,15 @@ export default function SalesDashboard() {
                 </Text>
 
                 <View style={s.actionRow}>
-                  <Pressable style={s.actionBtn} onPress={() => setReceiptItem(item)}>
-                    <MaterialCommunityIcons name="file-document-outline" size={14} color="#6B7280" />
+                  <Pressable
+                    style={s.actionBtn}
+                    onPress={() => setReceiptItem(item)}
+                  >
+                    <MaterialCommunityIcons
+                      name="file-document-outline"
+                      size={14}
+                      color="#6B7280"
+                    />
                     <Text style={s.actionText}>영수증 확인</Text>
                   </Pressable>
                 </View>
@@ -251,7 +312,12 @@ export default function SalesDashboard() {
         )}
       </ScrollView>
 
-      <Modal visible={!!receiptItem} transparent animationType="fade" onRequestClose={() => setReceiptItem(null)}>
+      <Modal
+        visible={!!receiptItem}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setReceiptItem(null)}
+      >
         <Pressable style={s.modalBackdrop} onPress={() => setReceiptItem(null)}>
           <Pressable style={s.modalSheet} onPress={(e) => e.stopPropagation()}>
             <View style={s.modalHeader}>
@@ -262,7 +328,9 @@ export default function SalesDashboard() {
             </View>
 
             <View style={s.receiptCard}>
-              <Text style={s.receiptAmount}>{receiptItem ? receiptItem.amount.toLocaleString("ko-KR") : "0"}</Text>
+              <Text style={s.receiptAmount}>
+                {receiptItem ? receiptItem.amount.toLocaleString("ko-KR") : "0"}
+              </Text>
               <Text style={s.receiptPaid}>결제완료</Text>
               <View style={s.receiptDash} />
 
@@ -276,18 +344,26 @@ export default function SalesDashboard() {
               </View>
               <View style={s.receiptRow}>
                 <Text style={s.receiptKey}>차량정보</Text>
-                <Text style={s.receiptVal}>{receiptItem?.vehicleInfo ?? "-"}</Text>
+                <Text style={s.receiptVal}>
+                  {receiptItem?.vehicleInfo ?? "-"}
+                </Text>
               </View>
               <View style={s.receiptRow}>
                 <Text style={s.receiptKey}>결제 방식</Text>
-                <Text style={s.receiptVal}>{receiptItem?.payMethodLabel ?? "-"}</Text>
+                <Text style={s.receiptVal}>
+                  {receiptItem?.payMethodLabel ?? "-"}
+                </Text>
               </View>
 
               <View style={s.receiptBlockGap} />
 
               <View style={s.receiptRow}>
                 <Text style={s.receiptKey}>공급가액</Text>
-                <Text style={s.receiptVal}>{receiptItem ? receiptItem.amount.toLocaleString("ko-KR") : "0"}</Text>
+                <Text style={s.receiptVal}>
+                  {receiptItem
+                    ? receiptItem.amount.toLocaleString("ko-KR")
+                    : "0"}
+                </Text>
               </View>
               <View style={s.receiptRow}>
                 <Text style={s.receiptKey}>세액</Text>
@@ -319,29 +395,6 @@ const s = StyleSheet.create({
     alignItems: "center",
   },
   monthText: { fontSize: 17, fontWeight: "900", color: "#111827" },
-  summaryCard: {
-    marginTop: 14,
-    marginHorizontal: 16,
-    borderRadius: 18,
-    paddingHorizontal: 18,
-    paddingVertical: 16,
-    backgroundColor: "#4E46E5",
-  },
-  summaryCaption: { fontSize: 12, fontWeight: "700", color: "#DCD9FF" },
-  summaryAmount: { marginTop: 8, fontSize: 21, fontWeight: "900", color: "#FFFFFF" },
-  summaryDivider: {
-    marginTop: 14,
-    marginBottom: 12,
-    height: 1,
-    backgroundColor: "rgba(255,255,255,0.2)",
-  },
-  summaryBottomRow: { flexDirection: "row", alignItems: "center" },
-  summaryCol: { flex: 1 },
-  summaryColDivider: { width: 1, height: 44, backgroundColor: "rgba(255,255,255,0.3)" },
-  summarySmall: { fontSize: 12, fontWeight: "700", color: "#DCD9FF" },
-  summaryGreen: { marginTop: 4, fontSize: 16, fontWeight: "900", color: "#74D39E" },
-  summaryWhite: { marginTop: 4, fontSize: 16, fontWeight: "900", color: "#FFFFFF" },
-  summaryRight: { textAlign: "right" },
   sectionHeader: {
     marginTop: 20,
     marginBottom: 8,
@@ -357,7 +410,11 @@ const s = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 12,
   },
-  itemTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  itemTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
   dateRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   dateText: { fontSize: 12, fontWeight: "700", color: "#64748B" },
   badge: { borderRadius: 10, paddingHorizontal: 10, paddingVertical: 5 },
@@ -367,7 +424,13 @@ const s = StyleSheet.create({
   badgeDoneText: { color: "#2E8B57" },
   badgePendingText: { color: "#6B7280" },
   amountText: { fontSize: 16, fontWeight: "900", color: "#111827" },
-  routeText: { marginTop: 10, fontSize: 15, fontWeight: "900", color: "#111827", letterSpacing: -0.1 },
+  routeText: {
+    marginTop: 10,
+    fontSize: 15,
+    fontWeight: "900",
+    color: "#111827",
+    letterSpacing: -0.1,
+  },
   arrowText: { color: "#B8C1D1" },
   actionRow: { marginTop: 10, alignItems: "flex-end" },
   actionBtn: {
@@ -393,7 +456,11 @@ const s = StyleSheet.create({
     paddingTop: 14,
     paddingBottom: 16,
   },
-  modalHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  modalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
   modalTitle: { fontSize: 18, fontWeight: "900", color: "#111827" },
   receiptCard: {
     marginTop: 10,
@@ -403,8 +470,19 @@ const s = StyleSheet.create({
     backgroundColor: "#FAFBFD",
     padding: 14,
   },
-  receiptAmount: { fontSize: 20, fontWeight: "900", textAlign: "center", color: "#111827" },
-  receiptPaid: { fontSize: 12, fontWeight: "700", textAlign: "center", color: "#64748B", marginTop: 2 },
+  receiptAmount: {
+    fontSize: 20,
+    fontWeight: "900",
+    textAlign: "center",
+    color: "#111827",
+  },
+  receiptPaid: {
+    fontSize: 12,
+    fontWeight: "700",
+    textAlign: "center",
+    color: "#64748B",
+    marginTop: 2,
+  },
   receiptDash: {
     height: 1,
     borderStyle: "dashed",
@@ -413,7 +491,11 @@ const s = StyleSheet.create({
     marginTop: 14,
     marginBottom: 10,
   },
-  receiptRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 8 },
+  receiptRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
   receiptKey: { fontSize: 13, fontWeight: "700", color: "#64748B" },
   receiptVal: { fontSize: 13, fontWeight: "900", color: "#111827" },
   receiptBlockGap: { height: 8 },

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useCallback, useMemo, useEffect } from "react";
 import {
   ScrollView,
   StyleSheet,
@@ -15,27 +15,85 @@ import { DrOrderCard } from "@/features/driver/shard/ui/DrOrderCard";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import { useDriverHome } from "@/features/driver/home/model/useDriverHome";
 import { fetchMyUnreadChatCount } from "@/shared/api/chatApi";
+import { OrderService } from "@/shared/api/orderService"; // 🚩 매출 데이터 호출용
+import { SalesSummaryCard } from "../../shard/ui/SalesSummaryCard";
+
+// 정산 로직을 위한 타입 및 유틸 함수 (정산 페이지와 동일)
+function getAmount(order: any) {
+  return (
+    Number(order.basePrice ?? 0) +
+    Number(order.laborFee ?? 0) +
+    Number(order.packagingPrice ?? 0) +
+    Number(order.insuranceFee ?? 0)
+  );
+}
 
 export default function DriverHomeScreen() {
   const t = useAppTheme();
   const c = t.colors;
   const router = useRouter();
-  const [hasUnreadChat, setHasUnreadChat] = React.useState(false);
+  const [hasUnreadChat, setHasUnreadChat] = useState(false);
 
-  const syncUnread = React.useCallback(async () => {
-    const unreadCount = await fetchMyUnreadChatCount();
-    setHasUnreadChat(unreadCount > 0);
+  // 매출 관련 상태 추가
+  const [totalAmount, setTotalAmount] = useState(0);
+  const [settledAmount, setSettledAmount] = useState(0);
+  const pendingAmount = Math.max(0, totalAmount - settledAmount);
+
+  const now = new Date();
+  const currentMonthNumber = now.getMonth() + 1; // 이번 달
+
+  const syncUnread = useCallback(async () => {
+    try {
+      const unreadCount = await fetchMyUnreadChatCount();
+      setHasUnreadChat(unreadCount > 0);
+    } catch (e) {
+      console.log("채팅 알림 동기화 실패");
+    }
   }, []);
 
-  // 홈 화면 데이터 공급
+  // 이번 달 매출 데이터 가져오기 로직 (정산 페이지와 동일한 흐름)
+  const fetchMonthlyRevenue = useCallback(async () => {
+    try {
+      const year = now.getFullYear();
+      const month = now.getMonth() + 1;
+
+      const revenue = await OrderService.getMyRevenue(year, month);
+      const orders = Array.isArray(revenue?.orders) ? revenue.orders : [];
+
+      let total = 0;
+      let settled = 0;
+
+      orders.forEach((o) => {
+        if (o.status !== "CANCELLED" && o.status !== "REQUESTED") {
+          const amt = getAmount(o);
+          total += amt;
+          if (String(o.settlementStatus ?? "").toUpperCase() === "COMPLETED") {
+            settled += amt;
+          }
+        }
+      });
+
+      setTotalAmount(total);
+      setSettledAmount(settled);
+    } catch (error) {
+      console.log("매출 데이터 로드 실패");
+    }
+  }, []);
+
+  // 홈 화면 기본 데이터 공급
   const {
     recommendedOrders,
-    income,
     statusCounts,
     isRefreshing,
     myLocation,
-    onRefresh,
+    onRefresh: homeRefresh,
   } = useDriverHome();
+
+  // 통합 새로고침 함수
+  const handleRefresh = async () => {
+    homeRefresh();
+    await fetchMonthlyRevenue();
+  };
 
   // 대시보드 클릭 시 운행 탭 이동
   const handleStatusPress = (tabName: "READY" | "ONGOING" | "DONE") => {
@@ -46,10 +104,12 @@ export default function DriverHomeScreen() {
   };
 
   useFocusEffect(
-    React.useCallback(() => {
+    useCallback(() => {
       let timer: ReturnType<typeof setInterval> | null = null;
 
       void syncUnread();
+      void fetchMonthlyRevenue(); // 화면 진입 시 매출액 업데이트
+
       timer = setInterval(() => {
         void syncUnread();
       }, 3000);
@@ -57,7 +117,7 @@ export default function DriverHomeScreen() {
       return () => {
         if (timer) clearInterval(timer);
       };
-    }, [syncUnread])
+    }, [syncUnread, fetchMonthlyRevenue]),
   );
 
   return (
@@ -66,17 +126,22 @@ export default function DriverHomeScreen() {
       <View style={[styles.header, { backgroundColor: c.bg.surface }]}>
         <Text style={[styles.logoText, { color: c.brand.primary }]}>BARO</Text>
         <View style={styles.headerIcons}>
-          {/* 채팅 */}
-          <Pressable onPress={() => router.push("/(chat)")} style={styles.chatIconWrap}>
-            <Ionicons name="chatbubble-outline" size={24} color={c.text.primary} />
-            {hasUnreadChat ? (
+          <Pressable
+            onPress={() => router.push("/(chat)")}
+            style={styles.chatIconWrap}
+          >
+            <Ionicons
+              name="chatbubble-outline"
+              size={24}
+              color={c.text.primary}
+            />
+            {hasUnreadChat && (
               <View style={styles.chatUnreadBadge}>
-                <Text style={styles.chatUnreadText}>1</Text>
+                <Text style={styles.chatUnreadText}>N</Text>
               </View>
-            ) : null}
+            )}
           </Pressable>
 
-          {/* 알림 */}
           <Pressable onPress={() => console.log("알림 이동")}>
             <Ionicons
               name="notifications-outline"
@@ -91,55 +156,17 @@ export default function DriverHomeScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          // 화면 새로고침
-          <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />
+          <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />
         }
       >
-        {/* 정산 카드  */}
-        <Pressable
-          onPress={() => router.push("/(driver)/(tabs)/sales")}
-          style={[
-            styles.incomeCard,
-            { backgroundColor: c.brand.primary, overflow: "hidden" },
-          ]}
-        >
-          {/* 카드 배경 장식 패턴 */}
-          <View style={styles.bgPatternContainer}>
-            <View style={(styles.bgShape, styles.shapeCircleBig)} />
-            <View style={(styles.bgShape, styles.shapeSquareRotated)} />
-            <View style={(styles.bgShape, styles.shapeCircleSmall)} />
-          </View>
-
-          <View style={{ zIndex: 1 }}>
-            <View style={styles.incomeHeader}>
-              <Text style={styles.incomeTitle}>{income.month}월 예상 수익</Text>
-              <View
-                style={[
-                  styles.incomeBadge,
-                  { backgroundColor: "rgba(255, 255, 255, 0.2)" },
-                ]}
-              >
-                <Text
-                  style={[styles.incomeBadgeText, { color: c.text.inverse }]}
-                >
-                  +{income.growthRate}%
-                </Text>
-              </View>
-            </View>
-
-            <Text style={[styles.incomeAmount, { color: c.text.inverse }]}>
-              {income.amount.toLocaleString()}원
-            </Text>
-            <Text
-              style={[
-                styles.incomeSub,
-                { color: c.text.inverse, opacity: 0.9 },
-              ]}
-            >
-              목표 달성까지 {income.targetDiff.toLocaleString()}원 남았어요!
-            </Text>
-          </View>
-        </Pressable>
+        {/* 공통 매출 카드 */}
+        <SalesSummaryCard
+          monthNumber={currentMonthNumber}
+          totalAmount={totalAmount}
+          settledAmount={settledAmount}
+          pendingAmount={pendingAmount}
+          style={{ marginBottom: 24 }} // 대시보드와의 간격
+        />
 
         {/* 대시보드 (운송 현황 카운트)*/}
         <View style={styles.dashboardContainer}>
@@ -282,7 +309,7 @@ export default function DriverHomeScreen() {
           </View>
         </View>
 
-        {/* 맞춤 추천 오더) */}
+        {/* 맞춤 추천 오더 */}
         <View style={styles.orderList}>
           <View style={styles.listHeader}>
             <Text style={[styles.sectionTitle, { color: c.text.primary }]}>
@@ -347,71 +374,18 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: 3,
   },
-  chatUnreadText: { color: "#FFFFFF", fontSize: 10, fontWeight: "900", lineHeight: 12 },
-  bgPatternContainer: { ...StyleSheet.absoluteFillObject, zIndex: 0 },
-  bgShape: {
-    position: "absolute",
-    backgroundColor: "rgba(255, 255, 255, 0.08)",
+  chatUnreadText: {
+    color: "#FFFFFF",
+    fontSize: 10,
+    fontWeight: "900",
+    lineHeight: 12,
   },
-  shapeCircleBig: {
-    width: 140,
-    height: 140,
-    borderRadius: 70,
-    top: -40,
-    right: -30,
-  },
-  shapeSquareRotated: {
-    width: 100,
-    height: 100,
-    borderRadius: 16,
-    bottom: -30,
-    left: -20,
-    transform: [{ rotate: "35deg" }],
-  },
-  shapeCircleSmall: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    top: "40%",
-    right: 20,
-    backgroundColor: "rgba(255, 255, 255, 0.05)",
-  },
-  scrollContent: { paddingHorizontal: 20, paddingBottom: 30 },
-  incomeCard: {
-    padding: 24,
-    borderRadius: 24,
-    marginBottom: 24,
-    elevation: 8,
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.25,
-    shadowRadius: 20,
-  },
-  incomeHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  incomeTitle: { opacity: 0.9, fontSize: 14, fontWeight: "500" },
-  incomeBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  incomeBadgeText: { fontSize: 13, fontWeight: "700" },
-  incomeAmount: {
-    fontSize: 32,
-    fontWeight: "800",
-    marginBottom: 4,
-  },
-  incomeSub: {
-    fontSize: 13,
-    fontWeight: "500",
-  },
+  scrollContent: { paddingHorizontal: 20, paddingBottom: 30, paddingTop: 10 },
   listHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+    marginBottom: 10,
   },
   orderList: { gap: 16 },
   dashboardContainer: { marginBottom: 24 },
