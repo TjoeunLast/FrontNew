@@ -50,6 +50,23 @@ function resolveOutgoingReadState(
   return hasLaterOtherMessage ? 'READ' : 'UNREAD';
 }
 
+function hasLaterOtherMessageAfter(
+  item: ChatMessageResponse,
+  myUserId: number | null,
+  sortedMessages: ChatMessageResponse[]
+): boolean {
+  const myId = Number(myUserId);
+  if (!Number.isFinite(myId)) return false;
+  const itemTime = new Date(item.createdAt).getTime();
+  return sortedMessages.some((msg) => {
+    const senderId = Number((msg as any)?.senderId);
+    if (Number.isFinite(senderId) && senderId === myId) return false;
+    const t = new Date(msg.createdAt).getTime();
+    if (Number.isFinite(itemTime) && Number.isFinite(t) && t > itemTime) return true;
+    return msg.messageId > item.messageId;
+  });
+}
+
 const ChatRoomScreen = () => {
   const { roomId } = useLocalSearchParams<{ roomId: string }>();
   const navigation = useNavigation();
@@ -171,7 +188,13 @@ const ChatRoomScreen = () => {
     const senderId = Number((item as any)?.senderId);
     const isMine = Number.isFinite(myId) && Number.isFinite(senderId) && senderId === myId;
     const readState = resolveOutgoingReadState(item, userId, sortedMessages);
-    const readLabel = item.messageId === latestMyMessageId && readState === 'READ' ? '읽음' : item.messageId === latestMyMessageId && readState === 'UNREAD' ? '1' : '';
+    const hasLaterOtherMessage = hasLaterOtherMessageAfter(item, userId, sortedMessages);
+    const readLabel =
+      readState === 'UNREAD'
+        ? '1'
+        : readState === 'READ' && item.messageId === latestMyMessageId && !hasLaterOtherMessage
+          ? '읽음'
+          : '';
     return (
       <View style={[styles.messageRow, isMine ? styles.myMessageRow : styles.otherMessageRow]}>
         {isMine ? (
