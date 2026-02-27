@@ -5,7 +5,6 @@ import {
 } from '../models/payment';
 import type {
   CreatePaymentDisputeRequest,
-  ExternalPayRequest,
   MarkPaidRequest,
   PaymentProvider,
   PaymentDisputeResponse,
@@ -70,10 +69,6 @@ export const PaymentService = {
   /** 화주 수동 결제 반영(운영 fallback) */
   markPaid: (orderId: number, request: MarkPaidRequest) =>
     post<TransportPaymentResponse>(`${USER_PAYMENT_BASE}/orders/${orderId}/mark-paid`, request),
-
-  /** 화주 외부 결제 기록(운영 fallback) */
-  externalPay: (orderId: number, request: ExternalPayRequest) =>
-    post<TransportPaymentResponse>(`${USER_PAYMENT_BASE}/orders/${orderId}/external-pay`, request),
 
   /** 차주 결제 확인 */
   confirmByDriver: (orderId: number) =>
