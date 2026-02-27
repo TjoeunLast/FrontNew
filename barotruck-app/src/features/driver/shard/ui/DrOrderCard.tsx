@@ -24,19 +24,18 @@ function getDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
 export const DrOrderCard = ({
   order,
   myLocation,
+  hideDistance,
 }: {
   order: OrderResponse;
   myLocation?: any;
+  hideDistance?: boolean;
 }) => {
-  // 데이터 구조 분해 할당
   const {
     orderId,
     createdAt,
     startAddr,
-    startPlace,
     startSchedule,
     endAddr,
-    endPlace,
     reqCarType,
     reqTonnage,
     driveMode,
@@ -44,7 +43,6 @@ export const DrOrderCard = ({
     laborFee,
     packagingPrice,
     distance,
-    workType,
     instant,
     payMethod,
     startType,
@@ -57,24 +55,22 @@ export const DrOrderCard = ({
   const { colors: c } = useAppTheme();
   const router = useRouter();
 
-  // totalPrice 계산(기본 운송료 + 수수료 + 포장비)
   const totalPrice = basePrice + (laborFee || 0) + (packagingPrice || 0);
 
-  // 주소 요약
+  // 시/구 까지만 나오도록 짧게 자르기 (예: "서울특별시 강남구 역삼동" -> "서울 강남구")
   const getShortAddr = (addr: string) => {
     if (!addr) return "";
     const parts = addr.split(" ");
-    return `${parts[0]} ${parts[1] || ""}`;
+    return `${parts[0].replace("특별시", "").replace("광역시", "").replace("특별자치도", "")} ${parts[1] || ""}`;
   };
 
-  // 실시간 거리 계산
   const distanceText = useMemo(() => {
     if (myLocation && startLat && startLng) {
       const d = getDistance(myLocation.lat, myLocation.lng, startLat, startLng);
-      return `${d.toFixed(1)}km`; // 소수점 첫째 자리까지 표시
+      return `${d.toFixed(1)}km`;
     }
     return null;
-  }, [myLocation, startLat, startLng]); // 이 값들이 바뀔 때만 재계산
+  }, [myLocation, startLat, startLng]);
 
   const handlePress = () => {
     router.push({
@@ -92,12 +88,12 @@ export const DrOrderCard = ({
         instant && {
           borderColor: c.status.danger,
           borderWidth: 2,
-          elevation: 8,
+          elevation: 6,
         },
       ]}
     >
-      {/* 내 위치 거리 표시 */}
-      {distanceText && (
+      {/* 1. 내 위치 거리 (옵션) */}
+      {distanceText && !hideDistance && (
         <View style={s.centerDistance}>
           <MaterialCommunityIcons
             name="navigation-variant"
@@ -110,13 +106,13 @@ export const DrOrderCard = ({
         </View>
       )}
 
-      {/* 상단 헤더 */}
+      {/* 2. 상단 헤더 (뱃지 & 등록시간) */}
       <View style={s.topRow}>
         <View style={s.badgeRow}>
           <Badge
             label={instant ? "바로배차" : "직접배차"}
             tone={instant ? "urgent" : "direct"}
-            style={{ marginRight: 8 }}
+            style={{ marginRight: 6 }}
           />
           <Badge
             label={driveMode === "왕복" ? "왕복" : "편도"}
@@ -128,26 +124,20 @@ export const DrOrderCard = ({
         </Text>
       </View>
 
-      {/* 운송 경로 */}
+      {/* 3. 메인: 운송 경로 (큼직하게) */}
       <View style={s.routeRow}>
-        {/* 상차지 섹션 */}
         <View style={s.locGroup}>
-          <Text style={s.locLabel}>상차지</Text>
+          <Text style={[s.locType, { color: c.status.success }]}>
+            {startType}
+          </Text>
           <Text
             style={[s.locName, { color: c.text.primary }]}
             numberOfLines={1}
           >
             {getShortAddr(startAddr)}
           </Text>
-          <Text
-            style={[s.placeText, { color: c.text.secondary }]}
-            numberOfLines={1}
-          >
-            {startPlace}
-          </Text>
         </View>
 
-        {/* 경로 구분선 및 거리 정보 */}
         <View style={s.arrowArea}>
           <View
             style={[
@@ -164,58 +154,51 @@ export const DrOrderCard = ({
           </View>
         </View>
 
-        {/* 하차지 섹션 */}
         <View style={[s.locGroup, { alignItems: "flex-end" }]}>
-          <Text style={s.locLabel}>하차지</Text>
+          <Text style={[s.locType, { color: c.status.info }]}>{endType}</Text>
           <Text
             style={[s.locName, { color: c.text.primary, textAlign: "right" }]}
             numberOfLines={1}
           >
             {getShortAddr(endAddr)}
           </Text>
-          <Text
-            style={[
-              s.placeText,
-              { color: c.text.secondary, textAlign: "right" },
-            ]}
-            numberOfLines={1}
-          >
-            {endPlace}
-          </Text>
         </View>
       </View>
 
-      {/* 하단 정보 */}
+      {/* 4. 하단: 요약 정보 & 단가 */}
       <View style={[s.bottomRow, { borderTopColor: c.bg.canvas }]}>
         <View style={s.infoColumn}>
           <Text style={[s.loadDateText, { color: c.text.primary }]}>
             {startSchedule} 상차
           </Text>
           <Text style={[s.carText, { color: c.text.secondary }]}>
-            {/* 1. 당상 · 당착 (startType, endType) */}
-            {order.startType} · {order.endType}
-            {/* 2. 혼적 여부 (loadMethod) */}
-            {` · ${order.loadMethod || "독차"}`}
-            {/* 3. 수작업 여부 (laborFee가 존재하고 0이 아닐 때만 '수작업' 표시) */}
-            {order.laborFee && order.laborFee !== 0 ? " · 수작업" : ""}
+            {`${reqTonnage} ${reqCarType} · `}
+
+            <Text style={{ color: c.brand.primary, fontWeight: "800" }}>
+              {loadMethod || "독차"}
+            </Text>
+
+            {order.laborFee && order.laborFee !== 0 ? (
+              <Text style={{ color: c.status.danger, fontWeight: "800" }}>
+                {" · 수작업"}
+              </Text>
+            ) : null}
           </Text>
         </View>
 
         <View style={s.priceColumn}>
-          <View style={s.priceRow}>
-            <Text
-              style={[
-                s.priceText,
-                { color: instant ? c.status.danger : c.brand.primary },
-              ]}
-            >
-              {totalPrice.toLocaleString()}원
-            </Text>
-          </View>
+          <Text
+            style={[
+              s.priceText,
+              { color: instant ? c.status.danger : c.brand.primary },
+            ]}
+          >
+            {totalPrice.toLocaleString()}원
+          </Text>
           <Badge
             label={payMethod}
             tone={payMethod?.includes("선착불") ? "payPrepaid" : "payDeferred"}
-            style={{ marginTop: 6, alignSelf: "flex-end" }}
+            style={{ marginTop: 4, alignSelf: "flex-end" }}
           />
         </View>
       </View>
@@ -226,10 +209,14 @@ export const DrOrderCard = ({
 const s = StyleSheet.create({
   container: {
     padding: 16,
-    borderRadius: 24,
+    borderRadius: 20,
     borderWidth: 1,
     marginBottom: 12,
-    elevation: 4,
+    elevation: 3,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
   },
   centerDistance: {
     flexDirection: "row",
@@ -243,29 +230,28 @@ const s = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 14,
+    marginBottom: 16,
   },
   badgeRow: { flexDirection: "row", alignItems: "center" },
-  timeText: { fontSize: 12 },
+  timeText: { fontSize: 12, fontWeight: "500" },
   routeRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 16,
+    marginBottom: 20,
   },
-  locGroup: { flex: 1.5 },
-  locLabel: { fontSize: 11, color: "#94A3B8", marginBottom: 2 },
-  locName: { fontSize: 19, fontWeight: "900", letterSpacing: -0.5 },
-  placeText: { fontSize: 12, marginTop: 2 },
+  locGroup: { flex: 1.5, justifyContent: "center" },
+  locType: { fontSize: 12, fontWeight: "800", marginBottom: 4 },
+  locName: { fontSize: 20, fontWeight: "900", letterSpacing: -0.5 },
   arrowArea: { flex: 1, alignItems: "center", paddingHorizontal: 8 },
   distBadge: {
     borderWidth: 1,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 8,
-    marginBottom: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    marginBottom: 8,
   },
-  distText: { fontSize: 11, fontWeight: "700" },
+  distText: { fontSize: 11, fontWeight: "800" },
   line: { width: "100%", height: 1, position: "relative" },
   arrowHead: {
     position: "absolute",
@@ -281,17 +267,12 @@ const s = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-end",
-    paddingTop: 12,
+    paddingTop: 14,
     borderTopWidth: 1,
   },
-  infoColumn: { flex: 1.5 },
-  loadDateText: { fontSize: 14, fontWeight: "800", marginBottom: 2 },
-  carText: { fontSize: 12, fontWeight: "500" },
+  infoColumn: { flex: 1.5, justifyContent: "flex-end" },
+  loadDateText: { fontSize: 15, fontWeight: "800", marginBottom: 4 },
+  carText: { fontSize: 13, fontWeight: "600", letterSpacing: -0.2 },
   priceColumn: { flex: 1.2, alignItems: "flex-end" },
-  priceRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "flex-end",
-  },
-  priceText: { fontSize: 22, fontWeight: "900", letterSpacing: -0.5 },
+  priceText: { fontSize: 24, fontWeight: "900", letterSpacing: -0.5 },
 });

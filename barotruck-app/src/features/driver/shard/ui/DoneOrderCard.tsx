@@ -11,9 +11,9 @@ export const DoneOrderCard = ({ order, onDetail }: any) => {
     orderId,
     settlementStatus,
     startAddr,
-    startPlace,
+    startPlace, // 사용하지 않지만 로직 유지를 위해 구조 분해 할당은 남겨둠
     endAddr,
-    endPlace,
+    endPlace, // 사용하지 않지만 로직 유지를 위해 구조 분해 할당은 남겨둠
     distance,
     reqTonnage,
     reqCarType,
@@ -30,9 +30,12 @@ export const DoneOrderCard = ({ order, onDetail }: any) => {
   // 총 금액 계산 (모든 비용 합산)
   const totalPrice = (basePrice || 0) + (laborFee || 0) + (packagingPrice || 0);
 
-  // 주소 요약 함수
-  const getShortAddr = (addr: string) =>
-    addr ? `${addr.split(" ")[0]} ${addr.split(" ")[1] || ""}` : "";
+  // 주소 요약: "서울특별시 강남구" -> "서울 강남구" (디자인 통일)
+  const getShortAddr = (addr: string) => {
+    if (!addr) return "";
+    const parts = addr.split(" ");
+    return `${parts[0].replace("특별시", "").replace("광역시", "").replace("특별자치도", "")} ${parts[1] || ""}`;
+  };
 
   return (
     <Pressable
@@ -58,7 +61,7 @@ export const DoneOrderCard = ({ order, onDetail }: any) => {
         </View>
       </View>
 
-      {/* 중단 영역 (운송 경로) */}
+      {/* 중단 영역 (운송 경로) - 패밀리룩 적용 및 상세주소 제거 */}
       <View style={s.routeRow}>
         <View style={s.locGroup}>
           <Text style={[s.locLabel, { color: c.text.secondary }]}>상차지</Text>
@@ -67,12 +70,6 @@ export const DoneOrderCard = ({ order, onDetail }: any) => {
             numberOfLines={1}
           >
             {getShortAddr(startAddr)}
-          </Text>
-          <Text
-            style={[s.placeText, { color: c.text.secondary }]}
-            numberOfLines={1}
-          >
-            {startPlace}
           </Text>
         </View>
 
@@ -84,7 +81,7 @@ export const DoneOrderCard = ({ order, onDetail }: any) => {
             ]}
           >
             <Text style={[s.distText, { color: c.text.secondary }]}>
-              {distance}km
+              {distance ? `${distance}km` : "-"}
             </Text>
           </View>
           <View style={[s.line, { backgroundColor: c.border.default }]}>
@@ -99,15 +96,6 @@ export const DoneOrderCard = ({ order, onDetail }: any) => {
             numberOfLines={1}
           >
             {getShortAddr(endAddr)}
-          </Text>
-          <Text
-            style={[
-              s.placeText,
-              { textAlign: "right", color: c.text.secondary },
-            ]}
-            numberOfLines={1}
-          >
-            {endPlace}
           </Text>
         </View>
       </View>
@@ -141,11 +129,15 @@ export const DoneOrderCard = ({ order, onDetail }: any) => {
 
 const s = StyleSheet.create({
   container: {
-    padding: 20,
-    borderRadius: 24,
+    padding: 16, // 20 -> 16으로 줄여 컴팩트하게
+    borderRadius: 20, // 24 -> 20 살짝 둥글게 통일
     borderWidth: 1,
-    marginBottom: 16,
-    elevation: 2,
+    marginBottom: 12, // 간격 살짝 줄임
+    elevation: 3, // 그림자 다이어트
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
   },
   topRow: {
     flexDirection: "row",
@@ -165,23 +157,22 @@ const s = StyleSheet.create({
   detailText: { fontSize: 13, marginRight: 2 },
   routeRow: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "center", // flex-start -> center 정렬
     justifyContent: "space-between",
-    marginBottom: 16,
+    marginBottom: 20,
   },
-  locGroup: { flex: 1.5 },
-  locLabel: { fontSize: 11, marginBottom: 2 },
-  locName: { fontSize: 19, fontWeight: "900", letterSpacing: -0.5 },
-  placeText: { fontSize: 12, marginTop: 2 },
+  locGroup: { flex: 1.5, justifyContent: "center" },
+  locLabel: { fontSize: 12, fontWeight: "800", marginBottom: 4 }, // 라벨 스타일 굵게 통일
+  locName: { fontSize: 20, fontWeight: "900", letterSpacing: -0.5 }, // 폰트 확대 (19->20)
   arrowArea: { flex: 1, alignItems: "center", paddingHorizontal: 8 },
   distBadge: {
     borderWidth: 1,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 8,
-    marginBottom: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    marginBottom: 8,
   },
-  distText: { fontSize: 11, fontWeight: "700" },
+  distText: { fontSize: 11, fontWeight: "800" },
   line: {
     width: "100%",
     height: 1,
@@ -201,12 +192,11 @@ const s = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-end",
-    paddingTop: 12,
+    paddingTop: 14,
     borderTopWidth: 1,
   },
-  infoColumn: { flex: 1.5 },
-  loadDateText: { fontSize: 14, fontWeight: "800", marginBottom: 2 },
-  carText: { fontSize: 12, fontWeight: "500", opacity: 0.8 },
+  infoColumn: { flex: 1.5, justifyContent: "flex-end" },
+  loadDateText: { fontSize: 15, fontWeight: "800", marginBottom: 4 }, // 14 -> 15 폰트 확대
   priceColumn: { flex: 1.2, alignItems: "flex-end" },
-  priceText: { fontSize: 22, fontWeight: "900", letterSpacing: -0.5 },
+  priceText: { fontSize: 24, fontWeight: "900", letterSpacing: -0.5 }, // 22 -> 24 폰트 확대 (제일 중요!)
 });
