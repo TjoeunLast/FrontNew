@@ -3,27 +3,11 @@ import { OrderResponse } from "@/shared/models/order";
 import { OrderService } from "@/shared/api/orderService";
 import * as Location from "expo-location";
 
-export interface IncomeSummary {
-  month: number;
-  amount: number;
-  targetDiff: number;
-  growthRate: number;
-}
-
-// 정산 카드 목업 (수정해야됨)
-const MOCK_INCOME: IncomeSummary = {
-  month: 2,
-  amount: 3540000,
-  targetDiff: 460000,
-  growthRate: 8.5,
-};
-
 export const useDriverHome = () => {
   const [recommendedOrders, setRecommendedOrders] = useState<OrderResponse[]>(
     [],
   );
   const [myOrders, setMyOrders] = useState<OrderResponse[]>([]);
-  const [income] = useState<IncomeSummary>(MOCK_INCOME);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   // 차주 현재 위치 상태
@@ -95,7 +79,6 @@ export const useDriverHome = () => {
 
   return {
     recommendedOrders,
-    income,
     statusCounts,
     isRefreshing,
     myLocation,

@@ -90,9 +90,12 @@ export const ActiveOrderCard = ({
 
   const ui = getStatusConfig(order.status);
 
-  // 주소 요약
-  const getShortAddr = (addr: string) =>
-    addr ? `${addr.split(" ")[0]} ${addr.split(" ")[1] || ""}` : "";
+  // 주소 요약: "서울특별시 강남구" -> "서울 강남구" (디자인 통일)
+  const getShortAddr = (addr: string) => {
+    if (!addr) return "";
+    const parts = addr.split(" ");
+    return `${parts[0].replace("특별시", "").replace("광역시", "").replace("특별자치도", "")} ${parts[1] || ""}`;
+  };
 
   return (
     <Pressable
@@ -102,7 +105,7 @@ export const ActiveOrderCard = ({
       ]}
       onPress={() => onDetail(Number(order.orderId))}
     >
-      {/* 상단  */}
+      {/* 상단  */}
       <View style={s.topRow}>
         <Badge label={ui.badge} tone="neutral" />
         <Pressable
@@ -124,21 +127,15 @@ export const ActiveOrderCard = ({
         </Pressable>
       </View>
 
-      {/* 중단 영역 */}
+      {/* 중단 영역 (운송 경로) - 패밀리룩 디자인 통일 및 상세주소 제거 */}
       <View style={s.routeRow}>
         <View style={s.locGroup}>
-          <Text style={[s.locLabel, { color: c.text.secondary }]}>상차지</Text>
+          <Text style={[s.locType, { color: c.text.secondary }]}>상차지</Text>
           <Text
             style={[s.locName, { color: c.text.primary }]}
             numberOfLines={1}
           >
             {getShortAddr(order.startAddr)}
-          </Text>
-          <Text
-            style={[s.placeText, { color: c.text.secondary }]}
-            numberOfLines={1}
-          >
-            {order.startPlace}
           </Text>
         </View>
 
@@ -159,21 +156,12 @@ export const ActiveOrderCard = ({
         </View>
 
         <View style={[s.locGroup, { alignItems: "flex-end" }]}>
-          <Text style={[s.locLabel, { color: c.text.secondary }]}>하차지</Text>
+          <Text style={[s.locType, { color: c.text.secondary }]}>하차지</Text>
           <Text
             style={[s.locName, { color: c.text.primary, textAlign: "right" }]}
             numberOfLines={1}
           >
             {getShortAddr(order.endAddr)}
-          </Text>
-          <Text
-            style={[
-              s.placeText,
-              { textAlign: "right", color: c.text.secondary },
-            ]}
-            numberOfLines={1}
-          >
-            {order.endPlace}
           </Text>
         </View>
       </View>
@@ -188,9 +176,7 @@ export const ActiveOrderCard = ({
         <View style={s.goalHeader}>
           <Ionicons name="location" size={14} color={ui.actionColor} />
           <Text style={[s.goalTitle, { color: ui.actionColor }]}>
-            {order.status === "LOADING"
-              ? `${order.startSchedule} 상차`
-              : ui.goal}
+            {ui.goal}
           </Text>
         </View>
         <Text
@@ -236,11 +222,15 @@ export const ActiveOrderCard = ({
 
 const s = StyleSheet.create({
   container: {
-    padding: 20,
-    borderRadius: 24,
+    padding: 16, // 20 -> 16으로 줄여 컴팩트하게
+    borderRadius: 20, // 24 -> 20 살짝 둥글게 통일
     borderWidth: 1,
-    marginBottom: 16,
-    elevation: 4,
+    marginBottom: 12, // 간격 살짝 줄임
+    elevation: 3, // 그림자 다이어트
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
   },
   topRow: {
     flexDirection: "row",
@@ -259,23 +249,22 @@ const s = StyleSheet.create({
   callBtnText: { fontSize: 12, fontWeight: "700" },
   routeRow: {
     flexDirection: "row",
-    alignItems: "flex-start",
+    alignItems: "center", // flex-start -> center로 맞춰 깔끔하게 정렬
     justifyContent: "space-between",
     marginBottom: 20,
   },
-  locGroup: { flex: 1.5 },
-  locLabel: { fontSize: 11, marginBottom: 4 },
-  locName: { fontSize: 18, fontWeight: "900", letterSpacing: -0.5 },
-  placeText: { fontSize: 12, marginTop: 4 },
-  arrowArea: { flex: 0.8, alignItems: "center", marginTop: 18 },
+  locGroup: { flex: 1.5, justifyContent: "center" },
+  locType: { fontSize: 12, fontWeight: "800", marginBottom: 4 }, // 상하차지 라벨 폰트 통일
+  locName: { fontSize: 20, fontWeight: "900", letterSpacing: -0.5 }, // 폰트 확대 (18->20)
+  arrowArea: { flex: 1, alignItems: "center", paddingHorizontal: 8 },
   distBadge: {
     borderWidth: 1,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 8,
-    marginBottom: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    marginBottom: 8,
   },
-  distText: { fontSize: 11, fontWeight: "700" },
+  distText: { fontSize: 11, fontWeight: "800" },
   line: { width: "100%", height: 1, position: "relative" },
   arrowHead: {
     position: "absolute",
@@ -304,7 +293,6 @@ const s = StyleSheet.create({
   actionRowSplit: {
     flexDirection: "row",
     gap: 8,
-    marginTop: 16,
   },
   btnNav: {
     flex: 1,

@@ -1,4 +1,10 @@
-import React from "react";
+import React, {
+  useCallback,
+  useMemo,
+  useState,
+  useRef,
+  useEffect,
+} from "react";
 import {
   View,
   Text,
@@ -8,7 +14,10 @@ import {
   RefreshControl,
   ActivityIndicator,
   Alert,
+  Animated,
+  Easing,
 } from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
 import { DrOrderCard } from "@/features/driver/shard/ui/DrOrderCard";
 import { useOrderList } from "../model/useOrderList";
 import { Ionicons } from "@expo/vector-icons";
@@ -30,13 +39,68 @@ export default function OrderListScreen() {
     myLocation,
   } = useOrderList();
 
+  // 15초 카운트다운 숫자
+  const [timeLeft, setTimeLeft] = useState(15);
+
+  // 아이콘 회전을 위한 애니메이션 값
+  const spinAnim = useRef(new Animated.Value(0)).current;
+
+  // refreshing 상태가 바뀔 때 회전 애니메이션 제어
+  useEffect(() => {
+    if (refreshing) {
+      Animated.loop(
+        Animated.timing(spinAnim, {
+          toValue: 1,
+          duration: 800,
+          easing: Easing.linear,
+          useNativeDriver: true,
+        }),
+      ).start();
+    } else {
+      spinAnim.stopAnimation();
+      spinAnim.setValue(0);
+      setTimeLeft(15); // 갱신 끝나면 타이머 리셋
+    }
+  }, [refreshing, spinAnim]);
+
+  // 15초마다 자동 갱신 로직 (1초 카운트다운)
+  useFocusEffect(
+    useCallback(() => {
+      if (refreshing) return; // 갱신 중엔 타이머 멈춤
+
+      // 1초 타이머 설정
+      const timer = setInterval(() => {
+        setTimeLeft((prev) => {
+          if (prev <= 1) {
+            console.log("자동 갱신", new Date().toLocaleTimeString());
+            onRefresh();
+            return 15;
+          }
+          return prev - 1;
+        });
+      }, 1000); // 1000ms = 1초
+
+      // 화면을 벗어나면 타이머 해제
+      return () => clearInterval(timer);
+    }, [onRefresh, refreshing]),
+  );
+
+  // 회전 애니메이션 보간
+  const spin = spinAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ["0deg", "360deg"],
+  });
+
   return (
     <View style={{ flex: 1, backgroundColor: "#FFF" }}>
       <ShipperScreenHeader
         title="오더 목록"
         hideBackButton
         right={
-          <Pressable onPress={() => Alert.alert("필터", "상세 필터 모달이 열립니다.")} style={s.headerFilterBtn}>
+          <Pressable
+            onPress={() => Alert.alert("필터", "상세 필터 모달이 열립니다.")}
+            style={s.headerFilterBtn}
+          >
             <Ionicons name="options-outline" size={24} color={c.text.primary} />
           </Pressable>
         }
@@ -73,13 +137,34 @@ export default function OrderListScreen() {
 
       {/* 목롤 요약 및 정렬 */}
       <View style={s.listInfoRow}>
-        <Text style={s.totalText}>
-          총{" "}
-          <Text style={{ color: c.brand.primary }}>
-            {filteredOrders.length}
+        <View style={{ flexDirection: "row", alignItems: "center" }}>
+          <Text style={s.totalText}>
+            총{" "}
+            <Text style={{ color: c.brand.primary }}>
+              {filteredOrders.length}
+            </Text>
+            건의 오더
           </Text>
-          건의 오더
-        </Text>
+
+          {/* 자동 갱신 카운트다운 및 회전 아이콘 (오더 갯수 옆) */}
+          <Pressable
+            style={s.refreshWrap}
+            onPress={() => {
+              if (!refreshing) {
+                setTimeLeft(15);
+                onRefresh();
+              }
+            }}
+          >
+            <Animated.View style={{ transform: [{ rotate: spin }] }}>
+              <Ionicons name="refresh" size={14} color="#94A3B8" />
+            </Animated.View>
+            <Text style={s.refreshText}>
+              {refreshing ? "업데이트 중" : `${timeLeft}`}
+            </Text>
+          </Pressable>
+        </View>
+
         <View style={s.sortContainer}>
           <SortButton
             label="최신순"
@@ -188,6 +273,21 @@ const s = StyleSheet.create({
     paddingVertical: 16,
   },
   totalText: { fontSize: 14, color: "#94A3B8", fontWeight: "600" },
+  refreshWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginLeft: 10,
+    gap: 4,
+    backgroundColor: "#F1F5F9",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  refreshText: {
+    fontSize: 11,
+    color: "#94A3B8",
+    fontWeight: "700",
+  },
   sortContainer: { flexDirection: "row" },
   sortBtn: { marginLeft: 16, alignItems: "center" },
   sortBtnText: { fontSize: 14, color: "#94A3B8", fontWeight: "600" },

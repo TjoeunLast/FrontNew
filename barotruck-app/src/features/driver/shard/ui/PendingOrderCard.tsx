@@ -1,32 +1,15 @@
 import React from "react";
-import { useMemo } from "react";
 import { View, Text, StyleSheet, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Badge } from "@/shared/ui/feedback/Badge";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 
-// 거리 계산 함수
-function getDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
-  const R = 6371;
-  const dLat = (lat2 - lat1) * (Math.PI / 180);
-  const dLon = (lon2 - lon1) * (Math.PI / 180);
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(lat1 * (Math.PI / 180)) *
-      Math.cos(lat2 * (Math.PI / 180)) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
-}
-
 export const PendingOrderCard = ({
   order,
   onCancel,
   onStart,
   onDetail,
-  myLocation,
 }: any) => {
   const { colors: c } = useAppTheme();
 
@@ -36,11 +19,13 @@ export const PendingOrderCard = ({
     reqCarType,
     workType,
     startType,
+    endType,
     loadMethod,
     instant,
     payMethod,
     startLat,
     startLng,
+    distance,
   } = order;
 
   // 상태 및 총 금액 계산
@@ -50,18 +35,12 @@ export const PendingOrderCard = ({
     (order.laborFee || 0) +
     (order.packagingPrice || 0);
 
-  // 주소 요약
-  const getShortAddr = (addr: string) =>
-    addr ? `${addr.split(" ")[0]} ${addr.split(" ")[1] || ""}` : "";
-
-  // 거리 계산 로직
-  const distanceToStart = useMemo(() => {
-    if (myLocation && startLat && startLng) {
-      const d = getDistance(myLocation.lat, myLocation.lng, startLat, startLng);
-      return `${d.toFixed(1)}km`;
-    }
-    return null;
-  }, [myLocation, startLat, startLng]);
+  // 주소 요약: "서울특별시 강남구 역삼동" -> "서울 강남구"
+  const getShortAddr = (addr: string) => {
+    if (!addr) return "";
+    const parts = addr.split(" ");
+    return `${parts[0].replace("특별시", "").replace("광역시", "").replace("특별자치도", "")} ${parts[1] || ""}`;
+  };
 
   return (
     <Pressable
@@ -72,20 +51,6 @@ export const PendingOrderCard = ({
         isAccepted && { borderColor: c.brand.primary, borderWidth: 1.5 },
       ]}
     >
-      {/* 내 위치에서 상차지 까지 거리 */}
-      {distanceToStart && (
-        <View style={s.centerDistance}>
-          <MaterialCommunityIcons
-            name="navigation-variant"
-            size={14}
-            color={c.brand.primary}
-          />
-          <Text style={[s.distanceText, { color: c.brand.primary }]}>
-            상차지까지 {distanceToStart}
-          </Text>
-        </View>
-      )}
-
       {/* 상단 영역 */}
       <View style={s.topRow}>
         <View style={s.badgeRow}>
@@ -103,22 +68,18 @@ export const PendingOrderCard = ({
         </View>
       </View>
 
-      {/* 중단 영역 */}
+      {/* 중단 영역 (운송 경로) */}
       <View style={s.routeRow}>
         {/* 상차지 */}
         <View style={s.locGroup}>
-          <Text style={[s.locLabel, { color: c.text.secondary }]}>상차지</Text>
+          <Text style={[s.locType, { color: c.status.success }]}>
+            {startType}
+          </Text>
           <Text
             style={[s.locName, { color: c.text.primary }]}
             numberOfLines={1}
           >
             {getShortAddr(order.startAddr)}
-          </Text>
-          <Text
-            style={[s.placeText, { color: c.text.secondary }]}
-            numberOfLines={1}
-          >
-            {order.startPlace}
           </Text>
         </View>
 
@@ -131,7 +92,7 @@ export const PendingOrderCard = ({
             ]}
           >
             <Text style={[s.distText, { color: c.text.secondary }]}>
-              {order.distance ? `${order.distance}km` : "-"}
+              {distance ? `${distance}km` : "-"}
             </Text>
           </View>
           <View style={[s.line, { backgroundColor: c.border.default }]}>
@@ -141,34 +102,25 @@ export const PendingOrderCard = ({
 
         {/* 하차지 */}
         <View style={[s.locGroup, { alignItems: "flex-end" }]}>
-          <Text style={[s.locLabel, { color: c.text.secondary }]}>하차지</Text>
+          <Text style={[s.locType, { color: c.status.info }]}>{endType}</Text>
           <Text
             style={[s.locName, { color: c.text.primary, textAlign: "right" }]}
             numberOfLines={1}
           >
             {getShortAddr(order.endAddr)}
           </Text>
-          <Text
-            style={[
-              s.placeText,
-              { textAlign: "right", color: c.text.secondary },
-            ]}
-            numberOfLines={1}
-          >
-            {order.endPlace}
-          </Text>
         </View>
       </View>
 
-      {/* 하단 정보 */}
+      {/* 하단 정보 (DrOrderCard 디자인 통일) */}
       <View style={[s.bottomRow, { borderTopColor: c.bg.canvas }]}>
         <View style={s.infoColumn}>
           <Text style={[s.loadDateText, { color: c.text.primary }]}>
             {startSchedule} 상차
           </Text>
           <Text style={[s.carText, { color: c.text.secondary }]}>
-            {reqTonnage} {reqCarType} • {workType || "지게차"} • {startType} •{" "}
-            {loadMethod}
+            {`${reqTonnage} ${reqCarType} · ${loadMethod || "독차"}`}
+            {order.laborFee && order.laborFee !== 0 ? " · 수작업" : ""}
           </Text>
         </View>
 
@@ -181,7 +133,7 @@ export const PendingOrderCard = ({
           <Badge
             label={payMethod}
             tone={payMethod?.includes("선착불") ? "payPrepaid" : "payDeferred"}
-            style={{ marginTop: 6, alignSelf: "flex-end" }}
+            style={{ marginTop: 4, alignSelf: "flex-end" }}
           />
         </View>
       </View>
@@ -224,17 +176,21 @@ export const PendingOrderCard = ({
 
 const s = StyleSheet.create({
   container: {
-    padding: 20,
-    borderRadius: 24,
+    padding: 16,
+    borderRadius: 20,
     borderWidth: 1,
-    marginBottom: 16,
-    elevation: 4,
+    marginBottom: 12,
+    elevation: 3,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
   },
   centerDistance: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 12,
+    marginBottom: 8,
     gap: 4,
   },
   distanceText: { fontSize: 13, fontWeight: "800" },
@@ -249,23 +205,22 @@ const s = StyleSheet.create({
   detailText: { fontSize: 13, marginRight: 2 },
   routeRow: {
     flexDirection: "row",
-    alignItems: "flex-start",
+    alignItems: "center",
     justifyContent: "space-between",
     marginBottom: 20,
   },
-  locGroup: { flex: 1.5 },
-  locLabel: { fontSize: 11, marginBottom: 4 },
-  locName: { fontSize: 19, fontWeight: "900", letterSpacing: -0.5 },
-  placeText: { fontSize: 12, marginTop: 4 },
-  arrowArea: { flex: 0.8, alignItems: "center", marginTop: 18 },
+  locGroup: { flex: 1.5, justifyContent: "center" },
+  locType: { fontSize: 12, fontWeight: "800", marginBottom: 4 },
+  locName: { fontSize: 20, fontWeight: "900", letterSpacing: -0.5 },
+  arrowArea: { flex: 1, alignItems: "center", paddingHorizontal: 8 },
   distBadge: {
     borderWidth: 1,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 8,
-    marginBottom: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    marginBottom: 8,
   },
-  distText: { fontSize: 11, fontWeight: "700" },
+  distText: { fontSize: 11, fontWeight: "800" },
   line: {
     width: "100%",
     height: 1,
@@ -285,19 +240,19 @@ const s = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-end",
-    paddingTop: 12,
+    paddingTop: 14,
     borderTopWidth: 1,
   },
-  infoColumn: { flex: 1.5 },
-  loadDateText: { fontSize: 14, fontWeight: "800", marginBottom: 2 },
-  carText: { fontSize: 12, fontWeight: "500", opacity: 0.8 },
+  infoColumn: { flex: 1.5, justifyContent: "flex-end" },
+  loadDateText: { fontSize: 15, fontWeight: "800", marginBottom: 4 },
+  carText: { fontSize: 13, fontWeight: "600", letterSpacing: -0.2 },
   priceColumn: { flex: 1.2, alignItems: "flex-end" },
   priceRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "flex-end",
   },
-  priceText: { fontSize: 22, fontWeight: "900", letterSpacing: -0.5 },
+  priceText: { fontSize: 24, fontWeight: "900", letterSpacing: -0.5 },
   actionArea: {
     marginTop: 16,
     paddingTop: 16,
@@ -312,5 +267,5 @@ const s = StyleSheet.create({
     gap: 6,
   },
   btnPrimaryText: { fontSize: 15, fontWeight: "700" },
-  btnSecondaryText: { fontSize: 15, fontWeight: "700" }, // 기존 스타일과 통합
+  btnSecondaryText: { fontSize: 15, fontWeight: "700" },
 });
