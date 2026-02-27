@@ -37,7 +37,7 @@ export default function DrivingListScreen() {
     completedOrders,
     loading, // 데이터를 가져오는 중인지 나타내는 상태
     refresh, // 데이터를 다시 불러오는 함수\
-    myLocation, // 내 위치 정보
+    // myLocation, // 내 위치 정보
   } = useDrivingList();
 
   // 운행 프로세스 로직 (취소, 상태변경, 모달 등)
@@ -138,7 +138,7 @@ export default function DrivingListScreen() {
                     <PendingOrderCard
                       key={order.orderId}
                       order={order}
-                      myLocation={myLocation}
+                      // myLocation={myLocation}
                       onStart={handleStartTransport} // 운송 시작 액션 연결
                       onDetail={(id: number) =>
                         router.push(`/(driver)/order-detail/${id}`)
@@ -165,7 +165,7 @@ export default function DrivingListScreen() {
                     <PendingOrderCard
                       key={order.orderId}
                       order={order}
-                      myLocation={myLocation}
+                      // myLocation={myLocation}
                       onCancel={handleCancelOrder}
                       onDetail={(id: number) =>
                         router.push(`/(driver)/order-detail/${id}`)
