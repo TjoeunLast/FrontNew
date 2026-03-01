@@ -52,32 +52,38 @@ export default function DriverHomeScreen() {
   }, []);
 
   const fetchMonthlyRevenue = useCallback(async () => {
-      try {
-          const year = new Date().getFullYear();
-          const month = new Date().getMonth() + 1;
+    try {
+      const year = new Date().getFullYear();
+      const month = new Date().getMonth() + 1;
 
-          const revenue = await OrderService.getMyRevenue(year, month);
-          // API가 400 에러 등으로 실패하더라도 빈 배열을 보장받도록 처리
-          const orders = Array.isArray(revenue?.orders) ? revenue.orders : [];
+      const revenue = await OrderService.getMyRevenue(year, month);
+      const orders = Array.isArray(revenue?.orders) ? revenue.orders : [];
 
-          let total = 0;
-          let settled = 0;
+      let total = 0;
+      let settled = 0;
 
-          orders.forEach((o) => {
-              if (o.status !== "CANCELLED" && o.status !== "REQUESTED") {
-                  const amt = getAmount(o);
-                  total += amt;
-                  if (String(o.settlementStatus ?? "").toUpperCase() === "COMPLETED") {
-                      settled += amt;
-                  }
-              }
-          });
+      orders.forEach((o) => {
+        // 정산 페이지(SalesDashboard)와 완벽히 동일한 필터링 기준 적용
+        if (
+          o.status !== "CANCELLED" &&
+          o.status !== "REQUESTED" &&
+          o.status !== "PENDING"
+        ) {
+          const amt = getAmount(o);
+          total += amt;
 
-          setTotalAmount(total || revenue?.totalAmount || 0); // 서버 통계값 우선 활용
-          setSettledAmount(settled || revenue?.receivedAmount || 0);
-      } catch (error) {
-          console.log("홈 화면 매출 데이터 처리 중단됨");
-      }
+          // settlementStatus가 COMPLETED일 때만 입금 완료 처리
+          if (String(o.settlementStatus ?? "").toUpperCase() === "COMPLETED") {
+            settled += amt;
+          }
+        }
+      });
+
+      setTotalAmount(total);
+      setSettledAmount(settled);
+    } catch (error) {
+      console.log("홈 화면 매출 데이터 처리 중단됨");
+    }
   }, []);
 
   // 홈 화면 기본 데이터 공급
