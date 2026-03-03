@@ -1,7 +1,11 @@
 // src/shared/utils/AddressSearch.tsx
-import React from 'react';
-import { Modal, SafeAreaView, Button } from 'react-native';
-import Postcode from '@actbase/react-daum-postcode';
+import { Ionicons } from "@expo/vector-icons";
+import React from "react";
+import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import Postcode from "@actbase/react-daum-postcode";
+
+import { useAppTheme } from "@/shared/hooks/useAppTheme";
 
 interface AddressData {
   zonecode: number | string;
@@ -26,6 +30,8 @@ interface AddressSearchProps {
 }
 
 const AddressSearch = ({ visible, onClose, onComplete }: AddressSearchProps) => {
+  const { colors } = useAppTheme();
+
   const parseCoordinate = (value: unknown): number | undefined => {
     const n = Number(value);
     return Number.isFinite(n) ? n : undefined;
@@ -49,17 +55,67 @@ const AddressSearch = ({ visible, onClose, onComplete }: AddressSearchProps) => 
 
   return (
     <Modal visible={visible} animationType="slide">
-      <SafeAreaView style={{ flex: 1 }}>
+      <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.bg.canvas }]} edges={["top", "bottom"]}>
+        <View
+          style={[
+            styles.header,
+            {
+              backgroundColor: colors.bg.canvas,
+              borderBottomColor: colors.border.default,
+            },
+          ]}
+        >
+          <Pressable onPress={onClose} style={styles.backButton} hitSlop={12}>
+            <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
+          </Pressable>
+          <Text style={[styles.headerTitle, { color: colors.text.primary }]}>주소 검색</Text>
+          <View style={styles.headerSpacer} />
+        </View>
+
         <Postcode
-          style={{ width: '100%', height: '100%' }}
+          style={styles.postcode}
           jsOptions={{ animation: true }}
           onSelected={handleComplete}
           onError={(error: unknown) => console.error(error)}
         />
-        <Button title="닫기" onPress={onClose} color="red" />
       </SafeAreaView>
     </Modal>
   );
 };
+
+const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+  },
+  header: {
+    minHeight: 56,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  headerTitle: {
+    flex: 1,
+    fontSize: 17,
+    fontWeight: "700",
+    textAlign: "center",
+  },
+  headerSpacer: {
+    width: 40,
+    height: 40,
+  },
+  postcode: {
+    flex: 1,
+    width: "100%",
+  },
+});
 
 export default AddressSearch;
