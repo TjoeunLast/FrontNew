@@ -1,7 +1,7 @@
 /**
  * 결제 DTO/타입 정의
- * - 프론트에서 method/payChannel을 명시적으로 전달 가능
- * - 미입력 시 prepare 기본값(CARD/CARD) 자동 적용
+ * - 토스 결제는 prepare -> 프론트 결제창 -> confirm 순서
+ * - mark-paid는 운영 fallback(수동 반영) 용도
  */
 
 /** 결제 수단 */
@@ -26,7 +26,7 @@ export type TransportPaymentStatus =
   | 'ADMIN_HOLD' // 관리자 보류
   | 'ADMIN_FORCE_CONFIRMED' // 관리자 강제확정
   | 'ADMIN_REJECTED' // 관리자 반려
-  | 'CANCELLED'; // 취소
+  | 'CANCELLED'; // 결제 취소
 
 /** 결제 이의 사유 */
 export type PaymentDisputeReason =
@@ -36,7 +36,7 @@ export type PaymentDisputeReason =
   | 'FRAUD_SUSPECTED'
   | 'OTHER';
 
-/** 결제 이의 처리 상태 */
+/** 결제 이의 상태 */
 export type PaymentDisputeStatus =
   | 'PENDING'
   | 'ADMIN_HOLD'
@@ -96,16 +96,10 @@ export interface TossPrepareResponse {
 
 /** mark-paid 요청 DTO */
 export interface MarkPaidRequest {
-  method: PaymentMethod;
-  paymentTiming: PaymentTiming;
+  method?: PaymentMethod;
+  paymentTiming?: PaymentTiming;
   proofUrl?: string | null;
   paidAt?: string | null;
-}
-
-/** external-pay 요청 DTO */
-export interface ExternalPayRequest {
-  method: PaymentMethod;
-  paymentTiming: PaymentTiming;
 }
 
 /** 결제 이의 생성 요청 DTO */

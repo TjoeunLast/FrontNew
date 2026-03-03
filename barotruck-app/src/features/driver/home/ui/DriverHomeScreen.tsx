@@ -51,33 +51,33 @@ export default function DriverHomeScreen() {
     }
   }, []);
 
-  // 이번 달 매출 데이터 가져오기 로직 (정산 페이지와 동일한 흐름)
   const fetchMonthlyRevenue = useCallback(async () => {
-    try {
-      const year = now.getFullYear();
-      const month = now.getMonth() + 1;
+      try {
+          const year = new Date().getFullYear();
+          const month = new Date().getMonth() + 1;
 
-      const revenue = await OrderService.getMyRevenue(year, month);
-      const orders = Array.isArray(revenue?.orders) ? revenue.orders : [];
+          const revenue = await OrderService.getMyRevenue(year, month);
+          // API가 400 에러 등으로 실패하더라도 빈 배열을 보장받도록 처리
+          const orders = Array.isArray(revenue?.orders) ? revenue.orders : [];
 
-      let total = 0;
-      let settled = 0;
+          let total = 0;
+          let settled = 0;
 
-      orders.forEach((o) => {
-        if (o.status !== "CANCELLED" && o.status !== "REQUESTED") {
-          const amt = getAmount(o);
-          total += amt;
-          if (String(o.settlementStatus ?? "").toUpperCase() === "COMPLETED") {
-            settled += amt;
-          }
-        }
-      });
+          orders.forEach((o) => {
+              if (o.status !== "CANCELLED" && o.status !== "REQUESTED") {
+                  const amt = getAmount(o);
+                  total += amt;
+                  if (String(o.settlementStatus ?? "").toUpperCase() === "COMPLETED") {
+                      settled += amt;
+                  }
+              }
+          });
 
-      setTotalAmount(total);
-      setSettledAmount(settled);
-    } catch (error) {
-      console.log("매출 데이터 로드 실패");
-    }
+          setTotalAmount(total || revenue?.totalAmount || 0); // 서버 통계값 우선 활용
+          setSettledAmount(settled || revenue?.receivedAmount || 0);
+      } catch (error) {
+          console.log("홈 화면 매출 데이터 처리 중단됨");
+      }
   }, []);
 
   // 홈 화면 기본 데이터 공급
@@ -112,7 +112,7 @@ export default function DriverHomeScreen() {
 
       timer = setInterval(() => {
         void syncUnread();
-      }, 3000);
+      }, 30000);
 
       return () => {
         if (timer) clearInterval(timer);

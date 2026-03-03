@@ -380,20 +380,22 @@ export const OrderService = {
     return res.data;
   },
 
-/** 차주 전용: 월간 수익 통계 및 목록 조회 */
   getMyRevenue: async (year?: number, month?: number): Promise<MyRevenueResponse> => {
-    // API 호출 (쿼리 파라미터 전달)
-    const res = await apiClient.get(`${API_BASE}/my-revenue`, {
-      params: { year, month }
-    });
-    
-    // 백엔드에서 준 orders 리스트를 normalizeOrderRow 등을 통해 가공해야 한다면 아래처럼 처리 가능
-    const data = res.data;
-    if (data && data.orders) {
-      data.orders = toOrderList(data.orders);
-    }
-    
-    return data;
+      try {
+          const res = await apiClient.get(`${API_BASE}/my-revenue`, {
+              // 반드시 params 객체 안에 담아서 보내야 쿼리 스트링(?year=2026&month=2)으로 인식됩니다.
+              params: { year, month } 
+          });
+          
+          const data = res.data;
+          if (data && data.orders) {
+              data.orders = toOrderList(data.orders);
+          }
+          return data;
+      } catch (error) {
+          console.warn("매출 데이터 로드 실패:", error);
+          return { totalAmount: 0, receivedAmount: 0, pendingAmount: 0, orders: [] };
+      }
   },
 
 };
