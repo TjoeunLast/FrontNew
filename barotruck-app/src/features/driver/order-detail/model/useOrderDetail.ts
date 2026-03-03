@@ -13,21 +13,62 @@ export const useOrderDetail = () => {
   const { id } = useLocalSearchParams();
   const { colors: c } = useAppTheme();
 
+  // 상태 관리
   const [order, setOrder] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-
-  // 기사님 현재 위치 상태
   const [myLocation, setMyLocation] = useState<{
     lat: number;
     lng: number;
   } | null>(null);
 
-  /**
-   * SECTION 1: 데이터 패칭 및 동기화
-   */
+  // 내 위치 가져오기 (임시 좌표 적용)
+  const getMyLocation = useCallback(async () => {
+    // 임시 기본 좌표 (강남역 근처)
+    const FALLBACK_LOCATION = { lat: 37.494461, lng: 127.029592 };
+
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+
+      // 1. 권한 거부 시: 임시 좌표 세팅 후 종료
+      if (status !== "granted") {
+        console.log("위치 권한 거부됨. 기본 위치를 사용합니다.");
+        setMyLocation(FALLBACK_LOCATION);
+        return;
+      }
+
+      // 2. 캐시된 위치 먼저 확인
+      let location = await Location.getLastKnownPositionAsync({});
+
+      // 3. 캐시가 없으면 현재 위치 요청
+      if (!location) {
+        location = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+      }
+
+      if (location) {
+        // 성공적으로 가져오면 실제 내 위치 세팅
+        setMyLocation({
+          lat: location.coords.latitude,
+          lng: location.coords.longitude,
+        });
+        console.log("내 위치 가져오기 성공:", location.coords);
+      } else {
+        // 못 가져왔을 경우 임시 좌표
+        setMyLocation(FALLBACK_LOCATION);
+      }
+    } catch (error) {
+      // 4. 통신 에러, GPS 꺼짐 등 어떤 에러가 나도 임시 좌표를 띄워서 무한로딩 방지!
+      console.warn("위치 가져오기 실패. 기본 위치로 대체합니다:", error);
+      setMyLocation(FALLBACK_LOCATION);
+    }
+  }, []);
+
+  // 데이터 매칭
   const fetchDetail = useCallback(async () => {
     try {
       setLoading(true);
+
       const myOrders = await OrderService.getMyDrivingOrders();
       let found = myOrders.find((o) => o.orderId.toString() === id);
 
@@ -47,9 +88,6 @@ export const useOrderDetail = () => {
     }
   }, [id]);
 
-  /**
-   * SECTION 2: 물류 운행 프로세스 훅 연결
-   */
   const {
     handleUpdateStatus,
     handleCancelOrder,
@@ -59,32 +97,13 @@ export const useOrderDetail = () => {
     handleAcceptOrder,
   } = useDrivingProcess(fetchDetail);
 
-  /**
-   * SECTION 3: 위치 정보 가져오기
-   */
-  const getMyLocation = useCallback(async () => {
-    try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") return;
-
-      const location = await Location.getCurrentPositionAsync({});
-      setMyLocation({
-        lat: location.coords.latitude,
-        lng: location.coords.longitude,
-      });
-    } catch (error) {
-      console.error("상세페이지 위치 획득 실패:", error);
-    }
-  }, []);
-
+  // 초기 렌더링 시 데이터 패칭 (위치는 백그라운드로 실행)
   useEffect(() => {
     if (id) fetchDetail();
     getMyLocation();
   }, [id, fetchDetail, getMyLocation]);
 
-  /**
-   * SECTION 4: 하단 액션 버튼 설정
-   */
+  // 하단 액션 버튼
   const buttonConfig = useMemo(() => {
     if (!order) return null;
     const s = order.status;
@@ -147,35 +166,35 @@ export const useOrderDetail = () => {
   }, [
     order,
     c,
-    fetchDetail,
     handleCancelOrder,
     handleStartTransport,
     handleUpdateStatus,
+    handleAcceptOrder,
   ]);
 
-  /**
-   * SECTION 5: 반환 데이터 (에러 해결 포인트! 🚩)
-   */
   return {
     order,
     loading,
     modalOpen,
     setModalOpen,
     myLocation,
+
+    // 계산된 데이터
     totalPrice: order
       ? (order.basePrice || 0) +
         (order.laborFee || 0) +
         (order.packagingPrice || 0)
       : 0,
-
-    // 🚩 당상/당착 정보 반환 (UI에서 사용 예정)
     startType: order?.startType || "",
     endType: order?.endType || "",
 
+    // 헬퍼 함수
     formatAddress: {
       big: (addr: string) => addr?.split(" ").slice(0, 2).join(" ") || "",
       small: (addr: string) => addr?.split(" ").slice(2).join(" ") || "",
     },
+
+    // 액션
     actions: {
       goBack: () => router.back(),
       copyAddress: async (t: string) => {
@@ -184,6 +203,8 @@ export const useOrderDetail = () => {
       },
       callPhone: (num: string) => Linking.openURL(`tel:${num}`),
     },
+
+    // 하단 버튼 구성
     buttonConfig,
   };
 };
