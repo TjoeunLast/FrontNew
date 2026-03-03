@@ -11,6 +11,9 @@ export type CurrentUserSnapshot = {
   role: CurrentUserRole;
   gender?: "M" | "F";
   birthDate?: string;
+  activityAddress?: string;
+  activityLat?: number;
+  activityLng?: number;
 };
 
 const CURRENT_USER_KEY = "baro_current_user_snapshot";

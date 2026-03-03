@@ -10,12 +10,53 @@ import {
   Platform,
   Alert,
 } from 'react-native';
-import { useLocalSearchParams, useNavigation } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 
 import { useChatManager } from '../../../../shared/api/chatApi';
 import { ChatMessageResponse } from '../../../../shared/models/chat';
+import { getCurrentUserSnapshot } from '../../../../shared/utils/currentUserStorage';
+
+const ORDER_SUMMARY_STORAGE_KEY = 'chat_order_summary_v1';
+
+function pickParam(value?: string | string[]) {
+  if (Array.isArray(value)) return value[0] ?? '';
+  return value ?? '';
+}
+
+type OrderSummary = {
+  orderId: string;
+  routeText: string;
+  cargoText: string;
+  priceText: string;
+};
+
+async function loadStoredOrderSummary(roomId: string): Promise<OrderSummary | null> {
+  try {
+    const raw = await AsyncStorage.getItem(`${ORDER_SUMMARY_STORAGE_KEY}:${roomId}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<OrderSummary> | null;
+    if (!parsed) return null;
+    return {
+      orderId: String(parsed.orderId ?? '').trim(),
+      routeText: String(parsed.routeText ?? '').trim(),
+      cargoText: String(parsed.cargoText ?? '').trim(),
+      priceText: String(parsed.priceText ?? '').trim(),
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function storeOrderSummary(roomId: string, summary: OrderSummary) {
+  try {
+    await AsyncStorage.setItem(`${ORDER_SUMMARY_STORAGE_KEY}:${roomId}`, JSON.stringify(summary));
+  } catch {
+    // noop
+  }
+}
 
 function resolveOutgoingReadState(
   item: ChatMessageResponse,
@@ -50,10 +91,41 @@ function resolveOutgoingReadState(
   return hasLaterOtherMessage ? 'READ' : 'UNREAD';
 }
 
+function hasLaterOtherMessageAfter(
+  item: ChatMessageResponse,
+  myUserId: number | null,
+  sortedMessages: ChatMessageResponse[]
+): boolean {
+  const myId = Number(myUserId);
+  if (!Number.isFinite(myId)) return false;
+  const itemTime = new Date(item.createdAt).getTime();
+  return sortedMessages.some((msg) => {
+    const senderId = Number((msg as any)?.senderId);
+    if (Number.isFinite(senderId) && senderId === myId) return false;
+    const t = new Date(msg.createdAt).getTime();
+    if (Number.isFinite(itemTime) && Number.isFinite(t) && t > itemTime) return true;
+    return msg.messageId > item.messageId;
+  });
+}
+
 const ChatRoomScreen = () => {
-  const { roomId } = useLocalSearchParams<{ roomId: string }>();
+  const {
+    roomId,
+    orderId,
+    routeText,
+    cargoText,
+    priceText,
+  } = useLocalSearchParams<{
+    roomId: string;
+    orderId?: string | string[];
+    routeText?: string | string[];
+    cargoText?: string | string[];
+    priceText?: string | string[];
+  }>();
   const navigation = useNavigation();
+  const router = useRouter();
   const [text, setText] = useState('');
+  const [cachedOrderSummary, setCachedOrderSummary] = useState<OrderSummary | null>(null);
   const listRef = useRef<FlatList<ChatMessageResponse>>(null);
 
   const { userId, messages, loadHistory, connectSocket, sendMessage, disconnect } = useChatManager();
@@ -62,6 +134,48 @@ const ChatRoomScreen = () => {
     const other = messages.find((m) => m.senderId !== userId && m.senderNickname);
     return other?.senderNickname || '채팅';
   }, [messages, userId]);
+
+  const paramOrderSummary = useMemo<OrderSummary | null>(() => {
+    const resolvedOrderId = pickParam(orderId).trim();
+    const resolvedRouteText = pickParam(routeText).trim();
+    const resolvedCargoText = pickParam(cargoText).trim();
+    const resolvedPriceText = pickParam(priceText).trim();
+
+    if (!resolvedOrderId && !resolvedRouteText && !resolvedCargoText && !resolvedPriceText) {
+      return null;
+    }
+
+    return {
+      orderId: resolvedOrderId,
+      routeText: resolvedRouteText || '오더 경로 정보 없음',
+      cargoText: resolvedCargoText || '오더 화물 정보 없음',
+      priceText: resolvedPriceText || '',
+    };
+  }, [cargoText, orderId, priceText, routeText]);
+
+  useEffect(() => {
+    const resolvedRoomId = pickParam(roomId).trim();
+    if (!resolvedRoomId) return;
+
+    let active = true;
+
+    if (paramOrderSummary) {
+      setCachedOrderSummary(paramOrderSummary);
+      void storeOrderSummary(resolvedRoomId, paramOrderSummary);
+      return;
+    }
+
+    void (async () => {
+      const stored = await loadStoredOrderSummary(resolvedRoomId);
+      if (active) setCachedOrderSummary(stored);
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [paramOrderSummary, roomId]);
+
+  const orderSummary = paramOrderSummary ?? cachedOrderSummary;
 
   useEffect(() => {
     navigation.setOptions({
@@ -125,6 +239,34 @@ const ChatRoomScreen = () => {
     }
   };
 
+  const handlePressOrderSummary = async () => {
+    const resolvedOrderId = String(orderSummary?.orderId ?? '').trim();
+    if (!resolvedOrderId) return;
+
+    try {
+      const snapshot = await getCurrentUserSnapshot();
+      const role = String(snapshot?.role ?? '').trim().toUpperCase();
+
+      if (role === 'DRIVER') {
+        router.push({
+          pathname: '/(driver)/order-detail/[id]',
+          params: { id: resolvedOrderId },
+        });
+        return;
+      }
+
+      router.push({
+        pathname: '/(common)/orders/[orderId]',
+        params: { orderId: resolvedOrderId },
+      });
+    } catch {
+      router.push({
+        pathname: '/(common)/orders/[orderId]',
+        params: { orderId: resolvedOrderId },
+      });
+    }
+  };
+
   const pickImageFromGallery = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
@@ -171,7 +313,13 @@ const ChatRoomScreen = () => {
     const senderId = Number((item as any)?.senderId);
     const isMine = Number.isFinite(myId) && Number.isFinite(senderId) && senderId === myId;
     const readState = resolveOutgoingReadState(item, userId, sortedMessages);
-    const readLabel = item.messageId === latestMyMessageId && readState === 'READ' ? '읽음' : item.messageId === latestMyMessageId && readState === 'UNREAD' ? '1' : '';
+    const hasLaterOtherMessage = hasLaterOtherMessageAfter(item, userId, sortedMessages);
+    const readLabel =
+      readState === 'UNREAD'
+        ? '1'
+        : readState === 'READ' && item.messageId === latestMyMessageId && !hasLaterOtherMessage
+          ? '읽음'
+          : '';
     return (
       <View style={[styles.messageRow, isMine ? styles.myMessageRow : styles.otherMessageRow]}>
         {isMine ? (
@@ -201,13 +349,21 @@ const ChatRoomScreen = () => {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
     >
-      <View style={styles.orderSummary}>
-        <View style={styles.orderSummaryLeft}>
-          <Text style={styles.routeText}>경기 평택 → 부산 신항</Text>
-          <Text style={styles.cargoText}>11톤 윙바디 · 파렛트 14개</Text>
-        </View>
-        <Text style={styles.priceText}>450,000원</Text>
-      </View>
+      {orderSummary ? (
+        <TouchableOpacity
+          style={styles.orderSummary}
+          activeOpacity={orderSummary.orderId ? 0.86 : 1}
+          onPress={() => void handlePressOrderSummary()}
+          disabled={!orderSummary.orderId}
+        >
+          <View style={styles.orderSummaryLeft}>
+            {!!orderSummary.orderId && <Text style={styles.orderIdText}>오더 #{orderSummary.orderId}</Text>}
+            <Text style={styles.routeText}>{orderSummary.routeText}</Text>
+            <Text style={styles.cargoText}>{orderSummary.cargoText}</Text>
+          </View>
+          {!!orderSummary.priceText && <Text style={styles.priceText}>{orderSummary.priceText}</Text>}
+        </TouchableOpacity>
+      ) : null}
 
       {!!dateChipLabel && (
         <View style={styles.dateChipWrap}>
@@ -263,6 +419,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#d9dfef',
   },
   orderSummaryLeft: { flex: 1, paddingRight: 8 },
+  orderIdText: { fontSize: 11, fontWeight: '700', color: '#5f6b85', marginBottom: 3 },
   routeText: { fontSize: 15, fontWeight: '700', color: '#222836' },
   cargoText: { marginTop: 4, fontSize: 12, color: '#66748d' },
   priceText: { fontSize: 16, fontWeight: '700', color: '#4d51db' },

@@ -6,10 +6,87 @@ import { useRouter, useFocusEffect, useNavigation } from 'expo-router';
 import { useChatManager } from '../../../../shared/api/chatApi';
 import { ChatRoomResponse } from '../../../../shared/models/chat';
 
+const GENERIC_ROOM_NAMES = new Set(['오더 협의방', '협의방', '채팅', '채팅방', '1:1 채팅']);
+
+function normalizeText(value: unknown) {
+  return String(value ?? '').trim();
+}
+
+function normalizeNumberText(value: unknown) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return '';
+  return `${n.toLocaleString()}원`;
+}
+
+function buildLocationLabel(place: unknown, addr: unknown) {
+  const placeText = normalizeText(place);
+  if (placeText) return placeText;
+
+  const parts = normalizeText(addr).split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '';
+  if (parts.length === 1) return parts[0];
+  return `${parts[0]} ${parts[1]}`;
+}
+
+function resolveRoomTitle(item: ChatRoomResponse) {
+  const row = item as ChatRoomResponse & Record<string, unknown>;
+  const candidates = [
+    row.otherUserNickname,
+    row.partnerNickname,
+    row.targetNickname,
+    row.opponentNickname,
+    row.nickname,
+    row.roomName,
+  ];
+
+  for (const candidate of candidates) {
+    const text = normalizeText(candidate);
+    if (text && !GENERIC_ROOM_NAMES.has(text)) return text;
+  }
+
+  return '';
+}
+
+function resolveRoomOrderSummary(item: ChatRoomResponse) {
+  const row = item as ChatRoomResponse & Record<string, unknown>;
+  const orderId = normalizeText(row.orderId ?? row.orderNo);
+  const routeText =
+    normalizeText(row.routeText) ||
+    [buildLocationLabel(row.startPlace, row.startAddr), buildLocationLabel(row.endPlace, row.endAddr)]
+      .filter(Boolean)
+      .join(' → ');
+  const tonnageText = normalizeText(row.reqTonnage ?? row.tonnageLabel ?? row.tonnage);
+  const vehicleText = [tonnageText, normalizeText(row.reqCarType ?? row.carType)].filter(Boolean).join(' ');
+  const cargoLabel = normalizeText(row.cargoText) || [vehicleText, normalizeText(row.cargoContent)].filter(Boolean).join(' · ');
+  const priceText = normalizeText(row.priceText) || normalizeNumberText(row.price ?? row.basePrice ?? row.totalPrice);
+
+  if (!orderId && !routeText && !cargoLabel && !priceText) return null;
+
+  return {
+    orderId,
+    routeText,
+    cargoText: cargoLabel,
+    priceText,
+  };
+}
+
+function shouldHideRoom(item: ChatRoomResponse) {
+  const rawRoomName = normalizeText((item as ChatRoomResponse & Record<string, unknown>).roomName);
+  const roomTitle = resolveRoomTitle(item);
+  const orderSummary = resolveRoomOrderSummary(item);
+
+  if (!roomTitle && GENERIC_ROOM_NAMES.has(rawRoomName) && !orderSummary) {
+    return true;
+  }
+
+  return false;
+}
+
 const ChatListScreen = () => {
   const router = useRouter();
   const navigation = useNavigation();
   const { userId, rooms, fetchMyRooms } = useChatManager();
+  const visibleRooms = rooms.filter((room) => !shouldHideRoom(room));
 
   useEffect(() => {
     navigation.setOptions({
@@ -52,6 +129,8 @@ const ChatListScreen = () => {
   const renderItem = ({ item }: { item: ChatRoomResponse }) => {
     const displayTime = getDisplayTime(item.lastMessageTime);
     const hasUnread = item.unreadCount > 0;
+    const roomTitle = resolveRoomTitle(item);
+    const orderSummary = resolveRoomOrderSummary(item);
 
     return (
       <TouchableOpacity
@@ -60,7 +139,10 @@ const ChatListScreen = () => {
           if (item.roomId && userId) {
             router.push({
               pathname: '/(chat)/[roomId]',
-              params: { roomId: item.roomId.toString() },
+              params: {
+                roomId: item.roomId.toString(),
+                ...(orderSummary ?? {}),
+              },
             });
           }
         }}
@@ -68,16 +150,16 @@ const ChatListScreen = () => {
         <View style={styles.avatarWrap}>
           <View style={styles.avatarCircle}>
             <Ionicons
-              name={hasUnread ? 'person-outline' : 'business-outline'}
+              name="chatbubble-outline"
               size={22}
               color={hasUnread ? '#5a5ce1' : '#97a3b7'}
             />
           </View>
-          {hasUnread && <View style={styles.onlineDot} />}
+          {hasUnread && <View style={styles.unreadDot} />}
         </View>
 
         <View style={styles.roomInfo}>
-          <Text style={styles.roomName}>{item.roomName}</Text>
+          {!!roomTitle && <Text style={styles.roomName}>{roomTitle}</Text>}
           <Text style={styles.lastMessage} numberOfLines={1}>
             {item.lastMessage || '메시지가 없습니다.'}
           </Text>
@@ -85,11 +167,6 @@ const ChatListScreen = () => {
 
         <View style={styles.metaInfo}>
           <Text style={[styles.time, hasUnread && styles.timeUnread]}>{displayTime}</Text>
-          {hasUnread && (
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>{item.unreadCount}</Text>
-            </View>
-          )}
         </View>
       </TouchableOpacity>
     );
@@ -97,12 +174,18 @@ const ChatListScreen = () => {
 
   return (
     <View style={styles.container}>
-      <FlatList
-        data={rooms}
-        keyExtractor={(item) => item.roomId?.toString() || Math.random().toString()}
-        renderItem={renderItem}
-        contentContainerStyle={styles.listContent}
-      />
+      {visibleRooms.length === 0 ? (
+        <View style={styles.emptyWrap}>
+          <Text style={styles.emptyText}>아직 채팅이 없습니다.</Text>
+        </View>
+      ) : (
+        <FlatList
+          data={visibleRooms}
+          keyExtractor={(item) => item.roomId?.toString() || Math.random().toString()}
+          renderItem={renderItem}
+          contentContainerStyle={styles.listContent}
+        />
+      )}
     </View>
   );
 };
@@ -110,6 +193,8 @@ const ChatListScreen = () => {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#eef0f5' },
   listContent: { paddingHorizontal: 12, paddingVertical: 12, gap: 10 },
+  emptyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },
+  emptyText: { fontSize: 15, fontWeight: '600', color: '#7b8798' },
   roomItem: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -131,14 +216,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e3e8f1',
   },
-  onlineDot: {
+  unreadDot: {
     position: 'absolute',
     right: 8,
     bottom: 4,
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: '#4fb37f',
+    backgroundColor: '#ef4444',
     borderWidth: 2,
     borderColor: '#f8f9fb',
   },
@@ -148,17 +233,6 @@ const styles = StyleSheet.create({
   metaInfo: { alignItems: 'flex-end', justifyContent: 'flex-start', minHeight: 50 },
   time: { fontSize: 12, color: '#9ba6b8', fontWeight: '600' },
   timeUnread: { color: '#5a5ce1' },
-  badge: {
-    minWidth: 24,
-    height: 24,
-    borderRadius: 12,
-    paddingHorizontal: 6,
-    marginTop: 8,
-    backgroundColor: '#de5048',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  badgeText: { color: '#fff', fontSize: 12, fontWeight: '800' },
 });
 
 export default ChatListScreen;

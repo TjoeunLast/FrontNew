@@ -1,15 +1,18 @@
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
 import { useRouter } from "expo-router";
 import React from "react";
 import {
   Alert,
+  Image,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
+  type ImageStyle,
   type TextStyle,
   type ViewStyle,
 } from "react-native";
@@ -19,6 +22,8 @@ import { AuthService } from "@/shared/api/authService";
 import { UserService } from "@/shared/api/userService";
 import ShipperScreenHeader from "@/shared/ui/layout/ShipperScreenHeader";
 import { clearCurrentUserSnapshot, getCurrentUserSnapshot } from "@/shared/utils/currentUserStorage";
+
+const PROFILE_IMAGE_STORAGE_KEY = "baro_profile_image_url_v1";
 
 type DriverProfileView = {
   nickname: string;
@@ -61,12 +66,14 @@ export default function DriverMyPageScreen() {
     carNum: "-",
     bankName: "-",
   });
+  const [profileImageUrl, setProfileImageUrl] = React.useState("");
 
   useFocusEffect(
     React.useCallback(() => {
       let active = true;
 
       void (async () => {
+        const localImageUrl = await AsyncStorage.getItem(PROFILE_IMAGE_STORAGE_KEY);
         try {
           const me = (await UserService.getMyInfo()) as any;
           const cached = await getCurrentUserSnapshot();
@@ -79,6 +86,7 @@ export default function DriverMyPageScreen() {
           }
 
           if (!active) return;
+          setProfileImageUrl((localImageUrl ?? "") || me?.profileImageUrl || "");
           setProfile({
             nickname: toText(me?.nickname ?? cached?.nickname, "차주"),
             vehicleLabel: toVehicleLabel(
@@ -90,6 +98,7 @@ export default function DriverMyPageScreen() {
           });
         } catch {
           if (!active) return;
+          setProfileImageUrl(localImageUrl ?? "");
           setProfile((prev) => prev);
         }
       })();
@@ -148,9 +157,11 @@ export default function DriverMyPageScreen() {
           height: 56,
           borderRadius: 28,
           backgroundColor: "rgba(78, 70, 229, 0.12)",
+          overflow: "hidden",
           alignItems: "center",
           justifyContent: "center",
         } as ViewStyle,
+        profileImage: { width: "100%", height: "100%" } as ImageStyle,
         profileInfo: { flex: 1 } as ViewStyle,
         profileName: { fontSize: 16, fontWeight: "800", color: "#111827", letterSpacing: -0.1 } as TextStyle,
         profileSubRow: { flexDirection: "row", alignItems: "center", marginTop: 4, gap: 8 } as ViewStyle,
@@ -257,7 +268,11 @@ export default function DriverMyPageScreen() {
       <ScrollView contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
         <Pressable style={s.profileCard} onPress={() => router.push("/(common)/settings/profile" as any)}>
           <View style={s.profileAvatar}>
-            <MaterialCommunityIcons name="steering" size={28} color="#4E46E5" />
+            {profileImageUrl ? (
+              <Image source={{ uri: profileImageUrl }} style={s.profileImage} resizeMode="cover" />
+            ) : (
+              <MaterialCommunityIcons name="steering" size={28} color="#4E46E5" />
+            )}
           </View>
             <View style={s.profileInfo}>
               <Text style={s.profileName}>{profile.nickname} 님</Text>
