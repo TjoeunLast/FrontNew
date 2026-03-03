@@ -144,6 +144,12 @@ function normalizeDisplayText(v?: string) {
   return s;
 }
 
+function buildChatLocationLabel(addr?: string, place?: string) {
+  const placeText = normalizeDisplayText(place);
+  if (placeText) return placeText;
+  return formatAddressBig(addr);
+}
+
 type ActionButtonConfig = {
   text: string;
   icon: keyof typeof Ionicons.glyphMap;
@@ -656,13 +662,30 @@ export default function OrderDetailScreen() {
       return;
     }
 
+    const routeText = `${buildChatLocationLabel(order?.startAddr, order?.startPlace)} → ${buildChatLocationLabel(
+      order?.endAddr,
+      order?.endPlace
+    )}`;
+    const tonnageText =
+      normalizeDisplayText(order?.reqTonnage) ||
+      (Number.isFinite(Number(order?.tonnage)) && Number(order?.tonnage) > 0 ? `${order?.tonnage}톤` : "");
+    const vehicleText = [tonnageText, normalizeDisplayText(order?.reqCarType) || "차량"].filter(Boolean).join(" ");
+    const cargoText = [vehicleText, cargoName].filter(Boolean).join(" · ");
+    const priceText = `${totalPrice.toLocaleString()}원`;
+
     setActionLoading(true);
     try {
       const res = await apiClient.post<number>(`/api/chat/room/personal/${targetId}`);
       const roomId = res.data;
       router.push({
         pathname: "/(chat)/[roomId]",
-        params: { roomId: String(roomId) },
+        params: {
+          roomId: String(roomId),
+          orderId: String(order?.orderId ?? ""),
+          routeText,
+          cargoText,
+          priceText,
+        },
       });
     } catch (err) {
       console.error("채팅방 생성 실패:", err);

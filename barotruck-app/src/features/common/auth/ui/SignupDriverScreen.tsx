@@ -1,6 +1,7 @@
 ﻿// src/features/common/auth/ui/SignupDriverScreen.tsx
-import React, { useMemo, useState, useCallback } from "react";
-import Postcode from 'react-native-daum-postcode'; // 주소 API 추가
+import React, { useMemo, useState } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as FileSystem from "expo-file-system/legacy";
 import {
   Alert,
   KeyboardAvoidingView,
@@ -25,7 +26,44 @@ import { withAlpha } from "@/shared/utils/color";
 import { AuthService } from "@/shared/api/authService";
 import { UserService } from "@/shared/api/userService";
 import { RegisterRequest } from "@/shared/models/auth";
+import AddressSearch from "@/shared/utils/AddressSearch";
 import { saveCurrentUserSnapshot } from "@/shared/utils/currentUserStorage";
+
+const PROFILE_IMAGE_STORAGE_KEY = "baro_profile_image_url_v1";
+
+async function persistProfileImage(uri: string): Promise<string> {
+  const docDir = FileSystem.documentDirectory;
+  if (!docDir) return uri;
+
+  const cleanUri = uri.split("?")[0] || uri;
+  const ext = cleanUri.includes(".") ? cleanUri.substring(cleanUri.lastIndexOf(".")) : ".jpg";
+  const safeExt = ext.length >= 2 && ext.length <= 5 ? ext : ".jpg";
+  const targetUri = `${docDir}profile-image${safeExt}`;
+
+  const targetInfo = await FileSystem.getInfoAsync(targetUri);
+  if (targetInfo.exists) {
+    await FileSystem.deleteAsync(targetUri, { idempotent: true });
+  }
+
+  await FileSystem.copyAsync({ from: uri, to: targetUri });
+  return targetUri;
+}
+
+function toUploadFile(uri: string) {
+  const normalized = uri.split("?")[0] || uri;
+  const ext = normalized.includes(".") ? normalized.substring(normalized.lastIndexOf(".") + 1).toLowerCase() : "jpg";
+  const type =
+    ext === "png" ? "image/png" :
+    ext === "heic" ? "image/heic" :
+    ext === "webp" ? "image/webp" :
+    "image/jpeg";
+
+  return {
+    uri,
+    name: `profile.${ext || "jpg"}`,
+    type,
+  } as any;
+}
 
 function showMsg(title: string, msg: string) {
   if (Platform.OS === "web") globalThis.alert(`${title}\n\n${msg}`);
@@ -231,57 +269,47 @@ export default function SignupDriverScreen() {
   const {
     email = "",
     password = "",
+    name = "",
     phone = "",
+    profileImageUri = "",
     gender,
     birthDate,
   } = useLocalSearchParams<{
     email: string;
     password: string;
+    name: string;
     phone: string;
+    profileImageUri?: string;
     gender?: "M" | "F";
     birthDate?: string;
   }>();
 
   const [nickname, setNickname] = useState("");
-  const [nickChecked, setNickChecked] = useState(false);
-  const [nickOkChecked, setNickOkChecked] = useState(false);
-  const [checkingNick, setCheckingNick] = useState(false);
   const [plateNo, setPlateNo] = useState("");
   const [carType, setCarType] = useState<string | null>(null);
   const [ton, setTon] = useState<string | null>(null);
   const [expYears, setExpYears] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [address, setAddress] = useState("");
+  const [addressLat, setAddressLat] = useState<number | null>(null);
+  const [addressLng, setAddressLng] = useState<number | null>(null);
   const [isPostcodeOpen, setIsPostcodeOpen] = useState(false);
 
   // ✅ 1. 유효성 검사 변수 추가 (에러 해결 핵심)
   const nickFormatOk = nickname.trim().length >= 2;
   const plateOk = normalizePlate(plateNo).length >= 6;
   const expOk = digitsOnly(expYears).length > 0;
+  const addressOk = address.trim().length > 0;
+  const addressCoordsOk = addressLat !== null && addressLng !== null;
   const canSubmit =
     nickFormatOk &&
-    nickChecked &&
-    nickOkChecked &&
     plateOk &&
     !!carType &&
     !!ton &&
     expOk &&
+    addressOk &&
+    addressCoordsOk &&
     !submitting;
-
-  const onCheckNickname = useCallback(async () => {
-    if (nickname.trim().length < 2)
-      return showMsg("알림", "2자 이상 입력하세요.");
-    try {
-      setCheckingNick(true);
-      const isDuplicated = await UserService.checkNickname(nickname.trim());
-      setNickChecked(true);
-      setNickOkChecked(!isDuplicated);
-    } catch (e: any) {
-      showMsg("오류", e.response?.data?.message ?? "실패");
-    } finally {
-      setCheckingNick(false);
-    }
-  }, [nickname, nickFormatOk]);
 
   const s = useMemo(() => {
     const S = { lg: 20, md: 16, xl: 24 };
@@ -362,8 +390,8 @@ export default function SignupDriverScreen() {
         borderTopColor: withAlpha(c.border.default, 0.7),
       },
       submitBtn: {
-        height: 76,
-        borderRadius: 20,
+        height: 62,
+        borderRadius: 18,
         shadowColor: withAlpha(c.brand.primary, 0.35),
         shadowOpacity: 1,
         shadowRadius: 18,
@@ -379,30 +407,50 @@ export default function SignupDriverScreen() {
     setSubmitting(true);
     try {
       const payload: RegisterRequest = {
-        email,
+        email: email.trim(),
         password,
+        name: name.trim(),
         nickname: nickname.trim(),
-        phone,
+        phone: phone.trim(),
         role: "DRIVER",
         gender,
         age: parseBirthDateToAge(String(birthDate ?? "")),
+        delflag: "N",
+        regflag: "Y",
+        ratingAvg: 0,
+        user_level: 0,
         driver: {
           carNum: normalizePlate(plateNo),
           carType: carType || "CARGO",
           tonnage: Number.parseFloat(mapTon(ton).replace("t", "")),
           career: Number.parseInt(digitsOnly(expYears), 10) || 0, // ✅ 필드명 career로 고정
           address: address, // 주소 필드 추가
+          lat: addressLat ?? undefined,
+          lng: addressLng ?? undefined,
           bankName: "",
           accountNum: "",
         },
       };
       const response = await AuthService.register(payload);
+      if (profileImageUri) {
+        try {
+          const persistedUri = await persistProfileImage(String(profileImageUri));
+          await UserService.uploadProfileImage(toUploadFile(persistedUri));
+          await AsyncStorage.setItem(PROFILE_IMAGE_STORAGE_KEY, persistedUri);
+        } catch (imageError) {
+          console.error("signup profile image upload failed", imageError);
+        }
+      }
       await saveCurrentUserSnapshot({
         email,
+        name,
         nickname: nickname.trim(),
         role: "DRIVER",
         gender,
         birthDate: String(birthDate ?? "").trim() || undefined,
+        activityAddress: address,
+        activityLat: addressLat ?? undefined,
+        activityLng: addressLng ?? undefined,
       });
 
       router.replace("/(driver)/(tabs)");
@@ -430,28 +478,19 @@ export default function SignupDriverScreen() {
 
   return (
     <SafeAreaView style={s.screen} edges={["top", "bottom"]}>
-      {/* 주소 검색 모달 */}
-      <Modal visible={isPostcodeOpen} animationType="slide">
-        <SafeAreaView style={{ flex: 1 }}>
-          <View style={s.header}>
-            <Pressable onPress={() => setIsPostcodeOpen(false)}>
-              <Ionicons name="close" size={28} color={c.text.primary} />
-            </Pressable>
-          </View>
-          <Postcode
-            style={{ flex: 1 }}
-            jsOptions={{ animation: true }}
-            onSelected={(data) => {
-              setAddress(data.address);
-              setIsPostcodeOpen(false);
-            }}
-            onError={() => {
-              showMsg("오류", "주소 서비스를 불러올 수 없습니다.");
-              setIsPostcodeOpen(false);
-            }}
-          />
-        </SafeAreaView>
-      </Modal>
+      <AddressSearch
+        visible={isPostcodeOpen}
+        onClose={() => setIsPostcodeOpen(false)}
+        onComplete={({ address: selectedAddress, lat, lng }) => {
+          setAddress(selectedAddress);
+          setAddressLat(typeof lat === "number" ? lat : null);
+          setAddressLng(typeof lng === "number" ? lng : null);
+
+          if (typeof lat !== "number" || typeof lng !== "number") {
+            showMsg("좌표 확인 필요", "주소는 선택됐지만 좌표를 가져오지 못했습니다. 다시 선택해주세요.");
+          }
+        }}
+      />
 
 
       <View style={s.header}>
@@ -474,57 +513,20 @@ export default function SignupDriverScreen() {
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={s.form}
         >
-          {/* 닉네임 + 중복확인 */}
           <Text style={s.label}>닉네임</Text>
-          <View style={s.row}>
-            <View style={{ flex: 1 }}>
-              <TextField
-                value={nickname}
-                // 1. onPress 대신 onChangeText를 사용해서 글자만 바뀌게 합니다.
-                onChangeText={(text) => {
-                  setNickname(text);
-                  setNickChecked(false); // 글자를 고치면 다시 확인하도록 상태 초기화
-                  setNickOkChecked(false);
-                }}
-                placeholder="앱에서 사용할 닉네임"
-                autoCapitalize="none"
-                inputWrapStyle={s.tfWrap}
-                inputStyle={s.tfInput}
-                errorText={
-                  nickname.length > 0 && !nickFormatOk
-                    ? "닉네임은 2글자 이상 입력해주세요."
-                    : undefined
-                }
-              />
-            </View>
-            <View style={s.rowGap} />
-            <Pressable
-              style={[
-                s.miniBtn,
-                (checkingNick || !nickFormatOk) && { opacity: 0.6 },
-              ]}
-              // 2. 버튼을 누를 때만 서버와 통신합니다.
-              onPress={onCheckNickname}
-              disabled={checkingNick || !nickFormatOk}
-            >
-              <Text style={s.miniBtnText}>
-                {checkingNick ? "확인중..." : "중복확인"}
-              </Text>
-            </Pressable>
-          </View>
-
-          {nickChecked ? (
-            <Text
-              style={[
-                s.helper,
-                { color: nickOkChecked ? c.status.success : c.status.danger },
-              ]}
-            >
-              {nickOkChecked
-                ? "사용 가능한 닉네임이에요."
-                : "이미 사용 중인 닉네임이에요."}
-            </Text>
-          ) : null}
+          <TextField
+            value={nickname}
+            onChangeText={setNickname}
+            placeholder="앱에서 사용할 닉네임"
+            autoCapitalize="none"
+            inputWrapStyle={s.tfWrap}
+            inputStyle={s.tfInput}
+            errorText={
+              nickname.length > 0 && !nickFormatOk
+                ? "닉네임은 2글자 이상 입력해주세요."
+                : undefined
+            }
+          />
 
           <View style={{ height: 16 }} />
 
@@ -595,10 +597,19 @@ export default function SignupDriverScreen() {
                 placeholder="주소 검색"
                 inputWrapStyle={s.tfWrap}
                 inputStyle={s.tfInput}
+                errorText={
+                  address.length > 0 && !addressCoordsOk
+                    ? "주소 좌표를 확인하지 못했습니다. 다시 선택해주세요."
+                    : undefined
+                }
               />
             </View>
           </Pressable>
-          <Text style={s.helper}>기사님의 활동 거점을 기준으로 오더가 추천됩니다.</Text>
+          <Text style={s.helper}>
+            {addressCoordsOk
+              ? `좌표 저장됨: ${addressLat?.toFixed(6)}, ${addressLng?.toFixed(6)}`
+              : "기사님의 활동 거점을 기준으로 오더가 추천됩니다."}
+          </Text>
 
         </ScrollView>
 

@@ -135,11 +135,7 @@ export default function DriverHomeScreen() {
               size={24}
               color={c.text.primary}
             />
-            {hasUnreadChat && (
-              <View style={styles.chatUnreadBadge}>
-                <Text style={styles.chatUnreadText}>N</Text>
-              </View>
-            )}
+            {hasUnreadChat && <View style={styles.chatUnreadDot} />}
           </Pressable>
 
           <Pressable onPress={() => console.log("알림 이동")}>
@@ -366,23 +362,16 @@ const styles = StyleSheet.create({
   logoText: { fontSize: 22, fontWeight: "900" },
   headerIcons: { flexDirection: "row", gap: 15 },
   chatIconWrap: { position: "relative" },
-  chatUnreadBadge: {
+  chatUnreadDot: {
     position: "absolute",
-    top: -6,
-    right: -8,
-    minWidth: 16,
-    height: 16,
-    borderRadius: 8,
+    top: -1,
+    right: -2,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
     backgroundColor: "#EF4444",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 3,
-  },
-  chatUnreadText: {
-    color: "#FFFFFF",
-    fontSize: 10,
-    fontWeight: "900",
-    lineHeight: 12,
+    borderWidth: 1.5,
+    borderColor: "#FFFFFF",
   },
   scrollContent: { paddingHorizontal: 20, paddingBottom: 30, paddingTop: 10 },
   listHeader: {

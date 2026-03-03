@@ -70,7 +70,6 @@ export default function SignupScreen() {
   const [pw, setPw] = useState("");
   const [pw2, setPw2] = useState("");
   const [name, setName] = useState("");
-  const [nickname, setNickname] = useState("");
   const [phone, setPhone] = useState("");
   const [gender, setGender] = useState<Gender | null>(null);
   const [birthDate, setBirthDate] = useState("");
@@ -225,8 +224,8 @@ export default function SignupScreen() {
         borderTopColor: withAlpha(c.border.default, 0.7),
       } as ViewStyle,
       nextBtn: {
-        height: 76,
-        borderRadius: 20,
+        height: 62,
+        borderRadius: 18,
         alignSelf: "stretch",
         shadowColor: withAlpha(c.brand.primary, 0.35),
         shadowOpacity: 1,
@@ -261,7 +260,6 @@ export default function SignupScreen() {
   const pwOk = pw.length >= 8;
   const pwMatch = pw.length > 0 && pw2.length > 0 && pw === pw2;
   const nameOk = name.trim().length > 0;
-  const nicknameOk = nickname.trim().length > 0;
   const phoneFormatOk = isPhoneLike(phone);
   const birthDateOk = parseBirthDate(birthDate) !== null;
   const genderOk = gender !== null;
@@ -272,7 +270,6 @@ export default function SignupScreen() {
     pwOk &&
     pwMatch &&
     nameOk &&
-    nicknameOk &&
     phoneFormatOk &&
     genderOk &&
     birthDateOk &&
@@ -310,7 +307,6 @@ export default function SignupScreen() {
       email: normalizeEmail(email),
       password: pw,
       name: name.trim(),
-      nickname: nickname.trim(),
       phone: phone.trim(),
       role: role,
       gender: gender!,
@@ -319,17 +315,10 @@ export default function SignupScreen() {
 
     // 데이터를 query params로 넘기거나, 다음 페이지에서 다시 입력받지 않도록 
     // 경로를 이동합니다. (상태 관리가 없으므로 router.push에 객체 전달)
-    if (role === "shipper") {
-      router.push({
-        pathname: "/(auth)/signup-shipper",
-        params: signupData,
-      });
-    } else {
-      router.push({
-        pathname: "/(auth)/signup-driver",
-        params: signupData,
-      });
-    }
+    router.push({
+      pathname: "/(auth)/signup-profile",
+      params: signupData,
+    });
   };
 
   return (
@@ -430,18 +419,6 @@ export default function SignupScreen() {
               inputWrapStyle={s.tfWrap}
               inputStyle={s.tfInput}
               errorText={pw2.length > 0 && !pwMatch ? "비밀번호가 일치하지 않아요." : undefined}
-            />
-
-            <View style={{ height: 16 }} />
-
-            <Text style={s.label}>닉네임</Text>
-            <TextField
-              value={nickname}
-              onChangeText={setNickname}
-              placeholder="닉네임 입력"
-              autoCapitalize="none"
-              inputWrapStyle={s.tfWrap}
-              inputStyle={s.tfInput}
             />
 
             <View style={{ height: 16 }} />
