@@ -2,6 +2,7 @@ import apiClient from './apiClient';
 import { UserProfile, DriverInfo, ShipperInfo, ChangePasswordRequest } from '../models/user';
 import * as SecureStore from "expo-secure-store";
 import { USE_MOCK } from "@/shared/config/mock";
+import { getCurrentUserSnapshot } from "@/shared/utils/currentUserStorage";
 
 type MockSession = {
   userId?: number;
@@ -28,10 +29,12 @@ export const UserService = {
    * 인터페이스 UserProfile과 필드명(userId, role 등)이 일치하는지 확인이 필요합니다.
    */
   getMyInfo: async (): Promise<UserProfile> => {
+    const snapshot = await getCurrentUserSnapshot();
+
     if (USE_MOCK) {
       const session = await readMockSession();
       const role = session.role ?? "SHIPPER";
-      return {
+      const baseProfile: UserProfile = {
         userId: Number(session.userId ?? 1),
         email: String(session.email ?? "mock@baro.local"),
         nickname: String(session.nickname ?? "목업유저"),
@@ -41,9 +44,19 @@ export const UserService = {
         role,
         ratingAvg: 4.8,
       };
+      return {
+        ...baseProfile,
+        nickname: String(snapshot?.nickname ?? baseProfile.nickname).trim() || baseProfile.nickname,
+        name: String(snapshot?.name ?? snapshot?.nickname ?? baseProfile.name).trim() || baseProfile.name,
+      };
     }
     const res = await apiClient.get('/api/user/me');
-    return res.data;
+    const baseProfile = res.data as UserProfile;
+    return {
+      ...baseProfile,
+      nickname: String(snapshot?.nickname ?? baseProfile.nickname).trim() || baseProfile.nickname,
+      name: String(snapshot?.name ?? snapshot?.nickname ?? baseProfile.name).trim() || baseProfile.name,
+    };
   },
 
   /** * 2. 차주 프로필 저장/수정 (DriverController /api/v1/drivers/me) 
@@ -91,6 +104,7 @@ export const UserService = {
 
   /** * 6. 회원 탈퇴 (POST /api/user/delete) */
   deleteUser: async (): Promise<string> => {
+    if (USE_MOCK) return "목업 회원 탈퇴 처리되었습니다.";
     const res = await apiClient.post('/api/user/delete');
     return res.data;
   },
