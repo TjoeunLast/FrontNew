@@ -5,6 +5,7 @@ import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Postcode from "@actbase/react-daum-postcode";
 
+import { KakaoLocalApi } from "@/shared/api/kakaoLocalService";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 
 interface AddressData {
@@ -45,12 +46,28 @@ const AddressSearch = ({ visible, onClose, onComplete }: AddressSearchProps) => 
     return undefined;
   };
 
-  const handleComplete = (data: AddressData) => {
-    const lat = pickCoordinate(data, ["y", "lat", "latitude"]);
-    const lng = pickCoordinate(data, ["x", "lng", "longitude"]);
+  const handleComplete = async (data: AddressData) => {
+    let lat = pickCoordinate(data, ["y", "lat", "latitude"]);
+    let lng = pickCoordinate(data, ["x", "lng", "longitude"]);
+
+    console.log("[AddressSearch] selected address:", data.address);
+    console.log("[AddressSearch] postcode coordinates:", { lat, lng });
+
+    if (lat === undefined || lng === undefined) {
+      try {
+        console.log("[AddressSearch] postcode coordinates missing, fallback to Kakao Local API");
+        const geocoded = await KakaoLocalApi.geocodeAddress(data.address);
+        lat = geocoded?.lat;
+        lng = geocoded?.lng;
+        console.log("[AddressSearch] Kakao Local API coordinates:", geocoded);
+      } catch (error) {
+        console.error("Failed to geocode selected address:", error);
+      }
+    }
+
+    console.log("[AddressSearch] final coordinates:", { address: data.address, lat, lng });
     onComplete({ address: data.address, lat, lng });
-    // 주소를 넘겨준 뒤 모달 닫기
-    onClose(); 
+    onClose();
   };
 
   return (

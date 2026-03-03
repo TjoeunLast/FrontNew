@@ -160,6 +160,12 @@ export function ShipperCreateOrderStep1Screen() {
       endLat === undefined ||
       endLng === undefined
     ) {
+      console.log("[RouteEstimate] skipped: missing coordinates", {
+        startLat,
+        startLng,
+        endLat,
+        endLng,
+      });
       setDistanceKm(fallbackDistanceKm);
       setEstimatedDurationMin(undefined);
       return;
@@ -168,6 +174,12 @@ export function ShipperCreateOrderStep1Screen() {
     let active = true;
     void (async () => {
       try {
+        console.log("[RouteEstimate] request", {
+          startLat,
+          startLng,
+          endLat,
+          endLng,
+        });
         const route = await RouteApi.estimateByCoords({
           startLat,
           startLng,
@@ -175,10 +187,12 @@ export function ShipperCreateOrderStep1Screen() {
           endLng,
         });
         if (!active) return;
+        console.log("[RouteEstimate] success", route);
         setDistanceKm(route.distanceKm);
         setEstimatedDurationMin(route.durationMin);
-      } catch {
+      } catch (error) {
         if (!active) return;
+        console.error("[RouteEstimate] failed", error);
         setDistanceKm(fallbackDistanceKm);
         setEstimatedDurationMin(undefined);
       }
