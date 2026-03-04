@@ -1,10 +1,4 @@
-import React, {
-  useCallback,
-  useMemo,
-  useState,
-  useRef,
-  useEffect,
-} from "react";
+import React, { useCallback, useState, useRef, useEffect } from "react";
 import {
   View,
   Text,
@@ -13,7 +7,6 @@ import {
   Pressable,
   RefreshControl,
   ActivityIndicator,
-  Alert,
   Animated,
   Easing,
 } from "react-native";
@@ -23,29 +16,34 @@ import { useOrderList } from "../model/useOrderList";
 import { Ionicons } from "@expo/vector-icons";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import ShipperScreenHeader from "@/shared/ui/layout/ShipperScreenHeader";
+import { useRouter } from "expo-router";
+import { useOrderFilterStore } from "@/features/driver/order-filter/model/useOrderFilterStore";
 
 export default function OrderListScreen() {
   const { colors: c } = useAppTheme();
+  const router = useRouter();
 
+  // 1. 비즈니스 로직 훅 (데이터 필터링 및 정렬 담당)
   const {
-    filteredOrders, // 필터와 정렬이 적용된 최종 오더 리스트
+    filteredOrders,
     loading,
     refreshing,
     onRefresh,
-    filter, // 배차 유형
-    setFilter,
-    sortBy, // 정렬 기준
+    category,
+    setCategory,
+    sortBy,
     setSortBy,
     myLocation,
   } = useOrderList();
 
-  // 15초 카운트다운 숫자
-  const [timeLeft, setTimeLeft] = useState(15);
+  // 2. 상세 필터 스토어 연결 (배지 숫자 계산 담당)
+  const filterStore = useOrderFilterStore();
+  const appliedCount = filterStore.getAppliedCount();
 
-  // 아이콘 회전을 위한 애니메이션 값
+  // 자동 갱신 타이머
+  const [timeLeft, setTimeLeft] = useState(15);
   const spinAnim = useRef(new Animated.Value(0)).current;
 
-  // refreshing 상태가 바뀔 때 회전 애니메이션 제어
   useEffect(() => {
     if (refreshing) {
       Animated.loop(
@@ -59,33 +57,26 @@ export default function OrderListScreen() {
     } else {
       spinAnim.stopAnimation();
       spinAnim.setValue(0);
-      setTimeLeft(15); // 갱신 끝나면 타이머 리셋
+      setTimeLeft(15);
     }
   }, [refreshing, spinAnim]);
 
-  // 15초마다 자동 갱신 로직 (1초 카운트다운)
   useFocusEffect(
     useCallback(() => {
-      if (refreshing) return; // 갱신 중엔 타이머 멈춤
-
-      // 1초 타이머 설정
+      if (refreshing) return;
       const timer = setInterval(() => {
         setTimeLeft((prev) => {
           if (prev <= 1) {
-            console.log("자동 갱신", new Date().toLocaleTimeString());
             onRefresh();
             return 15;
           }
           return prev - 1;
         });
-      }, 1000); // 1000ms = 1초
-
-      // 화면을 벗어나면 타이머 해제
+      }, 1000);
       return () => clearInterval(timer);
     }, [onRefresh, refreshing]),
   );
 
-  // 회전 애니메이션 보간
   const spin = spinAnim.interpolate({
     inputRange: [0, 1],
     outputRange: ["0deg", "360deg"],
@@ -98,44 +89,47 @@ export default function OrderListScreen() {
         hideBackButton
         right={
           <Pressable
-            onPress={() => Alert.alert("필터", "상세 필터 모달이 열립니다.")}
+            onPress={() => router.push("/(driver)/order-filter")}
             style={s.headerFilterBtn}
           >
             <Ionicons name="options-outline" size={24} color={c.text.primary} />
+            {appliedCount > 0 && (
+              <View
+                style={[s.filterBadge, { backgroundColor: c.brand.primary }]}
+              >
+                <Text style={s.filterBadgeText}>{appliedCount}</Text>
+              </View>
+            )}
           </Pressable>
         }
       />
 
-      {/* 필터 탭 (4개 항목으로 정리) */}
       <View style={s.filterWrapper}>
         <View style={s.tabContainer}>
           <TabChip
             label="전체"
-            active={filter.dispatchType === "ALL"}
-            onPress={() => setFilter({ ...filter, dispatchType: "ALL" })}
+            active={category.dispatchType === "ALL"}
+            onPress={() => setCategory({ dispatchType: "ALL" })}
           />
           <TabChip
             label="추천"
-            active={filter.dispatchType === "RECOMMENDED"}
-            onPress={() =>
-              setFilter({ ...filter, dispatchType: "RECOMMENDED" })
-            }
+            active={category.dispatchType === "RECOMMENDED"}
+            onPress={() => setCategory({ dispatchType: "RECOMMENDED" })}
             isRecommend
           />
           <TabChip
             label="바로배차"
-            active={filter.dispatchType === "INSTANT"}
-            onPress={() => setFilter({ ...filter, dispatchType: "INSTANT" })}
+            active={category.dispatchType === "INSTANT"}
+            onPress={() => setCategory({ dispatchType: "INSTANT" })}
           />
           <TabChip
             label="직접배차"
-            active={filter.dispatchType === "DIRECT"}
-            onPress={() => setFilter({ ...filter, dispatchType: "DIRECT" })}
+            active={category.dispatchType === "DIRECT"}
+            onPress={() => setCategory({ dispatchType: "DIRECT" })}
           />
         </View>
       </View>
 
-      {/* 목롤 요약 및 정렬 */}
       <View style={s.listInfoRow}>
         <View style={{ flexDirection: "row", alignItems: "center" }}>
           <Text style={s.totalText}>
@@ -143,24 +137,17 @@ export default function OrderListScreen() {
             <Text style={{ color: c.brand.primary }}>
               {filteredOrders.length}
             </Text>
-            건의 오더
+            건
           </Text>
-
-          {/* 자동 갱신 카운트다운 및 회전 아이콘 (오더 갯수 옆) */}
           <Pressable
             style={s.refreshWrap}
-            onPress={() => {
-              if (!refreshing) {
-                setTimeLeft(15);
-                onRefresh();
-              }
-            }}
+            onPress={() => !refreshing && onRefresh()}
           >
             <Animated.View style={{ transform: [{ rotate: spin }] }}>
               <Ionicons name="refresh" size={14} color="#94A3B8" />
             </Animated.View>
             <Text style={s.refreshText}>
-              {refreshing ? "업데이트 중" : `${timeLeft}`}
+              {refreshing ? "갱신중" : `${timeLeft}s`}
             </Text>
           </Pressable>
         </View>
@@ -184,7 +171,6 @@ export default function OrderListScreen() {
         </View>
       </View>
 
-      {/* 오더 리스트 */}
       {loading && !refreshing ? (
         <ActivityIndicator style={{ flex: 1 }} color="#1A2F4B" size="large" />
       ) : (
@@ -200,7 +186,7 @@ export default function OrderListScreen() {
           }
           ListEmptyComponent={
             <View style={s.empty}>
-              <Text style={s.emptyText}>해당하는 오더가 없습니다.</Text>
+              <Text style={s.emptyText}>조건에 맞는 오더가 없습니다.</Text>
             </View>
           }
         />
@@ -209,12 +195,12 @@ export default function OrderListScreen() {
   );
 }
 
+// UI 컴포넌트 & 스타일
 const TabChip = ({ label, active, onPress, isRecommend }: any) => (
   <Pressable
     style={[
       s.chip,
       active && (isRecommend ? s.activeRecommendChip : s.activeChip),
-      isRecommend && !active && { borderColor: "#E0E7FF" },
     ]}
     onPress={onPress}
   >
@@ -241,19 +227,27 @@ const SortButton = ({ label, active, onPress }: any) => (
 );
 
 const s = StyleSheet.create({
-  headerFilterBtn: { padding: 4 },
+  headerFilterBtn: { padding: 4, position: "relative" },
+  filterBadge: {
+    position: "absolute",
+    top: -4,
+    right: -4,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 4,
+    borderWidth: 1.5,
+    borderColor: "#FFF",
+  },
+  filterBadgeText: { color: "#FFF", fontSize: 10, fontWeight: "900" },
   filterWrapper: {
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: "#F1F5F9",
   },
-  tabContainer: {
-    flexDirection: "row",
-    paddingHorizontal: 20,
-    justifyContent: "flex-start",
-    alignItems: "center",
-    gap: 8,
-  },
+  tabContainer: { flexDirection: "row", paddingHorizontal: 20, gap: 8 },
   chip: {
     paddingHorizontal: 16,
     paddingVertical: 8,
@@ -283,11 +277,7 @@ const s = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 12,
   },
-  refreshText: {
-    fontSize: 11,
-    color: "#94A3B8",
-    fontWeight: "700",
-  },
+  refreshText: { fontSize: 11, color: "#94A3B8", fontWeight: "700" },
   sortContainer: { flexDirection: "row" },
   sortBtn: { marginLeft: 16, alignItems: "center" },
   sortBtnText: { fontSize: 14, color: "#94A3B8", fontWeight: "600" },

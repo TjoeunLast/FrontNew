@@ -91,7 +91,6 @@ export default function DriverHomeScreen() {
     recommendedOrders,
     statusCounts,
     isRefreshing,
-    myLocation,
     onRefresh: homeRefresh,
   } = useDriverHome();
 
@@ -333,11 +332,7 @@ export default function DriverHomeScreen() {
                 router.push(`/(driver)/order-detail/${order.orderId}`)
               }
             >
-              <DrOrderCard
-                order={order}
-                myLocation={myLocation}
-                hideDistance={true}
-              />
+              <DrOrderCard order={order} hideDistance={true} />
             </Pressable>
           ))}
 

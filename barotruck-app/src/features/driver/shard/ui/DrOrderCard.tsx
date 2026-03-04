@@ -194,7 +194,27 @@ export const DrOrderCard = ({
             {startSchedule} 상차
           </Text>
           <Text style={[s.carText, { color: c.text.secondary }]}>
-            {`${reqTonnage} ${reqCarType}`}
+            {`${reqTonnage} ${reqCarType} · `}
+
+            {/* 1. 독차/혼적 포인트 컬러 */}
+            <Text
+              style={{
+                color: loadMethod === "혼적" ? c.status.info : c.brand.primary,
+                fontWeight: "700",
+              }}
+            >
+              {loadMethod || "독차"}
+            </Text>
+
+            {/* 2. 수작업 포인트 컬러 (0원이 아닐 때만 출력) */}
+            {order.laborFee && order.laborFee !== 0 ? (
+              <>
+                {" · "}
+                <Text style={{ color: c.status.danger, fontWeight: "700" }}>
+                  수작업
+                </Text>
+              </>
+            ) : null}
           </Text>
         </View>
 
