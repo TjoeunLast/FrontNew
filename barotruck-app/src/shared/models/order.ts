@@ -182,6 +182,9 @@ export interface AssignedDriverInfoResponse {
   email?: string;
   profileImage?: ImageInfo;
   ratingAvg?: number; // 기사 평균 별점
+  age?: number;
+  level?: number;
+  role?: string;
 
   // --- 차주 전용 상세 정보 (Driver 엔티티 대응) ---
   driverId: number;
