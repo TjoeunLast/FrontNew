@@ -32,22 +32,21 @@ const { width } = Dimensions.get("window");
 
 
 function formatAddressBig(addr?: string) {
-  const parts = String(addr ?? "").trim().split(/\s+/).filter(Boolean);
+  const parts = String(addr ?? "").trim().replace(/\s+/g, " ").split(" ").filter(Boolean);
   if (!parts.length) return "-";
-  if (parts.length === 1) return parts[0];
-  return `${parts[0]} ${parts[1]}`;
-}
-
-function formatAddressSmall(addr?: string) {
-  const parts = String(addr ?? "").trim().split(/\s+/).filter(Boolean);
-  if (parts.length <= 2) return "-";
-  return parts.slice(2).join(" ");
+  const first = (parts[0] || "")
+    .replace("특별시", "")
+    .replace("광역시", "")
+    .replace("특별자치시", "")
+    .replace("특별자치도", "");
+  return [first, parts[1] || ""].filter(Boolean).join(" ");
 }
 
 function formatDetailSubText(addr?: string, place?: string) {
+  const parts = String(addr ?? "").trim().replace(/\s+/g, " ").split(" ").filter(Boolean);
+  const roadText = parts.slice(2).join(" ");
   const placeText = String(place ?? "").trim();
-  if (placeText) return placeText;
-  return formatAddressSmall(addr);
+  return [roadText, placeText].filter(Boolean).join(" ") || "-";
 }
 
 function formatYmd(dateStr?: string) {
@@ -778,14 +777,14 @@ export default function OrderDetailScreen() {
               <View style={s.routeBigRow}>
                 <View style={s.addrBox}>
                   <Text style={s.addrBig}>{formatAddressBig(order.startAddr)}</Text>
-                  <Text style={s.addrSmall}>
+                  <Text style={s.addrSmall} numberOfLines={1}>
                     {formatDetailSubText(order.startAddr, order.startPlace)}
                   </Text>
                 </View>
                 <Ionicons name="arrow-forward" size={24} color="#CBD5E1" />
                 <View style={[s.addrBox, { alignItems: "flex-end" }]}>
                   <Text style={s.addrBig}>{formatAddressBig(order.endAddr)}</Text>
-                  <Text style={s.addrSmall}>
+                  <Text style={s.addrSmall} numberOfLines={1}>
                     {formatDetailSubText(order.endAddr, order.endPlace)}
                   </Text>
                 </View>
