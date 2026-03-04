@@ -7,6 +7,7 @@ import { ChatMessageResponse, ChatRoomResponse, ChatHistoryResponse } from '../m
 import { jwtDecode } from "jwt-decode"; // 설치 필요: npm install jwt-decode
 import { UserService } from './userService';
 import { USE_MOCK } from "@/shared/config/mock";
+import { loadChatRoomVisitedAt } from '../utils/chatOrderSummary';
 
 
 export const useChatManager = () => {
@@ -193,5 +194,22 @@ export async function fetchMyChatRooms(): Promise<ChatRoomResponse[]> {
 
 export async function fetchMyUnreadChatCount(): Promise<number> {
   const rooms = await fetchMyChatRooms();
-  return rooms.reduce((acc, room) => acc + resolveUnreadCount(room), 0);
+  const counts = await Promise.all(
+    rooms.map(async (room) => {
+      const unreadCount = resolveUnreadCount(room);
+      if (unreadCount <= 0 || !room?.roomId) return unreadCount;
+
+      const visitedAt = await loadChatRoomVisitedAt(String(room.roomId));
+      const lastMessageTime = new Date((room as any)?.lastMessageTime ?? '').getTime();
+      const visitedTime = new Date(visitedAt).getTime();
+
+      if (Number.isFinite(lastMessageTime) && Number.isFinite(visitedTime) && lastMessageTime <= visitedTime) {
+        return 0;
+      }
+
+      return unreadCount;
+    })
+  );
+
+  return counts.reduce((acc, count) => acc + count, 0);
 }
