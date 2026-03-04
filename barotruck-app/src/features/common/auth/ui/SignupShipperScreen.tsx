@@ -1,5 +1,7 @@
 ﻿// src/features/common/auth/ui/SignupShipperScreen.tsx
 import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as FileSystem from "expo-file-system/legacy";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useMemo, useState } from "react";
 import {
@@ -24,8 +26,44 @@ import { Button } from "@/shared/ui/base/Button";
 import { TextField } from "@/shared/ui/form/TextField";
 import { withAlpha } from "@/shared/utils/color";
 import { saveCurrentUserSnapshot } from "@/shared/utils/currentUserStorage";
+import { UserService } from "@/shared/api/userService";
 
 type ShipperType = "personal" | "business";
+const PROFILE_IMAGE_STORAGE_KEY = "baro_profile_image_url_v1";
+
+async function persistProfileImage(uri: string): Promise<string> {
+  const docDir = FileSystem.documentDirectory;
+  if (!docDir) return uri;
+
+  const cleanUri = uri.split("?")[0] || uri;
+  const ext = cleanUri.includes(".") ? cleanUri.substring(cleanUri.lastIndexOf(".")) : ".jpg";
+  const safeExt = ext.length >= 2 && ext.length <= 5 ? ext : ".jpg";
+  const targetUri = `${docDir}profile-image${safeExt}`;
+
+  const targetInfo = await FileSystem.getInfoAsync(targetUri);
+  if (targetInfo.exists) {
+    await FileSystem.deleteAsync(targetUri, { idempotent: true });
+  }
+
+  await FileSystem.copyAsync({ from: uri, to: targetUri });
+  return targetUri;
+}
+
+function toUploadFile(uri: string) {
+  const normalized = uri.split("?")[0] || uri;
+  const ext = normalized.includes(".") ? normalized.substring(normalized.lastIndexOf(".") + 1).toLowerCase() : "jpg";
+  const type =
+    ext === "png" ? "image/png" :
+    ext === "heic" ? "image/heic" :
+    ext === "webp" ? "image/webp" :
+    "image/jpeg";
+
+  return {
+    uri,
+    name: `profile.${ext || "jpg"}`,
+    type,
+  } as any;
+}
 
 function digitsOnly(v: string) {
   return v.replace(/[^0-9]/g, "");
@@ -72,6 +110,7 @@ export default function SignupShipperScreen() {
     password: string;
     name: string;
     phone: string;
+    profileImageUri?: string;
     gender?: "M" | "F";
     birthDate?: string;
   }>();
@@ -80,10 +119,6 @@ export default function SignupShipperScreen() {
 
   // 닉네임 상태
   const [nickname, setNickname] = useState("");
-  const [nickChecked, setNickChecked] = useState(false);
-  const [nickOkChecked, setNickOkChecked] = useState(false);
-  // const [checkingNick, setCheckingNick] = useState(false); // (중복확인 버튼이 없으므로 주석 처리)
-
   // 사업자 정보 상태
   const [bizNo, setBizNo] = useState("");
   const [companyName, setCompanyName] = useState("");
@@ -164,8 +199,8 @@ export default function SignupShipperScreen() {
         borderTopColor: withAlpha(c.border.default, 0.7),
       } as ViewStyle,
       submitBtn: {
-        height: 76,
-        borderRadius: 20,
+        height: 62,
+        borderRadius: 18,
         alignSelf: "stretch",
         shadowColor: withAlpha(c.brand.primary, 0.35),
         shadowOpacity: 1,
@@ -209,32 +244,44 @@ export default function SignupShipperScreen() {
     setSubmitting(true);
     try {
       const payload: RegisterRequest = {
+        name: params.name.trim(),
         nickname: nickname.trim(),
-        email: params.email,
+        email: params.email.trim(),
         password: params.password,
-        phone: params.phone,
+        phone: params.phone.trim(),
         role: "SHIPPER",
         gender: params.gender,
         age: parseBirthDateToAge(String(params.birthDate ?? "")),
-        shipper:
-          shipperType === "business"
-            ? {
-                companyName: companyName.trim(),
-                bizRegNum: bizNoDigits,
-                representative: ceoName.trim(),
-                bizAddress: "",
-                isCorporate: "Y",
-              }
-            : undefined,
+        delflag: "N",
+        regflag: "Y",
+        ratingAvg: 0,
+        user_level: 0,
+        shipper: {
+          companyName: companyName.trim(),
+          bizRegNum: bizNoDigits,
+          representative: ceoName.trim(),
+          bizAddress: "",
+          isCorporate: shipperType === "business" ? "Y" : "N",
+        },
       };
 
       // 1. 회원가입 요청 (DB 저장)
       const reponse = await AuthService.register(payload);
+      if (params.profileImageUri) {
+        try {
+          const persistedUri = await persistProfileImage(String(params.profileImageUri));
+          await UserService.uploadProfileImage(toUploadFile(persistedUri));
+          await AsyncStorage.setItem(PROFILE_IMAGE_STORAGE_KEY, persistedUri);
+        } catch (imageError) {
+          console.error("signup profile image upload failed", imageError);
+        }
+      }
       await saveCurrentUserSnapshot({
         email: params.email,
         name: params.name,
         nickname: nickname.trim(),
         role: "SHIPPER",
+        shipperType: shipperType === "business" ? "Y" : "N",
         gender: params.gender,
         birthDate: String(params.birthDate ?? "").trim() || undefined,
       });
@@ -346,41 +393,19 @@ export default function SignupShipperScreen() {
 
           {/* 닉네임 입력 */}
           <Text style={s.label}>닉네임</Text>
-          <View style={s.row}>
-            <View style={{ flex: 1 }}>
-              <TextField
-                value={nickname}
-                onChangeText={(v) => {
-                  setNickname(v);
-                  setNickChecked(false);
-                  setNickOkChecked(false);
-                }}
-                placeholder="앱에서 사용할 닉네임"
-                autoCapitalize="none"
-                inputWrapStyle={s.tfWrap}
-                inputStyle={s.tfInput}
-                errorText={
-                  nickname.length > 0 && !nickFormatOk
-                    ? "닉네임은 2글자 이상 입력해주세요."
-                    : undefined
-                }
-              />
-            </View>
-          </View>
-
-          {/* 닉네임 상태 메시지 (필요 시 UI 부활 가능) */}
-          {nickChecked ? (
-            <Text
-              style={[
-                s.helper,
-                { color: nickOkChecked ? c.status.success : c.status.danger },
-              ]}
-            >
-              {nickOkChecked
-                ? "사용 가능한 닉네임이에요."
-                : "이미 사용 중인 닉네임이에요."}
-            </Text>
-          ) : null}
+          <TextField
+            value={nickname}
+            onChangeText={setNickname}
+            placeholder="앱에서 사용할 닉네임"
+            autoCapitalize="none"
+            inputWrapStyle={s.tfWrap}
+            inputStyle={s.tfInput}
+            errorText={
+              nickname.length > 0 && !nickFormatOk
+                ? "닉네임은 2글자 이상 입력해주세요."
+                : undefined
+            }
+          />
 
           {/* 사업자 정보 입력 필드 */}
           {shipperType === "business" ? (

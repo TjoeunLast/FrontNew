@@ -1,15 +1,18 @@
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
 import { useRouter } from "expo-router";
 import React from "react";
 import {
   Alert,
+  Image,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
+  type ImageStyle,
   type TextStyle,
   type ViewStyle,
 } from "react-native";
@@ -20,11 +23,15 @@ import { UserService } from "@/shared/api/userService";
 import ShipperScreenHeader from "@/shared/ui/layout/ShipperScreenHeader";
 import { clearCurrentUserSnapshot, getCurrentUserSnapshot } from "@/shared/utils/currentUserStorage";
 
+const PROFILE_IMAGE_STORAGE_KEY = "baro_profile_image_url_v1";
+
 type DriverProfileView = {
   nickname: string;
-  vehicleLabel: string;
+  gender: string;
+  ageLabel: string;
   carNum: string;
   bankName: string;
+  activityAddress: string;
 };
 
 function toText(v: unknown, fallback = "-") {
@@ -32,22 +39,34 @@ function toText(v: unknown, fallback = "-") {
   return text || fallback;
 }
 
-function toVehicleLabel(inputType?: unknown, inputTonnage?: unknown) {
-  const typeRaw = String(inputType ?? "").trim();
-  const tonnageRaw = String(inputTonnage ?? "").trim();
+function pickFirstText(...values: unknown[]) {
+  for (const value of values) {
+    const text = String(value ?? "").trim();
+    if (text) return text;
+  }
+  return "";
+}
 
-  const normalizedType =
-    typeRaw.toUpperCase() === "WING"
-      ? "윙바디"
-      : typeRaw.toUpperCase() === "CARGO"
-        ? "카고"
-        : typeRaw.toUpperCase() === "TOP"
-          ? "탑차"
-          : typeRaw || "윙바디";
+function pickPositiveNumber(...values: unknown[]) {
+  for (const value of values) {
+    const num = Number(value);
+    if (Number.isFinite(num) && num > 0) return num;
+  }
+  return undefined;
+}
 
-  const tonDigits = tonnageRaw.replace(/[^\d.]/g, "");
-  const tonLabel = tonDigits ? `${tonDigits}톤` : "1톤";
-  return `${tonLabel} ${normalizedType}`.trim();
+function normalizeGenderLabel(input?: unknown) {
+  const value = String(input ?? "").trim().toUpperCase();
+  if (!value) return "-";
+  if (value === "M" || value === "MALE" || value === "남" || value === "남성") return "남성";
+  if (value === "F" || value === "FEMALE" || value === "여" || value === "여성") return "여성";
+  return String(input ?? "").trim() || "-";
+}
+
+function normalizeAgeLabel(input?: unknown) {
+  const age = Number(input);
+  if (!Number.isFinite(age) || age <= 0) return "-";
+  return `${Math.floor(age)}세`;
 }
 
 export default function DriverMyPageScreen() {
@@ -57,16 +76,20 @@ export default function DriverMyPageScreen() {
   const [receiveOrderAlarm, setReceiveOrderAlarm] = React.useState(true);
   const [profile, setProfile] = React.useState<DriverProfileView>({
     nickname: "차주",
-    vehicleLabel: "1톤 윙바디",
+    gender: "-",
+    ageLabel: "-",
     carNum: "-",
     bankName: "-",
+    activityAddress: "-",
   });
+  const [profileImageUrl, setProfileImageUrl] = React.useState("");
 
   useFocusEffect(
     React.useCallback(() => {
       let active = true;
 
       void (async () => {
+        const localImageUrl = await AsyncStorage.getItem(PROFILE_IMAGE_STORAGE_KEY);
         try {
           const me = (await UserService.getMyInfo()) as any;
           const cached = await getCurrentUserSnapshot();
@@ -79,18 +102,27 @@ export default function DriverMyPageScreen() {
           }
 
           if (!active) return;
+          setProfileImageUrl((localImageUrl ?? "") || me?.profileImageUrl || "");
           setProfile({
             nickname: toText(me?.nickname ?? cached?.nickname, "차주"),
-            vehicleLabel: toVehicleLabel(
-              detail?.carType ?? detail?.driver?.carType,
-              detail?.tonnage ?? detail?.driver?.tonnage
-            ),
-            carNum: toText(detail?.carNum ?? detail?.driver?.carNum),
+            gender: normalizeGenderLabel(me?.gender ?? me?.sex ?? detail?.gender ?? detail?.user?.gender ?? cached?.gender),
+            ageLabel: normalizeAgeLabel(me?.age ?? detail?.age ?? detail?.user?.age ?? cached?.age),
+            carNum: toText(pickFirstText(detail?.carNum, detail?.driver?.carNum, cached?.driverCarNum)),
             bankName: toText(detail?.bankName ?? detail?.driver?.bankName),
+            activityAddress: toText(pickFirstText(detail?.address, detail?.driver?.address, cached?.activityAddress)),
           });
         } catch {
           if (!active) return;
-          setProfile((prev) => prev);
+          setProfileImageUrl(localImageUrl ?? "");
+          const cached = await getCurrentUserSnapshot();
+          setProfile({
+            nickname: toText(cached?.nickname, "차주"),
+            gender: normalizeGenderLabel(cached?.gender),
+            ageLabel: normalizeAgeLabel(cached?.age),
+            carNum: toText(cached?.driverCarNum),
+            bankName: "-",
+            activityAddress: toText(cached?.activityAddress),
+          });
         }
       })();
 
@@ -148,9 +180,11 @@ export default function DriverMyPageScreen() {
           height: 56,
           borderRadius: 28,
           backgroundColor: "rgba(78, 70, 229, 0.12)",
+          overflow: "hidden",
           alignItems: "center",
           justifyContent: "center",
         } as ViewStyle,
+        profileImage: { width: "100%", height: "100%" } as ImageStyle,
         profileInfo: { flex: 1 } as ViewStyle,
         profileName: { fontSize: 16, fontWeight: "800", color: "#111827", letterSpacing: -0.1 } as TextStyle,
         profileSubRow: { flexDirection: "row", alignItems: "center", marginTop: 4, gap: 8 } as ViewStyle,
@@ -257,12 +291,18 @@ export default function DriverMyPageScreen() {
       <ScrollView contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
         <Pressable style={s.profileCard} onPress={() => router.push("/(common)/settings/profile" as any)}>
           <View style={s.profileAvatar}>
-            <MaterialCommunityIcons name="steering" size={28} color="#4E46E5" />
+            {profileImageUrl ? (
+              <Image source={{ uri: profileImageUrl }} style={s.profileImage} resizeMode="cover" />
+            ) : (
+              <MaterialCommunityIcons name="steering" size={28} color="#4E46E5" />
+            )}
           </View>
             <View style={s.profileInfo}>
               <Text style={s.profileName}>{profile.nickname} 님</Text>
               <View style={s.profileSubRow}>
-                <Text style={s.profileSub}>{profile.vehicleLabel}</Text>
+                {(profile.gender !== "-" || profile.ageLabel !== "-") ? (
+                  <Text style={s.profileSub}>{[profile.gender, profile.ageLabel].filter((v) => v !== "-").join(" · ")}</Text>
+                ) : null}
                 <View style={s.driverBadge}>
                   <Text style={s.driverBadgeText}>차주</Text>
                 </View>
@@ -281,6 +321,17 @@ export default function DriverMyPageScreen() {
             </View>
             <Text style={s.rowLabel}>내 차량 정보</Text>
             <Text style={[s.rowValue, s.rowValuePrimary]}>{profile.carNum}</Text>
+            <Ionicons name="chevron-forward" size={20} color="#9BA7B7" />
+          </Pressable>
+          <View style={s.divider} />
+          <Pressable style={s.row} onPress={() => router.push("/(common)/settings/profile" as any)}>
+            <View style={s.iconWrap}>
+              <Ionicons name="location-outline" size={22} color="#7EA85B" />
+            </View>
+            <Text style={s.rowLabel}>활동 지역</Text>
+            <Text style={s.rowValue} numberOfLines={1}>
+              {profile.activityAddress}
+            </Text>
             <Ionicons name="chevron-forward" size={20} color="#9BA7B7" />
           </Pressable>
           <View style={s.divider} />
@@ -312,7 +363,7 @@ export default function DriverMyPageScreen() {
             <Ionicons name="chevron-forward" size={20} color="#9BA7B7" />
           </Pressable>
           <View style={s.divider} />
-          <Pressable style={s.row} onPress={() => router.push("/(common)/notifications" as any)}>
+          <Pressable style={s.row} onPress={() => router.push("/(common)/settings/announcements" as any)}>
             <View style={s.iconWrap}>
               <Ionicons name="megaphone-outline" size={20} color="#718197" />
             </View>
@@ -324,7 +375,7 @@ export default function DriverMyPageScreen() {
             <View style={s.iconWrap}>
               <Ionicons name="headset-outline" size={20} color="#718197" />
             </View>
-            <Text style={s.rowLabel}>고객센터 / 문의</Text>
+            <Text style={s.rowLabel}>1:1 문의하기</Text>
             <Ionicons name="chevron-forward" size={20} color="#9BA7B7" />
           </Pressable>
           <View style={s.divider} />
@@ -332,7 +383,7 @@ export default function DriverMyPageScreen() {
             <View style={s.iconWrap}>
               <Ionicons name="shield-checkmark-outline" size={20} color="#718197" />
             </View>
-            <Text style={s.rowLabel}>약관 및 정책</Text>
+            <Text style={s.rowLabel}>이용약관 및 정책</Text>
             <Ionicons name="chevron-forward" size={20} color="#9BA7B7" />
           </Pressable>
         </View>

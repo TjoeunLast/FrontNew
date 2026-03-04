@@ -39,7 +39,7 @@ export const s = StyleSheet.create({
   },
   selectText: { fontSize: 14, fontWeight: "700", flex: 1 },
 
-  chipRow: { flexDirection: "row", flexWrap: "wrap", gap: SP.chipGap, marginTop: 10 },
+  chipRow: { flexDirection: "row", flexWrap: "wrap", gap: SP.chipGap, marginTop: 4 },
   chip: {
     height: 36,
     paddingHorizontal: 12,

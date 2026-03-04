@@ -119,7 +119,7 @@ function toUiCard(order: OrderResponse): DispatchCardItem | null {
   const loadMethodShort = toLoadMethodShort(order.loadMethod);
   const workToolShort = toWorkToolShort(order.workType);
 
-  if (order.status === "REQUESTED" || order.status === "PENDING") {
+  if (order.status === "REQUESTED" || order.status === "PENDING" || order.status === "APPLIED") {
     const applicantsRaw = (order as any).applicantCount;
     const applicantsNum = Number(applicantsRaw);
     const applicantsBase = Number.isFinite(applicantsNum) ? Math.max(0, Math.floor(applicantsNum)) : 0;
@@ -129,8 +129,8 @@ function toUiCard(order: OrderResponse): DispatchCardItem | null {
       id: String(order.orderId),
       isInstantDispatch,
       tab: "WAITING",
-      statusLabel: applicants > 1 ? `신청 ${applicants}명` : "대기중",
-      statusTone: applicants > 1 ? "yellow" : "gray",
+      statusLabel: applicants > 0 ? `신청 ${applicants}명` : "대기중",
+      statusTone: applicants > 0 ? "yellow" : "gray",
       timeLabel,
       from,
       to,
@@ -402,6 +402,5 @@ export default function ShipperOrdersScreen() {
     </View>
   );
 }
-
 
 

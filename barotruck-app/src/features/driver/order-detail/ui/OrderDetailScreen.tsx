@@ -21,6 +21,15 @@ import OrderDetailPageFrame from "./OrderDetailPageFrame";
 
 const { width } = Dimensions.get("window");
 
+function buildChatLocationLabel(addr?: string, place?: string) {
+  const placeText = String(place ?? "").trim();
+  if (placeText) return placeText;
+  const parts = String(addr ?? "").trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "-";
+  if (parts.length === 1) return parts[0];
+  return `${parts[0]} ${parts[1]}`;
+}
+
 export default function OrderDetailScreen() {
   const { colors: c } = useAppTheme();
   const router = useRouter();
@@ -101,12 +110,29 @@ export default function OrderDetailScreen() {
       return;
     }
 
+    const routeText = `${buildChatLocationLabel(order.startAddr, order.startPlace)} → ${buildChatLocationLabel(
+      order.endAddr,
+      order.endPlace
+    )}`;
+    const tonnageText =
+      order.reqTonnage ||
+      (Number.isFinite(Number(order.tonnage)) && Number(order.tonnage) > 0 ? `${order.tonnage}톤` : "");
+    const vehicleText = [tonnageText, order.reqCarType || "차량"].filter(Boolean).join(" ");
+    const cargoText = [vehicleText, order.cargoContent || "일반화물"].filter(Boolean).join(" · ");
+    const priceText = `${totalPrice.toLocaleString()}원`;
+
     try {
       const res = await apiClient.post<number>(`/api/chat/room/personal/${targetId}`);
       const roomId = res.data;
       router.push({
         pathname: "/(chat)/[roomId]",
-        params: { roomId: String(roomId) },
+        params: {
+          roomId: String(roomId),
+          orderId: String(order.orderId),
+          routeText,
+          cargoText,
+          priceText,
+        },
       });
     } catch (err) {
       console.error("채팅방 생성 실패:", err);

@@ -32,22 +32,21 @@ const { width } = Dimensions.get("window");
 
 
 function formatAddressBig(addr?: string) {
-  const parts = String(addr ?? "").trim().split(/\s+/).filter(Boolean);
+  const parts = String(addr ?? "").trim().replace(/\s+/g, " ").split(" ").filter(Boolean);
   if (!parts.length) return "-";
-  if (parts.length === 1) return parts[0];
-  return `${parts[0]} ${parts[1]}`;
-}
-
-function formatAddressSmall(addr?: string) {
-  const parts = String(addr ?? "").trim().split(/\s+/).filter(Boolean);
-  if (parts.length <= 2) return "-";
-  return parts.slice(2).join(" ");
+  const first = (parts[0] || "")
+    .replace("특별시", "")
+    .replace("광역시", "")
+    .replace("특별자치시", "")
+    .replace("특별자치도", "");
+  return [first, parts[1] || ""].filter(Boolean).join(" ");
 }
 
 function formatDetailSubText(addr?: string, place?: string) {
+  const parts = String(addr ?? "").trim().replace(/\s+/g, " ").split(" ").filter(Boolean);
+  const roadText = parts.slice(2).join(" ");
   const placeText = String(place ?? "").trim();
-  if (placeText) return placeText;
-  return formatAddressSmall(addr);
+  return [roadText, placeText].filter(Boolean).join(" ") || "-";
 }
 
 function formatYmd(dateStr?: string) {
@@ -142,6 +141,12 @@ function normalizeDisplayText(v?: string) {
   if (!s) return "";
   if (s.toLowerCase() === "null" || s.toLowerCase() === "undefined") return "";
   return s;
+}
+
+function buildChatLocationLabel(addr?: string, place?: string) {
+  const placeText = normalizeDisplayText(place);
+  if (placeText) return placeText;
+  return formatAddressBig(addr);
 }
 
 type ActionButtonConfig = {
@@ -327,7 +332,7 @@ export default function OrderDetailScreen() {
     };
   }, [order?.orderId, order?.status, resolvedOrderId]);
 
-  const isWaiting = order?.status === "REQUESTED" || order?.status === "PENDING";
+  const isWaiting = order?.status === "REQUESTED" || order?.status === "PENDING" || order?.status === "APPLIED";
   const hasApplicants = useMemo(() => {
     if (!isWaiting) return false;
     if (applicantList.length > 0) return true;
@@ -387,7 +392,7 @@ export default function OrderDetailScreen() {
   const buttonConfig = useMemo<ActionButtonConfig | null>(() => {
     if (!order) return null;
 
-    if (order.status === "REQUESTED" || order.status === "PENDING") {
+    if (order.status === "REQUESTED" || order.status === "PENDING" || order.status === "APPLIED") {
       if (order.instant) {
         return {
           text: "배차 대기중",
@@ -656,13 +661,30 @@ export default function OrderDetailScreen() {
       return;
     }
 
+    const routeText = `${buildChatLocationLabel(order?.startAddr, order?.startPlace)} → ${buildChatLocationLabel(
+      order?.endAddr,
+      order?.endPlace
+    )}`;
+    const tonnageText =
+      normalizeDisplayText(order?.reqTonnage) ||
+      (Number.isFinite(Number(order?.tonnage)) && Number(order?.tonnage) > 0 ? `${order?.tonnage}톤` : "");
+    const vehicleText = [tonnageText, normalizeDisplayText(order?.reqCarType) || "차량"].filter(Boolean).join(" ");
+    const cargoText = [vehicleText, cargoName].filter(Boolean).join(" · ");
+    const priceText = `${totalPrice.toLocaleString()}원`;
+
     setActionLoading(true);
     try {
       const res = await apiClient.post<number>(`/api/chat/room/personal/${targetId}`);
       const roomId = res.data;
       router.push({
         pathname: "/(chat)/[roomId]",
-        params: { roomId: String(roomId) },
+        params: {
+          roomId: String(roomId),
+          orderId: String(order?.orderId ?? ""),
+          routeText,
+          cargoText,
+          priceText,
+        },
       });
     } catch (err) {
       console.error("채팅방 생성 실패:", err);
@@ -755,14 +777,14 @@ export default function OrderDetailScreen() {
               <View style={s.routeBigRow}>
                 <View style={s.addrBox}>
                   <Text style={s.addrBig}>{formatAddressBig(order.startAddr)}</Text>
-                  <Text style={s.addrSmall}>
+                  <Text style={s.addrSmall} numberOfLines={1}>
                     {formatDetailSubText(order.startAddr, order.startPlace)}
                   </Text>
                 </View>
                 <Ionicons name="arrow-forward" size={24} color="#CBD5E1" />
                 <View style={[s.addrBox, { alignItems: "flex-end" }]}>
                   <Text style={s.addrBig}>{formatAddressBig(order.endAddr)}</Text>
-                  <Text style={s.addrSmall}>
+                  <Text style={s.addrSmall} numberOfLines={1}>
                     {formatDetailSubText(order.endAddr, order.endPlace)}
                   </Text>
                 </View>
@@ -1024,6 +1046,10 @@ export default function OrderDetailScreen() {
                   <ScrollView showsVerticalScrollIndicator={false}>
                     {applicantList.map((driver) => {
                       const driverNo = Number(driver.driverId ?? driver.userId);
+                      const careerLabel =
+                        Number.isFinite(Number(driver.career)) && Number(driver.career) >= 0
+                          ? `${Number(driver.career)}년`
+                          : "-";
                       return (
                         <Pressable
                           key={String(driverNo)}
@@ -1035,7 +1061,7 @@ export default function OrderDetailScreen() {
                               {driver.nickname || "기사"}
                             </Text>
                             <Text style={[s.applicantMeta, { color: c.text.secondary }]}>
-                              {driver.tonnage || "-"} {driver.carType || "-"} | 경력 {driver.career ?? 0}년
+                              {driver.tonnage || "-"} {driver.carType || "-"} | 경력 {careerLabel}
                             </Text>
                           </View>
                           <Ionicons name="chevron-forward" size={18} color={c.text.secondary} />

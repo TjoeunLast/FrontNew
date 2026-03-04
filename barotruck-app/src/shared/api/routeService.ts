@@ -7,6 +7,19 @@ export interface RouteEstimateResult {
 
 type Numeric = number | undefined;
 
+interface KakaoMobilityRouteSummary {
+  distance?: number;
+  duration?: number;
+}
+
+interface KakaoMobilityRoute {
+  summary?: KakaoMobilityRouteSummary;
+}
+
+interface KakaoMobilityDirectionsResponse {
+  routes?: KakaoMobilityRoute[];
+}
+
 function toNum(v: unknown): Numeric {
   const n = Number(v);
   return Number.isFinite(n) ? n : undefined;
@@ -59,6 +72,58 @@ function parseEstimate(payload: any): RouteEstimateResult | null {
   return null;
 }
 
+function parseKakaoMobilityEstimate(payload: KakaoMobilityDirectionsResponse): RouteEstimateResult | null {
+  const summary = payload.routes?.[0]?.summary;
+  const distanceMeters = toNum(summary?.distance);
+  const durationSeconds = toNum(summary?.duration);
+  if (distanceMeters === undefined || durationSeconds === undefined) return null;
+
+  return {
+    distanceKm: Math.max(0, Math.round(distanceMeters / 1000)),
+    durationMin: Math.max(1, Math.round(durationSeconds / 60)),
+  };
+}
+
+async function estimateByKakaoMobility(params: {
+  startLat: number;
+  startLng: number;
+  endLat: number;
+  endLng: number;
+}): Promise<RouteEstimateResult> {
+  const restApiKey = String(process.env.EXPO_PUBLIC_KAKAO_REST_API_KEY ?? "").trim();
+  if (!restApiKey) {
+    throw new Error("kakao_mobility_key_missing");
+  }
+
+  const query = new URLSearchParams({
+    origin: `${params.startLng},${params.startLat}`,
+    destination: `${params.endLng},${params.endLat}`,
+    priority: "RECOMMEND",
+    summary: "true",
+  });
+
+  const response = await fetch(`https://apis-navi.kakaomobility.com/v1/directions?${query.toString()}`, {
+    method: "GET",
+    headers: {
+      Authorization: `KakaoAK ${restApiKey}`,
+      "Content-Type": "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`kakao_mobility_directions_failed:${response.status}:${errorText}`);
+  }
+
+  const payload = (await response.json()) as KakaoMobilityDirectionsResponse;
+  const parsed = parseKakaoMobilityEstimate(payload);
+  if (!parsed) {
+    throw new Error("kakao_mobility_directions_invalid_response");
+  }
+
+  return parsed;
+}
+
 export const RouteApi = {
   estimateByCoords: async (params: {
     startLat: number;
@@ -93,7 +158,11 @@ export const RouteApi = {
       }
     }
 
-    throw lastError ?? new Error("route_estimate_unavailable");
+    try {
+      return await estimateByKakaoMobility(params);
+    } catch (mobilityError) {
+      throw mobilityError ?? lastError ?? new Error("route_estimate_unavailable");
+    }
   },
 };
 

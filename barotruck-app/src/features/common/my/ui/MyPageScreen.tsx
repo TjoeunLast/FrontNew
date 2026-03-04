@@ -40,7 +40,7 @@ type ProfileView = {
   role: string;
   shipperType: string;
   gender: string;
-  birthDate: string;
+  ageLabel: string;
 };
 
 function readDefaultCardCompany(raw: string | null) {
@@ -97,11 +97,16 @@ function resolveShipperType(...sources: any[]) {
   const explicit = toShipperTypeLabel(
     sources.find((s) => s?.isCorporate != null)?.isCorporate ??
       sources.find((s) => s?.is_corporate != null)?.is_corporate ??
+      sources.find((s) => s?.user?.isCorporate != null)?.user?.isCorporate ??
+      sources.find((s) => s?.user?.is_corporate != null)?.user?.is_corporate ??
       sources.find((s) => s?.shipper?.isCorporate != null)?.shipper?.isCorporate ??
       sources.find((s) => s?.shipper?.is_corporate != null)?.shipper?.is_corporate ??
+      sources.find((s) => s?.user?.shipper?.isCorporate != null)?.user?.shipper?.isCorporate ??
+      sources.find((s) => s?.user?.shipper?.is_corporate != null)?.user?.shipper?.is_corporate ??
       sources.find((s) => s?.shipperInfo?.isCorporate != null)?.shipperInfo?.isCorporate ??
       sources.find((s) => s?.shipperInfo?.is_corporate != null)?.shipperInfo?.is_corporate ??
-      sources.find((s) => s?.shipperDto?.isCorporate != null)?.shipperDto?.isCorporate
+      sources.find((s) => s?.shipperDto?.isCorporate != null)?.shipperDto?.isCorporate ??
+      sources.find((s) => s?.shipperType != null)?.shipperType
   );
   if (explicit !== "-") return explicit;
 
@@ -124,6 +129,28 @@ function normalizeBirthDateLabel(input?: string) {
   const digits = String(input ?? "").replace(/\D/g, "");
   if (digits.length !== 8) return "-";
   return `${digits.slice(0, 4)}.${digits.slice(4, 6)}.${digits.slice(6, 8)}`;
+}
+
+function getAgeFromBirthDate(input?: unknown) {
+  const digits = String(input ?? "").replace(/\D/g, "");
+  if (digits.length !== 8) return undefined;
+  const year = Number(digits.slice(0, 4));
+  const month = Number(digits.slice(4, 6));
+  const day = Number(digits.slice(6, 8));
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return undefined;
+  const today = new Date();
+  let age = today.getFullYear() - year;
+  const thisYearBirthdayPassed =
+    today.getMonth() + 1 > month || (today.getMonth() + 1 === month && today.getDate() >= day);
+  if (!thisYearBirthdayPassed) age -= 1;
+  return age > 0 ? age : undefined;
+}
+
+function normalizeAgeLabel(input?: unknown, birthDateInput?: unknown) {
+  const age = Number(input);
+  if (Number.isFinite(age) && age > 0) return `${Math.floor(age)}세`;
+  const derivedAge = getAgeFromBirthDate(birthDateInput);
+  return derivedAge ? `${derivedAge}세` : "-";
 }
 
 async function fetchShipperDetailFromServer(baseMe: any) {
@@ -152,7 +179,7 @@ export default function MyPageScreen() {
     role: "-",
     shipperType: "-",
     gender: "-",
-    birthDate: "-",
+    ageLabel: "-",
   });
   const [profileImageUrl, setProfileImageUrl] = useState("");
   const [paymentMethodLabel, setPaymentMethodLabel] = useState("미등록");
@@ -183,7 +210,8 @@ export default function MyPageScreen() {
             shipperDetail?.user,
             me?.shipper,
             me?.shipperInfo,
-            me?.shipperDto
+            me?.shipperDto,
+            cached
           );
           const next: ProfileView = {
             email: me.email || "-",
@@ -200,7 +228,8 @@ export default function MyPageScreen() {
                 shipperDetail?.user?.sex ??
                 cached?.gender
             ),
-            birthDate: normalizeBirthDateLabel(
+            ageLabel: normalizeAgeLabel(
+              me.age ?? shipperDetail?.age ?? shipperDetail?.user?.age ?? cached?.age,
               me.birthDate ??
                 me.birthday ??
                 me.birth ??
@@ -228,7 +257,12 @@ export default function MyPageScreen() {
               nickname: me.nickname,
               name: me.name || cached?.name,
               role: me.role,
+              shipperType: shipperDetail?.isCorporate ?? cached?.shipperType,
               gender: me.gender ?? me.sex ?? shipperDetail?.user?.gender ?? cached?.gender,
+              age:
+                Number(me.age ?? shipperDetail?.age ?? shipperDetail?.user?.age ?? cached?.age) > 0
+                  ? Number(me.age ?? shipperDetail?.age ?? shipperDetail?.user?.age ?? cached?.age)
+                  : undefined,
               birthDate:
                 String(
                   me.birthDate ??
@@ -254,9 +288,9 @@ export default function MyPageScreen() {
             name: cached.name || "-",
             nickname: cached.nickname || "-",
             role: roleToKorean(cached.role || ""),
-            shipperType: "-",
+            shipperType: resolveShipperType(cached),
             gender: normalizeGenderLabel(cached.gender),
-            birthDate: normalizeBirthDateLabel(cached.birthDate),
+            ageLabel: normalizeAgeLabel(cached.age, cached.birthDate),
           });
         }
       })();
@@ -448,16 +482,20 @@ export default function MyPageScreen() {
               <Text style={s.profileName}>
                 {profile.nickname === "-" ? profileGreetingFallback : `${profile.nickname}님`}
               </Text>
-              {profile.shipperType !== "-" ? (
-                <View style={s.shipperTypeBadge}>
-                  <Text style={s.shipperTypeBadgeText}>{profile.shipperType}</Text>
-                </View>
-              ) : null}
             </View>
-            {(profile.gender !== "-" || profile.birthDate !== "-") ? (
-              <Text style={s.profileMeta}>
-                {[profile.gender, profile.birthDate].filter((v) => v !== "-").join(" · ")}
-              </Text>
+            {(profile.gender !== "-" || profile.ageLabel !== "-" || profile.shipperType !== "-") ? (
+              <View style={s.profileTopRow}>
+                {(profile.gender !== "-" || profile.ageLabel !== "-") ? (
+                  <Text style={s.profileMeta}>
+                    {[profile.gender, profile.ageLabel].filter((v) => v !== "-").join(" · ")}
+                  </Text>
+                ) : null}
+                {profile.shipperType !== "-" ? (
+                  <View style={s.shipperTypeBadge}>
+                    <Text style={s.shipperTypeBadgeText}>{profile.shipperType}</Text>
+                  </View>
+                ) : null}
+              </View>
             ) : null}
           </View>
           <View style={s.arrowCircle}>
@@ -476,11 +514,11 @@ export default function MyPageScreen() {
             <Ionicons name="chevron-forward" size={20} color={c.text.secondary} />
           </Pressable>
           <View style={s.divider} />
-          <Pressable style={s.row} onPress={() => router.push("/(common)/settings/shipper/addresses" as any)}>
-            <View style={[s.rowIconWrap, { backgroundColor: withAlpha(c.status.success, 0.16) }]}>
-              <Ionicons name="location-outline" size={18} color={c.status.success} />
+          <Pressable style={s.row} onPress={() => router.push("/(common)/settings/shipper/verification" as any)}>
+            <View style={[s.rowIconWrap, { backgroundColor: withAlpha(c.status.warning, 0.16) }]}>
+              <Ionicons name="shield-checkmark-outline" size={18} color={c.status.warning} />
             </View>
-            <Text style={s.rowLabel}>자주 쓰는 주소지</Text>
+            <Text style={s.rowLabel}>사업자 인증</Text>
             <Ionicons name="chevron-forward" size={20} color={c.text.secondary} />
           </Pressable>
           <View style={s.divider} />
@@ -500,6 +538,14 @@ export default function MyPageScreen() {
               <Ionicons name="chatbox-ellipses-outline" size={18} color={c.brand.primary} />
             </View>
             <Text style={s.rowLabel}>리뷰 관리</Text>
+            <Ionicons name="chevron-forward" size={20} color={c.text.secondary} />
+          </Pressable>
+          <View style={s.divider} />
+          <Pressable style={s.row} onPress={() => router.push("/(common)/settings/announcements" as any)}>
+            <View style={[s.rowIconWrap, { backgroundColor: withAlpha(c.status.warning, 0.14) }]}>
+              <Ionicons name="megaphone-outline" size={18} color={c.status.warning} />
+            </View>
+            <Text style={s.rowLabel}>공지사항</Text>
             <Ionicons name="chevron-forward" size={20} color={c.text.secondary} />
           </Pressable>
           <View style={s.divider} />

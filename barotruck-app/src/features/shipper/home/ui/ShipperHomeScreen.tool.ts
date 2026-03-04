@@ -46,7 +46,7 @@ function toWorkToolShort(v?: string) {
 
 function mapStatus(status: OrderStatus): LiveOrderItem["status"] {
   if (status === "COMPLETED") return "DONE";
-  if (status === "REQUESTED" || status === "PENDING") return "MATCHING";
+  if (status === "REQUESTED" || status === "PENDING" || status === "APPLIED") return "MATCHING";
   if (status === "ACCEPTED") return "DISPATCHED";
   return "DRIVING";
 }

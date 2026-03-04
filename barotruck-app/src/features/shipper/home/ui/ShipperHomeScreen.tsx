@@ -137,11 +137,7 @@ useFocusEffect(
         <View style={s.headerIcons}>
           <Pressable onPress={goChat} style={s.chatIconWrap}>
             <Ionicons name="chatbubble-outline" size={24} color={c.text.primary} />
-            {hasUnreadChat ? (
-              <View style={s.chatUnreadBadge}>
-                <Text style={s.chatUnreadText}>1</Text>
-              </View>
-            ) : null}
+            {hasUnreadChat ? <View style={s.chatUnreadDot} /> : null}
           </Pressable>
           <Pressable onPress={goNotificationsTab}>
             <Ionicons name="notifications-outline" size={24} color={c.text.primary} />
@@ -273,19 +269,17 @@ const s = StyleSheet.create({
   logoText: { fontSize: 22, fontWeight: "900" },
   headerIcons: { flexDirection: "row", gap: 15 },
   chatIconWrap: { position: "relative" },
-  chatUnreadBadge: {
+  chatUnreadDot: {
     position: "absolute",
-    top: -6,
-    right: -8,
-    minWidth: 16,
-    height: 16,
-    borderRadius: 8,
+    top: -1,
+    right: -2,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
     backgroundColor: "#EF4444",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 3,
+    borderWidth: 1.5,
+    borderColor: "#FFFFFF",
   },
-  chatUnreadText: { color: "#FFFFFF", fontSize: 10, fontWeight: "900", lineHeight: 12 },
   container: { paddingHorizontal: 20, paddingTop: 18, paddingBottom: 40 },
 
   dashboardContainer: { marginBottom: 14 },

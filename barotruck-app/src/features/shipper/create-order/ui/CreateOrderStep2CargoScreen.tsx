@@ -35,14 +35,6 @@ function won(n: number) {
   return `${v.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")}원`;
 }
 
-function toKoreanDateTextFromISO(iso: string) {
-  const d = new Date(iso);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}.${m}.${day}`;
-}
-
 function toScheduleText(iso: string, hhmm?: string) {
   const d = new Date(iso);
   const timeMatch = (hhmm ?? "").match(/^([01]\d|2[0-3]):([0-5]\d)$/);
@@ -116,8 +108,6 @@ export function ShipperCreateOrderStep2CargoScreen() {
       ? `${workTool === "크레인" ? "+7%" : "+5%"} (${won(unloadSurcharge)})`
       : "추가요금 없음";
   const packagingHintText = packaging === "포장" ? `선택 시 +${won(packagingPrice)}` : "추가요금 없음";
-  const payFeeHintText =
-    draft.pay === "card" ? `토스 결제 수수료 +10% (${won(fee)})` : "결제 방식 수수료 없음";
   const toggleRequestTag = (tag: string) => {
     setSelectedRequestTags((prev) => (prev.includes(tag) ? prev.filter((x) => x !== tag) : [...prev, tag]));
   };
@@ -210,50 +200,6 @@ export function ShipperCreateOrderStep2CargoScreen() {
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
       >
-        <Card padding={16} style={{ marginBottom: 18 }}>
-          <Text style={{ fontSize: 14, fontWeight: "900", color: c.text.primary, marginBottom: 10 }}>요약</Text>
-
-          <Text style={{ color: c.text.secondary, fontWeight: "800" }}>상차</Text>
-          <Text style={{ color: c.text.primary, fontWeight: "900", marginBottom: 8 }}>{draft.startSelected}</Text>
-          <Text style={{ color: c.text.secondary, fontWeight: "800" }}>상차지 상세 주소</Text>
-          <Text style={{ color: c.text.primary, fontWeight: "900", marginBottom: 8 }}>{draft.startAddrDetail}</Text>
-          <Text style={{ color: c.text.secondary, fontWeight: "800" }}>상차지 연락처</Text>
-          <Text style={{ color: c.text.primary, fontWeight: "900", marginBottom: 8 }}>{draft.startContact}</Text>
-          <Text style={{ color: c.text.secondary, fontWeight: "800" }}>상차 시간</Text>
-          <Text style={{ color: c.text.primary, fontWeight: "900", marginBottom: 8 }}>{draft.startTimeHHmm}</Text>
-
-          <Text style={{ color: c.text.secondary, fontWeight: "800" }}>하차</Text>
-          <Text style={{ color: c.text.primary, fontWeight: "900", marginBottom: 8 }}>{draft.endAddr}</Text>
-          <Text style={{ color: c.text.secondary, fontWeight: "800" }}>상세 주소</Text>
-          <Text style={{ color: c.text.primary, fontWeight: "900", marginBottom: 8 }}>{draft.endAddrDetail}</Text>
-          <Text style={{ color: c.text.secondary, fontWeight: "800" }}>연락처</Text>
-          <Text style={{ color: c.text.primary, fontWeight: "900", marginBottom: 8 }}>{draft.endContact}</Text>
-          <Text style={{ color: c.text.secondary, fontWeight: "800" }}>하차 시간</Text>
-          <Text style={{ color: c.text.primary, fontWeight: "900", marginBottom: 8 }}>
-            {draft.endTimeHHmm?.trim() || "하차시간 미정"}
-          </Text>
-
-          <View style={{ height: 1, backgroundColor: c.border.default, marginVertical: 12 }} />
-
-          <Text style={{ color: c.text.secondary, fontWeight: "800" }}>
-            상차일: {toKoreanDateTextFromISO(draft.loadDateISO)} ({draft.loadDay})
-          </Text>
-          <Text style={{ color: c.text.secondary, fontWeight: "800", marginTop: 6 }}>
-            차량: {draft.ton.label} · {draft.carType.label}
-          </Text>
-          <Text style={{ color: c.text.secondary, fontWeight: "800", marginTop: 6 }}>
-            운행 형태: {draft.tripType === "roundTrip" ? "왕복" : "편도"}
-          </Text>
-          <Text style={{ color: c.text.secondary, fontWeight: "800", marginTop: 6 }}>{payFeeHintText}</Text>
-
-          <View style={{ height: 1, backgroundColor: c.border.default, marginVertical: 12 }} />
-
-          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-            <Text style={{ color: c.text.secondary, fontWeight: "800" }}>희망 운임</Text>
-            <Text style={{ color: c.text.primary, fontWeight: "900", fontSize: 16 }}>{won(finalFare)}</Text>
-          </View>
-        </Card>
-
         <Card padding={16} style={{ marginBottom: 18 }}>
           <Text style={{ fontSize: 14, fontWeight: "900", color: c.text.primary, marginBottom: 12 }}>작업 정보</Text>
 

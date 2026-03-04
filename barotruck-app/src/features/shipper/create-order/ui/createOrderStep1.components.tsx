@@ -262,7 +262,7 @@ export function SearchableAddressField({
   const { colors: c } = useAppTheme();
   
   return (
-    <View style={{ flex: 1, marginBottom: 16 }}>
+    <View style={{ flex: 1, marginBottom: 8 }}>
       {label ? <Text style={[s.fieldLabel, { color: c.text.primary }]}>{label}</Text> : null}
       <Pressable
         onPress={onPress}

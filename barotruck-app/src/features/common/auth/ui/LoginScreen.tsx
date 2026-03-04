@@ -58,6 +58,7 @@ export default function LoginScreen() {
         nickname: me.nickname,
         role: me.role,
         gender: me.gender ?? me.sex,
+        age: Number.isFinite(Number(me.age)) ? Number(me.age) : undefined,
         birthDate: String(me.birthDate ?? me.birthday ?? me.birth ?? me.dateOfBirth ?? me.dob ?? "").trim() || undefined,
       }).catch(() => {});
 

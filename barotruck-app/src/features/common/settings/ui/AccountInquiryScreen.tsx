@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import React from "react";
 import {
@@ -16,11 +17,24 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { AuthService } from "@/shared/api/authService";
+import { UserService } from "@/shared/api/userService";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import ShipperScreenHeader from "@/shared/ui/layout/ShipperScreenHeader";
 import { withAlpha } from "@/shared/utils/color";
+import { clearCurrentUserSnapshot } from "@/shared/utils/currentUserStorage";
 
 const INQUIRY_TYPE_ITEMS = ["서비스 이용", "결제/정산", "계정/인증", "기타"] as const;
+const ACCOUNT_SCOPED_STORAGE_KEYS = [
+  "baro_profile_image_url_v1",
+  "baro_shipper_payment_methods_v1",
+  "baro_driver_settlement_account_v1",
+  "baro_driver_documents_status_v1",
+  "baro_shipper_favorite_addresses_v1",
+  "baro_local_shipper_orders_v1",
+  "baro_shipper_reviewed_order_ids_v1",
+  "baro_driver_extra_vehicles_v1",
+] as const;
 
 export default function AccountInquiryScreen() {
   const router = useRouter();
@@ -32,6 +46,7 @@ export default function AccountInquiryScreen() {
   const [title, setTitle] = React.useState("");
   const [content, setContent] = React.useState("");
   const [email, setEmail] = React.useState("");
+  const [withdrawing, setWithdrawing] = React.useState(false);
 
   const canSubmit = title.trim().length >= 2 && content.trim().length >= 10;
 
@@ -55,6 +70,72 @@ export default function AccountInquiryScreen() {
       },
     ]);
   }, [canSubmit, goBack]);
+
+  const clearLocalAccountData = React.useCallback(async () => {
+    await Promise.allSettled([
+      ...ACCOUNT_SCOPED_STORAGE_KEYS.map((key) => AsyncStorage.removeItem(key)),
+      clearCurrentUserSnapshot(),
+      AuthService.logout(),
+    ]);
+  }, []);
+
+  const doWithdraw = React.useCallback(async () => {
+    if (withdrawing) return;
+
+    try {
+      setWithdrawing(true);
+      await UserService.deleteUser();
+      await clearLocalAccountData();
+
+      if (Platform.OS === "web") {
+        window.alert("회원 탈퇴가 처리되었습니다.");
+        router.dismissAll();
+        router.replace("/(auth)/login");
+        return;
+      }
+
+      Alert.alert("탈퇴 완료", "회원 탈퇴가 처리되었습니다.", [
+        {
+          text: "확인",
+          onPress: () => {
+            router.dismissAll();
+            router.replace("/(auth)/login");
+          },
+        },
+      ]);
+    } catch {
+      Alert.alert("탈퇴 실패", "회원 탈퇴 처리 중 문제가 발생했습니다. 잠시 후 다시 시도해 주세요.");
+    } finally {
+      setWithdrawing(false);
+    }
+  }, [clearLocalAccountData, router, withdrawing]);
+
+  const onWithdraw = React.useCallback(() => {
+    if (withdrawing) return;
+
+    if (Platform.OS === "web") {
+      const first = window.confirm("회원 탈퇴를 진행할까요?");
+      if (!first) return;
+      const second = window.confirm("탈퇴 후에는 계정 정보가 복구되지 않을 수 있습니다. 계속할까요?");
+      if (!second) return;
+      void doWithdraw();
+      return;
+    }
+
+    Alert.alert("회원 탈퇴", "탈퇴 후에는 계정 정보가 복구되지 않을 수 있습니다.", [
+      { text: "취소", style: "cancel" },
+      {
+        text: "계속",
+        style: "destructive",
+        onPress: () => {
+          Alert.alert("회원 탈퇴", "정말로 회원 탈퇴를 진행할까요?", [
+            { text: "취소", style: "cancel" },
+            { text: "탈퇴", style: "destructive", onPress: () => void doWithdraw() },
+          ]);
+        },
+      },
+    ]);
+  }, [doWithdraw, withdrawing]);
 
   const s = React.useMemo(
     () =>
@@ -157,6 +238,16 @@ export default function AccountInquiryScreen() {
           fontSize: 14,
           fontWeight: "800",
         } as TextStyle,
+        withdrawWrap: {
+          marginTop: 2,
+          alignItems: "center",
+        } as ViewStyle,
+        withdrawText: {
+          fontSize: 11,
+          fontWeight: "700",
+          color: withAlpha(c.text.secondary, 0.64),
+          textDecorationLine: "underline",
+        } as TextStyle,
       }),
     [c, canSubmit]
   );
@@ -248,6 +339,9 @@ export default function AccountInquiryScreen() {
                 keyboardType="email-address"
               />
             </View>
+            <Pressable style={s.withdrawWrap} onPress={onWithdraw} disabled={withdrawing} hitSlop={6}>
+              <Text style={s.withdrawText}>{withdrawing ? "회원 탈퇴 처리 중..." : "회원 탈퇴"}</Text>
+            </Pressable>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>

@@ -10,6 +10,8 @@ export interface UserProfile {
   phone: string;
   role: 'USER' | 'DRIVER' | 'SHIPPER' | 'ADMIN';
   ratingAvg: number;
+  gender?: string;
+  age?: number;
 }
 
 /** * 비밀번호 변경 요청 데이터 (ChangePasswordRequest.java 대응) 
@@ -32,6 +34,8 @@ export interface DriverInfo {
   accountNum: string;
   type?: string; // 냉장, 냉동 등
   address?: string; // 차주 주소 (선호 지역)
+  lat?: number;     // 차주 활동 지역 위도
+  lng?: number;     // 차주 활동 지역 경도
   nbhId?: number;   // 지역 코드 (Neighborhood ID)
 }
 

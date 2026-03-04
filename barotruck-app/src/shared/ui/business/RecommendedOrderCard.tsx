@@ -43,12 +43,12 @@ export function RecommendedOrderCard({
   const c = t.colors;
   const isDone = statusKey === "DONE";
   const cardTint = isDone
-    ? { bg: "#F3F5F8", border: "#D8DFE8", text: "#8B96A8" }
+    ? { bg: "#F3F5F8", border: "#D8DFE8", text: "#8B96A8", borderWidth: 1 }
     : isEtaUrgent
-      ? { bg: "#fff9f9", border: "#FFB1B1", text: "#DC2626" }
+      ? { bg: "#fff9f9", border: "#FFB1B1", text: "#DC2626", borderWidth: 1 }
       : isHighlighted
-        ? { bg: c.brand.primarySoft, border: c.brand.primary, text: c.brand.primary }
-        : { bg: c.bg.surface, border: c.border.default, text: c.text.secondary };
+        ? { bg: c.bg.surface, border: c.brand.primary, text: c.brand.primary, borderWidth: 2 }
+        : { bg: c.bg.surface, border: c.border.default, text: c.text.secondary, borderWidth: 1 };
   const badgeMeta =
     statusKey === "MATCHING"
       ? { label: "대기", bg: c.brand.primary }
@@ -57,16 +57,27 @@ export function RecommendedOrderCard({
         : statusKey === "DRIVING"
           ? { label: "운송중", bg: c.status.danger }
           : { label: "완료", bg: c.text.secondary };
-  const getShortAddr = (addr: string) => {
-    const parts = (addr || "").trim().split(/\s+/);
-    return `${parts[0] || ""} ${parts[1] || ""}`.trim() || "-";
-  };
   const normalizeText = (v?: string) => (v || "").trim().replace(/\s+/g, " ");
-  const fromDetailText = normalizeText(fromDetail);
-  const toDetailText = normalizeText(toDetail);
-  // 차주 카드와 동일하게 "상세주소 없음" 문구를 쓰지 않고 실제 상세주소를 우선 노출한다.
-  const fromSubText = fromDetailText || normalizeText(from) || "-";
-  const toSubText = toDetailText || normalizeText(to) || "-";
+  const formatMainText = (addr?: string) => {
+    const parts = normalizeText(addr).split(" ").filter(Boolean);
+    if (!parts.length) return "-";
+    const first = (parts[0] || "")
+      .replace("특별시", "")
+      .replace("광역시", "")
+      .replace("특별자치시", "")
+      .replace("특별자치도", "");
+    return [first, parts[1] || ""].filter(Boolean).join(" ");
+  };
+  const formatSubText = (addr?: string, detail?: string) => {
+    const parts = normalizeText(addr).split(" ").filter(Boolean);
+    const roadText = parts.slice(2).join(" ");
+    const detailText = normalizeText(detail);
+    return [roadText, detailText].filter(Boolean).join(" ") || "-";
+  };
+  const fromMainText = formatMainText(from);
+  const toMainText = formatMainText(to);
+  const fromSubText = formatSubText(from, fromDetail);
+  const toSubText = formatSubText(to, toDetail);
 
   return (
     <Pressable
@@ -76,7 +87,7 @@ export function RecommendedOrderCard({
         {
           backgroundColor: cardTint.bg,
           borderColor: cardTint.border,
-          borderWidth: 1,
+          borderWidth: cardTint.borderWidth,
           elevation: 0,
           opacity: pressed ? 0.92 : 1,
         },
@@ -98,7 +109,7 @@ export function RecommendedOrderCard({
         <View style={s.locGroup}>
           <Text style={s.locLabel}>상차지</Text>
           <Text style={[s.locName, { color: isDone ? c.text.secondary : c.text.primary }]} numberOfLines={1}>
-            {getShortAddr(from)}
+            {fromMainText}
           </Text>
           <Text style={[s.placeText, { color: isDone ? "#94A3B8" : c.text.secondary }]} numberOfLines={1}>
             {fromSubText}
@@ -117,7 +128,7 @@ export function RecommendedOrderCard({
         <View style={[s.locGroup, { alignItems: "flex-end" }]}>
           <Text style={s.locLabel}>하차지</Text>
           <Text style={[s.locName, { color: isDone ? c.text.secondary : c.text.primary, textAlign: "right" }]} numberOfLines={1}>
-            {getShortAddr(to)}
+            {toMainText}
           </Text>
           <Text style={[s.placeText, { textAlign: "right", color: isDone ? "#94A3B8" : c.text.secondary }]} numberOfLines={1}>
             {toSubText}
