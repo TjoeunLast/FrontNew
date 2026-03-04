@@ -10,6 +10,8 @@ export interface UserProfile {
   phone: string;
   role: 'USER' | 'DRIVER' | 'SHIPPER' | 'ADMIN';
   ratingAvg: number;
+  gender?: string;
+  age?: number;
 }
 
 /** * 비밀번호 변경 요청 데이터 (ChangePasswordRequest.java 대응) 

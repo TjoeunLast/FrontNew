@@ -151,7 +151,7 @@ function toActionLabel(status: SettlementStatus) {
 }
 
 function mapOrderToSettlement(order: OrderResponse, pendingOrderIds?: Set<number>): SettlementItem | null {
-  if (order.status === "CANCELLED" || order.status === "REQUESTED" || order.status === "PENDING") return null;
+  if (order.status === "CANCELLED" || order.status === "REQUESTED" || order.status === "PENDING" || order.status === "APPLIED") return null;
 
   const scheduledAt =
     parseDate(order.endSchedule) || parseDate(order.startSchedule) || parseDate(order.updated) || parseDate(order.createdAt);
