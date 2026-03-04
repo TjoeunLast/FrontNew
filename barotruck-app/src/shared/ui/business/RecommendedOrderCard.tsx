@@ -43,12 +43,12 @@ export function RecommendedOrderCard({
   const c = t.colors;
   const isDone = statusKey === "DONE";
   const cardTint = isDone
-    ? { bg: "#F3F5F8", border: "#D8DFE8", text: "#8B96A8" }
+    ? { bg: "#F3F5F8", border: "#D8DFE8", text: "#8B96A8", borderWidth: 1 }
     : isEtaUrgent
-      ? { bg: "#fff9f9", border: "#FFB1B1", text: "#DC2626" }
+      ? { bg: "#fff9f9", border: "#FFB1B1", text: "#DC2626", borderWidth: 1 }
       : isHighlighted
-        ? { bg: c.brand.primarySoft, border: c.brand.primary, text: c.brand.primary }
-        : { bg: c.bg.surface, border: c.border.default, text: c.text.secondary };
+        ? { bg: c.bg.surface, border: c.brand.primary, text: c.brand.primary, borderWidth: 2 }
+        : { bg: c.bg.surface, border: c.border.default, text: c.text.secondary, borderWidth: 1 };
   const badgeMeta =
     statusKey === "MATCHING"
       ? { label: "대기", bg: c.brand.primary }
@@ -87,7 +87,7 @@ export function RecommendedOrderCard({
         {
           backgroundColor: cardTint.bg,
           borderColor: cardTint.border,
-          borderWidth: 1,
+          borderWidth: cardTint.borderWidth,
           elevation: 0,
           opacity: pressed ? 0.92 : 1,
         },

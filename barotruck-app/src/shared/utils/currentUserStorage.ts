@@ -11,6 +11,7 @@ export type CurrentUserSnapshot = {
   role: CurrentUserRole;
   shipperType?: "Y" | "N";
   gender?: "M" | "F";
+  age?: number;
   birthDate?: string;
   activityAddress?: string;
   activityLat?: number;

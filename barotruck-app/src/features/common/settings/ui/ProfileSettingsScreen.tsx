@@ -32,7 +32,7 @@ const PROFILE_IMAGE_STORAGE_KEY = "baro_profile_image_url_v1";
 type ProfileState = {
   nickname: string;
   gender: string;
-  birthDate: string;
+  ageLabel: string;
   shipperType: string;
   role: string;
   email: string;
@@ -163,6 +163,27 @@ function normalizeBirthDateFromAny(input?: unknown) {
   return normalizeBirthDate(raw);
 }
 
+function getAgeFromBirthDate(input?: unknown) {
+  const digits = String(input ?? "").replace(/\D/g, "");
+  if (digits.length !== 8) return undefined;
+  const year = Number(digits.slice(0, 4));
+  const month = Number(digits.slice(4, 6));
+  const day = Number(digits.slice(6, 8));
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return undefined;
+  const today = new Date();
+  let age = today.getFullYear() - year;
+  const passed = today.getMonth() + 1 > month || (today.getMonth() + 1 === month && today.getDate() >= day);
+  if (!passed) age -= 1;
+  return age > 0 ? age : undefined;
+}
+
+function normalizeAgeFromAny(ageInput?: unknown, birthDateInput?: unknown) {
+  const age = Number(ageInput);
+  if (Number.isFinite(age) && age > 0) return `${Math.floor(age)}세`;
+  const derivedAge = getAgeFromBirthDate(birthDateInput);
+  return derivedAge ? `${derivedAge}세` : "-";
+}
+
 function normalizeGenderFromAny(input?: unknown) {
   if (input == null) return "-";
   const raw = String(input).trim();
@@ -277,7 +298,7 @@ export default function ProfileSettingsScreen() {
   const [profile, setProfile] = React.useState<ProfileState>({
     nickname: "-",
     gender: "-",
-    birthDate: "-",
+    ageLabel: "-",
     shipperType: "-",
     role: "",
     email: "-",
@@ -320,7 +341,10 @@ export default function ProfileSettingsScreen() {
           const next: ProfileState = {
             nickname: normalizeNickname(me.nickname ?? cached?.nickname),
             gender: normalizeGenderFromAny(pickGender(me, detail, cached ?? undefined)),
-            birthDate: normalizeBirthDateFromAny(pickBirthDate(me, detail, cached ?? undefined)),
+            ageLabel: normalizeAgeFromAny(
+              me?.age ?? detail?.age ?? detail?.user?.age ?? cached?.age,
+              pickBirthDate(me, detail, cached ?? undefined)
+            ),
             shipperType: resolveShipperType(me, detail, cached ?? undefined),
             role: String(me?.role ?? cached?.role ?? "").trim().toUpperCase(),
             email: normalizeEmail(me.email ?? cached?.email),
@@ -355,7 +379,7 @@ export default function ProfileSettingsScreen() {
           const next: ProfileState = {
             nickname: normalizeNickname(cached?.nickname),
             gender: normalizeGenderFromAny(cached?.gender),
-            birthDate: normalizeBirthDateFromAny(cached?.birthDate),
+            ageLabel: normalizeAgeFromAny(cached?.age, cached?.birthDate),
             shipperType: resolveShipperType(cached, undefined, cached ?? undefined),
             role: String(cached?.role ?? "").trim().toUpperCase(),
             email: normalizeEmail(cached?.email),
@@ -895,8 +919,8 @@ export default function ProfileSettingsScreen() {
             </View>
             <View style={s.rowDivider} />
             <View style={s.row}>
-              <Text style={s.label}>생년월일</Text>
-              <Text style={s.value}>{profile.birthDate}</Text>
+              <Text style={s.label}>나이</Text>
+              <Text style={s.value}>{profile.ageLabel}</Text>
             </View>
           </View>
         </View>

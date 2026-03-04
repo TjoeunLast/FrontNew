@@ -7,6 +7,7 @@ function normalizeStatus(raw: any): OrderStatus {
   const v = String(raw ?? '').toUpperCase();
   if (
     v === 'REQUESTED' ||
+    v === 'APPLIED' ||
     v === 'ACCEPTED' ||
     v === 'LOADING' ||
     v === 'IN_TRANSIT' ||
@@ -181,6 +182,19 @@ function normalizeOrderRow(node: any): OrderResponse | null {
     duration: Number((node as any).duration ?? 0),
     user: (node as any).user,
     cancellation: (node as any).cancellation,
+    applicantCount: Math.max(
+      0,
+      Math.floor(
+        Number(
+          (node as any).applicantCount ??
+          (node as any).applicantsCount ??
+          (node as any).applyCount ??
+          (node as any).appliedCount ??
+          (Array.isArray((node as any).driverList) ? (node as any).driverList.length : 0) ??
+          0
+        ) || 0
+      )
+    ),
   };
 }
 
@@ -189,6 +203,7 @@ function mergeOrderRows(prev: OrderResponse, next: OrderResponse): OrderResponse
   return {
     ...prev,
     ...next,
+    applicantCount: Math.max(prev.applicantCount ?? 0, next.applicantCount ?? 0),
     settlementStatus: pickDefined(prev.settlementStatus, next.settlementStatus),
     tag: pickDefined(prev.tag, next.tag),
     payMethod: next.payMethod || prev.payMethod,
@@ -237,6 +252,102 @@ function toOrderList(payload: any): OrderResponse[] {
   if (out.length > 0) return out;
   if (Array.isArray(payload)) return payload as OrderResponse[];
   return [];
+}
+
+function toPositiveNumberOrUndefined(value: unknown): number | undefined {
+  const num = Number(value);
+  return Number.isFinite(num) && num > 0 ? num : undefined;
+}
+
+function toNumberOrUndefined(value: unknown): number | undefined {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : undefined;
+}
+
+function normalizeApplicant(node: any): AssignedDriverInfoResponse | null {
+  if (!node || typeof node !== 'object') return null;
+
+  const userId =
+    toPositiveNumberOrUndefined(
+      (node as any).userId ??
+      (node as any).user?.userId ??
+      (node as any).user?.id ??
+      (node as any).memberId
+    ) ?? 0;
+  const driverId =
+    toPositiveNumberOrUndefined(
+      (node as any).driverId ??
+      (node as any).driver?.driverId ??
+      (node as any).driver?.id
+    ) ?? 0;
+
+  if (userId <= 0 && driverId <= 0) return null;
+
+  return {
+    userId,
+    email: String((node as any).email ?? (node as any).user?.email ?? '').trim(),
+    nickname: String((node as any).nickname ?? (node as any).user?.nickname ?? '').trim(),
+    phone: String((node as any).phone ?? (node as any).user?.phone ?? '').trim(),
+    profileImage: (node as any).profileImage ?? (node as any).user?.profileImage,
+    ratingAvg: toNumberOrUndefined((node as any).ratingAvg ?? (node as any).user?.ratingAvg),
+    age: toNumberOrUndefined((node as any).age ?? (node as any).user?.age),
+    level: toNumberOrUndefined((node as any).level ?? (node as any).user?.level ?? (node as any).user_level),
+    role: String((node as any).role ?? (node as any).user?.role ?? '').trim() || undefined,
+    driverId,
+    carNum: String((node as any).carNum ?? (node as any).driver?.carNum ?? '').trim(),
+    carType: String((node as any).carType ?? (node as any).driver?.carType ?? '').trim(),
+    tonnage: toNumberOrUndefined((node as any).tonnage ?? (node as any).driver?.tonnage) ?? 0,
+    career:
+      toNumberOrUndefined(
+        (node as any).career ??
+        (node as any).driverCareer ??
+        (node as any).careerYear ??
+        (node as any).careerYears ??
+        (node as any).yearsOfCareer ??
+        (node as any).experienceYears ??
+        (node as any).driver?.career ??
+        (node as any).driver?.driverCareer ??
+        (node as any).driver?.careerYear ??
+        (node as any).driver?.careerYears ??
+        (node as any).driver?.yearsOfCareer ??
+        (node as any).driver?.experienceYears
+      ) ?? undefined,
+    bankName: String((node as any).bankName ?? (node as any).driver?.bankName ?? '').trim() || undefined,
+    accountNum: String((node as any).accountNum ?? (node as any).driver?.accountNum ?? '').trim() || undefined,
+    type: String((node as any).type ?? (node as any).driver?.type ?? '').trim() || undefined,
+  };
+}
+
+function toApplicantList(payload: any): AssignedDriverInfoResponse[] {
+  const out: AssignedDriverInfoResponse[] = [];
+
+  const absorb = (node: any) => {
+    if (!node) return;
+    if (Array.isArray(node)) {
+      node.forEach((item) => absorb(item));
+      return;
+    }
+
+    const normalized = normalizeApplicant(node);
+    if (normalized) {
+      out.push(normalized);
+      return;
+    }
+
+    if (typeof node === 'object') {
+      absorb((node as any).content);
+      absorb((node as any).items);
+      absorb((node as any).results);
+      absorb((node as any).data);
+      absorb((node as any).list);
+      absorb((node as any).rows);
+      absorb((node as any).drivers);
+      absorb((node as any).applicants);
+    }
+  };
+
+  absorb(payload);
+  return out;
 }
 
 export const OrderApi = {
@@ -320,7 +431,7 @@ export const OrderApi = {
   // 지원자들 정보 확인 API (차주가 오더에 지원한 기사들의 목록과 정보를 조회)
   getApplicantsInfo: async (orderId: number): Promise<AssignedDriverInfoResponse[]> => {
     const res = await apiClient.get(`${API_BASE}/${orderId}/applicants`);
-    return res.data;
+    return toApplicantList(res.data);
   },
 
   selectDriver: async (orderId: number, driverNo: number): Promise<string> => {

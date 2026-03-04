@@ -40,7 +40,7 @@ type ProfileView = {
   role: string;
   shipperType: string;
   gender: string;
-  birthDate: string;
+  ageLabel: string;
 };
 
 function readDefaultCardCompany(raw: string | null) {
@@ -131,6 +131,28 @@ function normalizeBirthDateLabel(input?: string) {
   return `${digits.slice(0, 4)}.${digits.slice(4, 6)}.${digits.slice(6, 8)}`;
 }
 
+function getAgeFromBirthDate(input?: unknown) {
+  const digits = String(input ?? "").replace(/\D/g, "");
+  if (digits.length !== 8) return undefined;
+  const year = Number(digits.slice(0, 4));
+  const month = Number(digits.slice(4, 6));
+  const day = Number(digits.slice(6, 8));
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return undefined;
+  const today = new Date();
+  let age = today.getFullYear() - year;
+  const thisYearBirthdayPassed =
+    today.getMonth() + 1 > month || (today.getMonth() + 1 === month && today.getDate() >= day);
+  if (!thisYearBirthdayPassed) age -= 1;
+  return age > 0 ? age : undefined;
+}
+
+function normalizeAgeLabel(input?: unknown, birthDateInput?: unknown) {
+  const age = Number(input);
+  if (Number.isFinite(age) && age > 0) return `${Math.floor(age)}세`;
+  const derivedAge = getAgeFromBirthDate(birthDateInput);
+  return derivedAge ? `${derivedAge}세` : "-";
+}
+
 async function fetchShipperDetailFromServer(baseMe: any) {
   if (USE_MOCK) return null;
   try {
@@ -157,7 +179,7 @@ export default function MyPageScreen() {
     role: "-",
     shipperType: "-",
     gender: "-",
-    birthDate: "-",
+    ageLabel: "-",
   });
   const [profileImageUrl, setProfileImageUrl] = useState("");
   const [paymentMethodLabel, setPaymentMethodLabel] = useState("미등록");
@@ -206,7 +228,8 @@ export default function MyPageScreen() {
                 shipperDetail?.user?.sex ??
                 cached?.gender
             ),
-            birthDate: normalizeBirthDateLabel(
+            ageLabel: normalizeAgeLabel(
+              me.age ?? shipperDetail?.age ?? shipperDetail?.user?.age ?? cached?.age,
               me.birthDate ??
                 me.birthday ??
                 me.birth ??
@@ -236,6 +259,10 @@ export default function MyPageScreen() {
               role: me.role,
               shipperType: shipperDetail?.isCorporate ?? cached?.shipperType,
               gender: me.gender ?? me.sex ?? shipperDetail?.user?.gender ?? cached?.gender,
+              age:
+                Number(me.age ?? shipperDetail?.age ?? shipperDetail?.user?.age ?? cached?.age) > 0
+                  ? Number(me.age ?? shipperDetail?.age ?? shipperDetail?.user?.age ?? cached?.age)
+                  : undefined,
               birthDate:
                 String(
                   me.birthDate ??
@@ -263,7 +290,7 @@ export default function MyPageScreen() {
             role: roleToKorean(cached.role || ""),
             shipperType: resolveShipperType(cached),
             gender: normalizeGenderLabel(cached.gender),
-            birthDate: normalizeBirthDateLabel(cached.birthDate),
+            ageLabel: normalizeAgeLabel(cached.age, cached.birthDate),
           });
         }
       })();
@@ -455,16 +482,20 @@ export default function MyPageScreen() {
               <Text style={s.profileName}>
                 {profile.nickname === "-" ? profileGreetingFallback : `${profile.nickname}님`}
               </Text>
-              {profile.shipperType !== "-" ? (
-                <View style={s.shipperTypeBadge}>
-                  <Text style={s.shipperTypeBadgeText}>{profile.shipperType}</Text>
-                </View>
-              ) : null}
             </View>
-            {(profile.gender !== "-" || profile.birthDate !== "-") ? (
-              <Text style={s.profileMeta}>
-                {[profile.gender, profile.birthDate].filter((v) => v !== "-").join(" · ")}
-              </Text>
+            {(profile.gender !== "-" || profile.ageLabel !== "-" || profile.shipperType !== "-") ? (
+              <View style={s.profileTopRow}>
+                {(profile.gender !== "-" || profile.ageLabel !== "-") ? (
+                  <Text style={s.profileMeta}>
+                    {[profile.gender, profile.ageLabel].filter((v) => v !== "-").join(" · ")}
+                  </Text>
+                ) : null}
+                {profile.shipperType !== "-" ? (
+                  <View style={s.shipperTypeBadge}>
+                    <Text style={s.shipperTypeBadgeText}>{profile.shipperType}</Text>
+                  </View>
+                ) : null}
+              </View>
             ) : null}
           </View>
           <View style={s.arrowCircle}>
@@ -507,6 +538,14 @@ export default function MyPageScreen() {
               <Ionicons name="chatbox-ellipses-outline" size={18} color={c.brand.primary} />
             </View>
             <Text style={s.rowLabel}>리뷰 관리</Text>
+            <Ionicons name="chevron-forward" size={20} color={c.text.secondary} />
+          </Pressable>
+          <View style={s.divider} />
+          <Pressable style={s.row} onPress={() => router.push("/(common)/settings/announcements" as any)}>
+            <View style={[s.rowIconWrap, { backgroundColor: withAlpha(c.status.warning, 0.14) }]}>
+              <Ionicons name="megaphone-outline" size={18} color={c.status.warning} />
+            </View>
+            <Text style={s.rowLabel}>공지사항</Text>
             <Ionicons name="chevron-forward" size={20} color={c.text.secondary} />
           </Pressable>
           <View style={s.divider} />

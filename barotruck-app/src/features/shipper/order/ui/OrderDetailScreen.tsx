@@ -332,7 +332,7 @@ export default function OrderDetailScreen() {
     };
   }, [order?.orderId, order?.status, resolvedOrderId]);
 
-  const isWaiting = order?.status === "REQUESTED" || order?.status === "PENDING";
+  const isWaiting = order?.status === "REQUESTED" || order?.status === "PENDING" || order?.status === "APPLIED";
   const hasApplicants = useMemo(() => {
     if (!isWaiting) return false;
     if (applicantList.length > 0) return true;
@@ -392,7 +392,7 @@ export default function OrderDetailScreen() {
   const buttonConfig = useMemo<ActionButtonConfig | null>(() => {
     if (!order) return null;
 
-    if (order.status === "REQUESTED" || order.status === "PENDING") {
+    if (order.status === "REQUESTED" || order.status === "PENDING" || order.status === "APPLIED") {
       if (order.instant) {
         return {
           text: "배차 대기중",
@@ -1046,6 +1046,10 @@ export default function OrderDetailScreen() {
                   <ScrollView showsVerticalScrollIndicator={false}>
                     {applicantList.map((driver) => {
                       const driverNo = Number(driver.driverId ?? driver.userId);
+                      const careerLabel =
+                        Number.isFinite(Number(driver.career)) && Number(driver.career) >= 0
+                          ? `${Number(driver.career)}년`
+                          : "-";
                       return (
                         <Pressable
                           key={String(driverNo)}
@@ -1057,7 +1061,7 @@ export default function OrderDetailScreen() {
                               {driver.nickname || "기사"}
                             </Text>
                             <Text style={[s.applicantMeta, { color: c.text.secondary }]}>
-                              {driver.tonnage || "-"} {driver.carType || "-"} | 경력 {driver.career ?? 0}년
+                              {driver.tonnage || "-"} {driver.carType || "-"} | 경력 {careerLabel}
                             </Text>
                           </View>
                           <Ionicons name="chevron-forward" size={18} color={c.text.secondary} />

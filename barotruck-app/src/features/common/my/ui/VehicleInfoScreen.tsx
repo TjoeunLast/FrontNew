@@ -324,10 +324,10 @@ export default function VehicleInfoScreen() {
         });
       }
 
-      Alert.alert("저장 완료", "주 차량 정보가 저장되었습니다.");
+      Alert.alert("수정 완료", "주 차량 정보가 수정되었습니다.");
       goBack();
     } catch {
-      Alert.alert("저장 실패", "차량 정보 저장 중 문제가 발생했습니다. 다시 시도해 주세요.");
+      Alert.alert("수정 실패", "차량 정보 수정 중 문제가 발생했습니다. 다시 시도해 주세요.");
     } finally {
       setSaving(false);
     }
@@ -433,9 +433,8 @@ export default function VehicleInfoScreen() {
           </View>
           <Text style={s.label}>차량 타입</Text>
           <SelectField label="차량 타입" value={vehicleType} options={VEHICLE_TYPE_OPTIONS} onChange={setVehicleType} />
-          <Text style={s.helper}>주 차량은 실제 차주 프로필 API에 저장됩니다.</Text>
           <Pressable style={s.saveBtn} onPress={() => void onSave()} disabled={saving}>
-            <Text style={s.saveBtnText}>{saving ? "저장 중..." : "저장"}</Text>
+            <Text style={s.saveBtnText}>{saving ? "수정 중..." : "수정"}</Text>
           </Pressable>
         </View>
 
