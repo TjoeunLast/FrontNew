@@ -1,5 +1,6 @@
 import { useOrderFilterStore } from "@/features/driver/order-filter/model/useOrderFilterStore";
 import { OrderService } from "@/shared/api/orderService";
+import { UserService } from "@/shared/api/userService";
 import { OrderResponse } from "@/shared/models/order";
 import * as Location from "expo-location";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -42,15 +43,15 @@ export const useOrderList = () => {
     lat: number;
     lng: number;
   } | null>(null);
+  const [driverAddress, setDriverAddress] = useState<string | null>(null);
 
   // 내 위치 가져오기
   const getMyLocation = useCallback(async () => {
-    const FALLBACK_LOCATION = { lat: 37.494461, lng: 127.029592 };
-
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== "granted") {
-        setMyLocation(FALLBACK_LOCATION);
+        setMyLocation(null); // 권한 거부 시
+        console.log("위치 권한 거부");
         return;
       }
 
@@ -58,7 +59,6 @@ export const useOrderList = () => {
       const locationPromise = (async () => {
         let location = await Location.getLastKnownPositionAsync({});
         if (!location) {
-          // 정확도를 낮춰서(Lowest) 속도를 끌어올림
           location = await Location.getCurrentPositionAsync({
             accuracy: Location.Accuracy.Lowest,
           });
@@ -83,12 +83,12 @@ export const useOrderList = () => {
           lng: location.coords.longitude,
         });
       } else {
-        console.log("위치 가져오기 2초 초과 -> 기본 위치 사용");
-        setMyLocation(FALLBACK_LOCATION);
+        console.log("위치 가져오기 2초 초과 -> 내 활동 기반 필터링");
+        setMyLocation(null);
       }
     } catch (error) {
-      console.log("위치 에러 -> 기본 위치 사용");
-      setMyLocation(FALLBACK_LOCATION);
+      console.log("위치 에러 -> 내 활동 기반 필터링");
+      setMyLocation(null);
     }
   }, []);
 
@@ -100,13 +100,20 @@ export const useOrderList = () => {
         .catch(() => []);
       const availablePromise = OrderService.getAvailableOrders();
 
-      const [recommended, allOrders] = await Promise.all([
+      const myInfoPromise = UserService.getMyInfo().catch(() => null);
+
+      const [recommended, allOrders, myInfo] = await Promise.all([
         recommendedPromise,
         availablePromise,
+        myInfoPromise,
       ]);
 
       setRecommendedOrders(recommended);
       setOrders(allOrders);
+
+      if (myInfo && (myInfo as any).address) {
+        setDriverAddress((myInfo as any).address);
+      }
     } finally {
       setLoading(false);
     }
@@ -151,19 +158,36 @@ export const useOrderList = () => {
       }
 
       // 3. 반경 필터링 (전국 999가 아닐 때)
-      if (
-        detailFilter.radius !== 999 &&
-        myLocation &&
-        o.startLat &&
-        o.startLng
-      ) {
-        const dist = getDistance(
-          myLocation.lat,
-          myLocation.lng,
-          o.startLat,
-          o.startLng,
-        );
-        if (dist > detailFilter.radius) return false;
+      if (detailFilter.radius !== 999) {
+        if (myLocation && o.startLat && o.startLng) {
+          // 3-1. GPS 좌표가 있을 때 -> 정상적인 반경(거리) 계산
+          const dist = getDistance(
+            myLocation.lat,
+            myLocation.lng,
+            o.startLat,
+            o.startLng,
+          );
+          if (dist > detailFilter.radius) return false;
+        } else {
+          // 3-2. GPS 획득 실패 시 -> 백엔드에서 받아온 기사님의 "XX시 OO구" 주소를 기준으로 필터링
+          if (driverAddress) {
+            // 예: "경기 안산시 상록구" -> "상록구" 추출
+            const addressParts = driverAddress.split(" ");
+            const lastWord = addressParts.pop() || "";
+            // "경기 안산시"
+            const cityAndGu = addressParts.join(" ");
+
+            const isAddressMatch =
+              o.startAddr.includes(lastWord) ||
+              o.startAddr.includes(driverAddress) ||
+              (cityAndGu && o.startAddr.includes(cityAndGu));
+
+            if (!isAddressMatch) return false;
+          } else {
+            // GPS도 없고, 서버에서 주소도 못 받아왔다면 필터링할 기준이 없음
+            return false;
+          }
+        }
       }
 
       // 4. 차종/중량 필터링
