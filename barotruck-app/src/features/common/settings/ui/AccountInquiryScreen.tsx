@@ -89,7 +89,9 @@ export default function AccountInquiryScreen() {
 
       if (Platform.OS === "web") {
         window.alert("회원 탈퇴가 처리되었습니다.");
-        router.dismissAll();
+        if (router.canDismiss()) {
+          router.dismissAll();
+        }
         router.replace("/(auth)/login");
         return;
       }
@@ -98,7 +100,9 @@ export default function AccountInquiryScreen() {
         {
           text: "확인",
           onPress: () => {
-            router.dismissAll();
+            if (router.canDismiss()) {
+              router.dismissAll();
+            }
             router.replace("/(auth)/login");
           },
         },

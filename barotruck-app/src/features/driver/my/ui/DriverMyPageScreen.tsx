@@ -138,7 +138,9 @@ export default function DriverMyPageScreen() {
       setLoggingOut(true);
       await AuthService.logout();
       await clearCurrentUserSnapshot();
-      router.dismissAll();
+      if (router.canDismiss()) {
+        router.dismissAll();
+      }
       router.replace("/(auth)/login");
     } finally {
       setLoggingOut(false);
