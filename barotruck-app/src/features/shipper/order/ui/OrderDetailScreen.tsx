@@ -494,12 +494,7 @@ export default function OrderDetailScreen() {
       setReviewOpen(true);
       return;
     }
-    setActionLoading(true);
-    try {
-      Alert.alert("안내", `${buttonConfig.text} 기능은 준비 중입니다.`);
-    } finally {
-      setActionLoading(false);
-    }
+    router.push(`/(common)/orders/${order.orderId}/transport-status` as any);
   };
 
   const handleSelectDriver = async (driver: AssignedDriverInfoResponse) => {
