@@ -19,13 +19,13 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import OrderDetailPageFrame from "@/features/driver/order-detail/ui/OrderDetailPageFrame";
+import apiClient from "@/shared/api/apiClient";
 import { OrderApi } from "@/shared/api/orderService";
 import { ReportService, ReviewService } from "@/shared/api/reviewService";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import type { AssignedDriverInfoResponse, OrderResponse } from "@/shared/models/order";
 import { Badge } from "@/shared/ui/feedback/Badge";
-import apiClient from "@/shared/api/apiClient";
-import OrderDetailPageFrame from "@/features/driver/order-detail/ui/OrderDetailPageFrame";
 
 const { width } = Dimensions.get("window");
 
@@ -368,12 +368,10 @@ export default function OrderDetailScreen() {
     if (tags.length > 0) return tags;
     return parsedCargo.tags;
   }, [order?.tag, parsedCargo.tags]);
+  // 포장 여부
   const packagingOx = useMemo(() => {
-    const v = normalizeDisplayText(parsedCargo.packaging).toLowerCase();
-    if (!v) return "X";
-    if (v.includes("없") || v.includes("미포장") || v === "x" || v === "n" || v === "no") return "X";
-    return "O";
-  }, [parsedCargo.packaging]);
+    return Number(order?.packagingPrice ?? 0) > 0 ? "O" : "X";
+  }, [order?.packagingPrice]);
   const shipperInfo = useMemo(() => {
     const userAny = order?.user as any;
     const businessName = String(
