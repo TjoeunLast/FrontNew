@@ -44,11 +44,9 @@ export function RecommendedOrderCard({
   const isDone = statusKey === "DONE";
   const cardTint = isDone
     ? { bg: "#F3F5F8", border: "#D8DFE8", text: "#8B96A8", borderWidth: 1 }
-    : isEtaUrgent
-      ? { bg: "#fff9f9", border: "#FFB1B1", text: "#DC2626", borderWidth: 1 }
-      : isHighlighted
-        ? { bg: c.bg.surface, border: c.brand.primary, text: c.brand.primary, borderWidth: 2 }
-        : { bg: c.bg.surface, border: c.border.default, text: c.text.secondary, borderWidth: 1 };
+    : isHighlighted
+      ? { bg: c.bg.surface, border: c.brand.primary, text: c.brand.primary, borderWidth: 2 }
+      : { bg: c.bg.surface, border: c.border.default, text: c.text.secondary, borderWidth: 1 };
   const badgeMeta =
     statusKey === "MATCHING"
       ? { label: "대기", bg: c.brand.primary }

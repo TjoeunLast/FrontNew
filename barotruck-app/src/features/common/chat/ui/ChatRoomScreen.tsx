@@ -10,52 +10,25 @@ import {
   Platform,
   Alert,
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 
 import { useChatManager } from '../../../../shared/api/chatApi';
 import { ChatMessageResponse } from '../../../../shared/models/chat';
 import { getCurrentUserSnapshot } from '../../../../shared/utils/currentUserStorage';
-
-const ORDER_SUMMARY_STORAGE_KEY = 'chat_order_summary_v1';
+import {
+  markChatRoomVisited,
+  loadStoredChatOrderSummary,
+  loadStoredChatRoomTitle,
+  storeChatOrderSummary,
+  storeChatRoomTitle,
+  type ChatOrderSummary,
+} from '../../../../shared/utils/chatOrderSummary';
 
 function pickParam(value?: string | string[]) {
   if (Array.isArray(value)) return value[0] ?? '';
   return value ?? '';
-}
-
-type OrderSummary = {
-  orderId: string;
-  routeText: string;
-  cargoText: string;
-  priceText: string;
-};
-
-async function loadStoredOrderSummary(roomId: string): Promise<OrderSummary | null> {
-  try {
-    const raw = await AsyncStorage.getItem(`${ORDER_SUMMARY_STORAGE_KEY}:${roomId}`);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as Partial<OrderSummary> | null;
-    if (!parsed) return null;
-    return {
-      orderId: String(parsed.orderId ?? '').trim(),
-      routeText: String(parsed.routeText ?? '').trim(),
-      cargoText: String(parsed.cargoText ?? '').trim(),
-      priceText: String(parsed.priceText ?? '').trim(),
-    };
-  } catch {
-    return null;
-  }
-}
-
-async function storeOrderSummary(roomId: string, summary: OrderSummary) {
-  try {
-    await AsyncStorage.setItem(`${ORDER_SUMMARY_STORAGE_KEY}:${roomId}`, JSON.stringify(summary));
-  } catch {
-    // noop
-  }
 }
 
 function resolveOutgoingReadState(
@@ -91,23 +64,6 @@ function resolveOutgoingReadState(
   return hasLaterOtherMessage ? 'READ' : 'UNREAD';
 }
 
-function hasLaterOtherMessageAfter(
-  item: ChatMessageResponse,
-  myUserId: number | null,
-  sortedMessages: ChatMessageResponse[]
-): boolean {
-  const myId = Number(myUserId);
-  if (!Number.isFinite(myId)) return false;
-  const itemTime = new Date(item.createdAt).getTime();
-  return sortedMessages.some((msg) => {
-    const senderId = Number((msg as any)?.senderId);
-    if (Number.isFinite(senderId) && senderId === myId) return false;
-    const t = new Date(msg.createdAt).getTime();
-    if (Number.isFinite(itemTime) && Number.isFinite(t) && t > itemTime) return true;
-    return msg.messageId > item.messageId;
-  });
-}
-
 const ChatRoomScreen = () => {
   const {
     roomId,
@@ -125,17 +81,43 @@ const ChatRoomScreen = () => {
   const navigation = useNavigation();
   const router = useRouter();
   const [text, setText] = useState('');
-  const [cachedOrderSummary, setCachedOrderSummary] = useState<OrderSummary | null>(null);
+  const [cachedOrderSummary, setCachedOrderSummary] = useState<ChatOrderSummary | null>(null);
+  const [cachedRoomTitle, setCachedRoomTitle] = useState('');
   const listRef = useRef<FlatList<ChatMessageResponse>>(null);
 
   const { userId, messages, loadHistory, connectSocket, sendMessage, disconnect } = useChatManager();
 
   const roomTitle = useMemo(() => {
     const other = messages.find((m) => m.senderId !== userId && m.senderNickname);
-    return other?.senderNickname || '채팅';
-  }, [messages, userId]);
+    return other?.senderNickname || cachedRoomTitle || '채팅';
+  }, [cachedRoomTitle, messages, userId]);
 
-  const paramOrderSummary = useMemo<OrderSummary | null>(() => {
+  useEffect(() => {
+    const resolvedRoomId = pickParam(roomId).trim();
+    if (!resolvedRoomId) return;
+
+    let active = true;
+
+    void (async () => {
+      const storedTitle = await loadStoredChatRoomTitle(resolvedRoomId);
+      if (active) setCachedRoomTitle(storedTitle);
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [roomId]);
+
+  useEffect(() => {
+    const resolvedRoomId = pickParam(roomId).trim();
+    const normalizedTitle = String(roomTitle ?? '').trim();
+    if (!resolvedRoomId || !normalizedTitle || normalizedTitle === '채팅') return;
+
+    setCachedRoomTitle((prev) => (prev === normalizedTitle ? prev : normalizedTitle));
+    void storeChatRoomTitle(resolvedRoomId, normalizedTitle);
+  }, [roomId, roomTitle]);
+
+  const paramOrderSummary = useMemo<ChatOrderSummary | null>(() => {
     const resolvedOrderId = pickParam(orderId).trim();
     const resolvedRouteText = pickParam(routeText).trim();
     const resolvedCargoText = pickParam(cargoText).trim();
@@ -161,12 +143,12 @@ const ChatRoomScreen = () => {
 
     if (paramOrderSummary) {
       setCachedOrderSummary(paramOrderSummary);
-      void storeOrderSummary(resolvedRoomId, paramOrderSummary);
+      void storeChatOrderSummary(resolvedRoomId, paramOrderSummary);
       return;
     }
 
     void (async () => {
-      const stored = await loadStoredOrderSummary(resolvedRoomId);
+      const stored = await loadStoredChatOrderSummary(resolvedRoomId);
       if (active) setCachedOrderSummary(stored);
     })();
 
@@ -190,11 +172,33 @@ const ChatRoomScreen = () => {
     const numericRoomId = Number(roomId);
     loadHistory(numericRoomId);
     connectSocket(numericRoomId);
+    void markChatRoomVisited(String(numericRoomId));
 
     return () => {
       disconnect();
     };
   }, [roomId, userId]);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      if (!roomId || !userId) return undefined;
+
+      const numericRoomId = Number(roomId);
+      if (!Number.isFinite(numericRoomId)) return undefined;
+
+      const refresh = () => {
+        void loadHistory(numericRoomId);
+        void markChatRoomVisited(String(numericRoomId));
+      };
+
+      refresh();
+      const timer = setInterval(refresh, 3000);
+
+      return () => {
+        clearInterval(timer);
+      };
+    }, [roomId, userId])
+  );
 
   const dateChipLabel = useMemo(() => {
     const target = messages[messages.length - 1]?.createdAt || messages[0]?.createdAt || new Date().toISOString();
@@ -211,6 +215,12 @@ const ChatRoomScreen = () => {
       return a.messageId - b.messageId;
     });
   }, [messages]);
+
+  useEffect(() => {
+    const resolvedRoomId = pickParam(roomId).trim();
+    if (!resolvedRoomId) return;
+    void markChatRoomVisited(resolvedRoomId);
+  }, [roomId, sortedMessages.length]);
 
   const latestMyMessageId = useMemo(() => {
     const myId = Number(userId);
@@ -313,13 +323,12 @@ const ChatRoomScreen = () => {
     const senderId = Number((item as any)?.senderId);
     const isMine = Number.isFinite(myId) && Number.isFinite(senderId) && senderId === myId;
     const readState = resolveOutgoingReadState(item, userId, sortedMessages);
-    const hasLaterOtherMessage = hasLaterOtherMessageAfter(item, userId, sortedMessages);
     const readLabel =
-      readState === 'UNREAD'
+      readState === 'READ' && item.messageId === latestMyMessageId
+        ? '읽음'
+        : readState === 'UNREAD' && item.messageId === latestMyMessageId
         ? '1'
-        : readState === 'READ' && item.messageId === latestMyMessageId && !hasLaterOtherMessage
-          ? '읽음'
-          : '';
+        : '';
     return (
       <View style={[styles.messageRow, isMine ? styles.myMessageRow : styles.otherMessageRow]}>
         {isMine ? (
