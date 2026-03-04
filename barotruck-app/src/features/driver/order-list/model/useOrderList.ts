@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
-import { OrderResponse } from "@/shared/models/order";
-import { OrderService } from "@/shared/api/orderService";
-import * as Location from "expo-location";
 import { useOrderFilterStore } from "@/features/driver/order-filter/model/useOrderFilterStore";
+import { OrderService } from "@/shared/api/orderService";
+import { OrderResponse } from "@/shared/models/order";
+import * as Location from "expo-location";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 export type SortType = "LATEST" | "PRICE_HIGH" | "NEARBY";
 
@@ -190,7 +190,6 @@ export const useOrderList = () => {
           if (formattedOrderDate !== detailFilter.uploadDate) return false;
         }
       }
-      return false;
 
       // 9. 수익 및 결제 (최소 운임)
       const totalPrice =

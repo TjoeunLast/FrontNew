@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback } from "react";
-import { useFocusEffect } from "expo-router";
 import { OrderService } from "@/shared/api/orderService";
 import { OrderResponse } from "@/shared/models/order";
+import { useFocusEffect } from "expo-router";
+import { useCallback, useEffect, useState } from "react";
 
 export const useDrivingList = () => {
   // 상태 관리
@@ -13,12 +13,13 @@ export const useDrivingList = () => {
   // loading: 로딩 상태
   const [loading, setLoading] = useState(true);
 
-  // 전체 목록 로드(위치 정보 파악 후 서버에서 오더 목록 가져오기)
+  // 전체 목록 로드
   const fetchMyOrders = async () => {
     try {
       setLoading(true);
       const data = await OrderService.getMyDrivingOrders(); // API 호출
       setOrders(data); // 데이터 저장
+      // console.log("목록 로드 완료:", data);
     } catch (error) {
       console.error("목록 로드 실패:", error);
     } finally {

@@ -1,25 +1,25 @@
-import React, { useMemo, useEffect } from "react";
+import { useAppTheme } from "@/shared/hooks/useAppTheme";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import React, { useEffect, useMemo } from "react";
 import {
-  View,
-  Text,
-  StyleSheet,
+  ActivityIndicator,
   Pressable,
   ScrollView,
   StatusBar,
-  ActivityIndicator,
+  StyleSheet,
+  Text,
+  View,
 } from "react-native";
-import { useAppTheme } from "@/shared/hooks/useAppTheme";
-import { useRouter, useLocalSearchParams } from "expo-router";
 
 // [컴포넌트 및 로직 임포트]
-import { PendingOrderCard } from "@/features/driver/shard/ui/PendingOrderCard";
-import { ActiveOrderCard } from "@/features/driver/shard/ui/ActiveOrderCard";
-import { DoneOrderCard } from "@/features/driver/shard/ui/DoneOrderCard";
 import { useDrivingList } from "@/features/driver/driving-list/model/useDrivingList";
 import { useDrivingProcess } from "@/features/driver/driving/model/useDrivingProcess";
 import { ReceiptModal } from "@/features/driver/driving/ui/ReceiptModal";
-import { Ionicons } from "@expo/vector-icons";
+import { ActiveOrderCard } from "@/features/driver/shard/ui/ActiveOrderCard";
+import { DoneOrderCard } from "@/features/driver/shard/ui/DoneOrderCard";
+import { PendingOrderCard } from "@/features/driver/shard/ui/PendingOrderCard";
 import ShipperScreenHeader from "@/shared/ui/layout/ShipperScreenHeader";
+import { Ionicons } from "@expo/vector-icons";
 
 export default function DrivingListScreen() {
   const { colors: c } = useAppTheme();
@@ -36,7 +36,7 @@ export default function DrivingListScreen() {
     activeOrders,
     completedOrders,
     loading, // 데이터를 가져오는 중인지 나타내는 상태
-    refresh, // 데이터를 다시 불러오는 함수\
+    refresh, // 데이터를 다시 불러오는 함수
     // myLocation, // 내 위치 정보
   } = useDrivingList();
 
