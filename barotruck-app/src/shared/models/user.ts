@@ -12,6 +12,9 @@ export interface UserProfile {
   ratingAvg: number;
   gender?: string;
   age?: number;
+  DriverInfo? : DriverInfo; // 차주 상세 정보 (차주인 경우)
+  ShipperInfo? : ShipperInfo; // 화주 상세 정보 (화주인 경우)
+
 }
 
 /** * 비밀번호 변경 요청 데이터 (ChangePasswordRequest.java 대응) 
