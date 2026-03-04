@@ -422,7 +422,9 @@ export default function MyPageScreen() {
       setLoading(true);
       await AuthService.logout();
       await clearCurrentUserSnapshot();
-      router.dismissAll();
+      if (router.canDismiss()) {
+        router.dismissAll();
+      }
       router.replace("/(auth)/login");
     } finally {
       setLoading(false);
