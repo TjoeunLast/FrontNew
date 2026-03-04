@@ -81,21 +81,31 @@ function toShipperTypeLabel(raw?: string) {
   return "-";
 }
 
-function resolveShipperType(me: any, detail?: any) {
+function resolveShipperType(me: any, detail?: any, cached?: { shipperType?: "Y" | "N" }) {
   const explicitType = toShipperTypeLabel(
     me?.isCorporate ??
       detail?.isCorporate ??
       me?.is_corporate ??
       detail?.is_corporate ??
+      me?.user?.isCorporate ??
+      detail?.user?.isCorporate ??
+      me?.user?.is_corporate ??
+      detail?.user?.is_corporate ??
       me?.shipper?.isCorporate ??
       detail?.shipper?.isCorporate ??
       me?.shipper?.is_corporate ??
       detail?.shipper?.is_corporate ??
+      me?.user?.shipper?.isCorporate ??
+      detail?.user?.shipper?.isCorporate ??
+      me?.user?.shipper?.is_corporate ??
+      detail?.user?.shipper?.is_corporate ??
       me?.shipperInfo?.isCorporate ??
       detail?.shipperInfo?.isCorporate ??
       me?.shipperInfo?.is_corporate ??
       detail?.shipperInfo?.is_corporate ??
-      me?.shipperDto?.isCorporate
+      me?.shipperDto?.isCorporate ??
+      me?.shipperType ??
+      cached?.shipperType
   );
   if (explicitType !== "-") return explicitType;
 
@@ -311,7 +321,7 @@ export default function ProfileSettingsScreen() {
             nickname: normalizeNickname(me.nickname ?? cached?.nickname),
             gender: normalizeGenderFromAny(pickGender(me, detail, cached ?? undefined)),
             birthDate: normalizeBirthDateFromAny(pickBirthDate(me, detail, cached ?? undefined)),
-            shipperType: resolveShipperType(me, detail),
+            shipperType: resolveShipperType(me, detail, cached ?? undefined),
             role: String(me?.role ?? cached?.role ?? "").trim().toUpperCase(),
             email: normalizeEmail(me.email ?? cached?.email),
             imageUrl: localImageUrl || me.profileImageUrl || "",
@@ -346,7 +356,7 @@ export default function ProfileSettingsScreen() {
             nickname: normalizeNickname(cached?.nickname),
             gender: normalizeGenderFromAny(cached?.gender),
             birthDate: normalizeBirthDateFromAny(cached?.birthDate),
-            shipperType: "-",
+            shipperType: resolveShipperType(cached, undefined, cached ?? undefined),
             role: String(cached?.role ?? "").trim().toUpperCase(),
             email: normalizeEmail(cached?.email),
             imageUrl: localImageUrl,

@@ -97,11 +97,16 @@ function resolveShipperType(...sources: any[]) {
   const explicit = toShipperTypeLabel(
     sources.find((s) => s?.isCorporate != null)?.isCorporate ??
       sources.find((s) => s?.is_corporate != null)?.is_corporate ??
+      sources.find((s) => s?.user?.isCorporate != null)?.user?.isCorporate ??
+      sources.find((s) => s?.user?.is_corporate != null)?.user?.is_corporate ??
       sources.find((s) => s?.shipper?.isCorporate != null)?.shipper?.isCorporate ??
       sources.find((s) => s?.shipper?.is_corporate != null)?.shipper?.is_corporate ??
+      sources.find((s) => s?.user?.shipper?.isCorporate != null)?.user?.shipper?.isCorporate ??
+      sources.find((s) => s?.user?.shipper?.is_corporate != null)?.user?.shipper?.is_corporate ??
       sources.find((s) => s?.shipperInfo?.isCorporate != null)?.shipperInfo?.isCorporate ??
       sources.find((s) => s?.shipperInfo?.is_corporate != null)?.shipperInfo?.is_corporate ??
-      sources.find((s) => s?.shipperDto?.isCorporate != null)?.shipperDto?.isCorporate
+      sources.find((s) => s?.shipperDto?.isCorporate != null)?.shipperDto?.isCorporate ??
+      sources.find((s) => s?.shipperType != null)?.shipperType
   );
   if (explicit !== "-") return explicit;
 
@@ -183,7 +188,8 @@ export default function MyPageScreen() {
             shipperDetail?.user,
             me?.shipper,
             me?.shipperInfo,
-            me?.shipperDto
+            me?.shipperDto,
+            cached
           );
           const next: ProfileView = {
             email: me.email || "-",
@@ -228,6 +234,7 @@ export default function MyPageScreen() {
               nickname: me.nickname,
               name: me.name || cached?.name,
               role: me.role,
+              shipperType: shipperDetail?.isCorporate ?? cached?.shipperType,
               gender: me.gender ?? me.sex ?? shipperDetail?.user?.gender ?? cached?.gender,
               birthDate:
                 String(
@@ -254,7 +261,7 @@ export default function MyPageScreen() {
             name: cached.name || "-",
             nickname: cached.nickname || "-",
             role: roleToKorean(cached.role || ""),
-            shipperType: "-",
+            shipperType: resolveShipperType(cached),
             gender: normalizeGenderLabel(cached.gender),
             birthDate: normalizeBirthDateLabel(cached.birthDate),
           });
@@ -476,11 +483,11 @@ export default function MyPageScreen() {
             <Ionicons name="chevron-forward" size={20} color={c.text.secondary} />
           </Pressable>
           <View style={s.divider} />
-          <Pressable style={s.row} onPress={() => router.push("/(common)/settings/shipper/addresses" as any)}>
-            <View style={[s.rowIconWrap, { backgroundColor: withAlpha(c.status.success, 0.16) }]}>
-              <Ionicons name="location-outline" size={18} color={c.status.success} />
+          <Pressable style={s.row} onPress={() => router.push("/(common)/settings/shipper/verification" as any)}>
+            <View style={[s.rowIconWrap, { backgroundColor: withAlpha(c.status.warning, 0.16) }]}>
+              <Ionicons name="shield-checkmark-outline" size={18} color={c.status.warning} />
             </View>
-            <Text style={s.rowLabel}>자주 쓰는 주소지</Text>
+            <Text style={s.rowLabel}>사업자 인증</Text>
             <Ionicons name="chevron-forward" size={20} color={c.text.secondary} />
           </Pressable>
           <View style={s.divider} />

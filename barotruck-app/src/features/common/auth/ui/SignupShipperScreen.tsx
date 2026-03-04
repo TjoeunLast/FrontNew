@@ -256,16 +256,13 @@ export default function SignupShipperScreen() {
         regflag: "Y",
         ratingAvg: 0,
         user_level: 0,
-        shipper:
-          shipperType === "business"
-            ? {
-                companyName: companyName.trim(),
-                bizRegNum: bizNoDigits,
-                representative: ceoName.trim(),
-                bizAddress: "",
-                isCorporate: "Y",
-              }
-            : undefined,
+        shipper: {
+          companyName: companyName.trim(),
+          bizRegNum: bizNoDigits,
+          representative: ceoName.trim(),
+          bizAddress: "",
+          isCorporate: shipperType === "business" ? "Y" : "N",
+        },
       };
 
       // 1. 회원가입 요청 (DB 저장)
@@ -284,6 +281,7 @@ export default function SignupShipperScreen() {
         name: params.name,
         nickname: nickname.trim(),
         role: "SHIPPER",
+        shipperType: shipperType === "business" ? "Y" : "N",
         gender: params.gender,
         birthDate: String(params.birthDate ?? "").trim() || undefined,
       });
