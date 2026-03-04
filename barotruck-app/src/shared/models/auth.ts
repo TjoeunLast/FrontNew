@@ -18,6 +18,7 @@ export interface RegisterRequest {
     carNum: string;
     carType: string;
     tonnage: number;
+    type?: string;
     bankName: string;
     accountNum: string;
     career: number; // 또는 경력 형식에 따라 string 추가

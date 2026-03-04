@@ -287,6 +287,7 @@ export default function SignupDriverScreen() {
   const [nickname, setNickname] = useState("");
   const [plateNo, setPlateNo] = useState("");
   const [carType, setCarType] = useState<string | null>(null);
+  const [vehicleType, setVehicleType] = useState<string | null>(null);
   const [ton, setTon] = useState<string | null>(null);
   const [expYears, setExpYears] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -305,6 +306,7 @@ export default function SignupDriverScreen() {
     nickFormatOk &&
     plateOk &&
     !!carType &&
+    !!vehicleType &&
     !!ton &&
     expOk &&
     addressOk &&
@@ -406,6 +408,19 @@ export default function SignupDriverScreen() {
     if (submitting) return;
     setSubmitting(true);
     try {
+      const driverProfilePayload = {
+        carNum: normalizePlate(plateNo),
+        carType: carType || "CARGO",
+        tonnage: Number.parseFloat(mapTon(ton).replace("t", "")),
+        type: vehicleType || "NORMAL",
+        career: Number.parseInt(digitsOnly(expYears), 10) || 0,
+        address,
+        lat: addressLat ?? undefined,
+        lng: addressLng ?? undefined,
+        bankName: "",
+        accountNum: "",
+      };
+
       const payload: RegisterRequest = {
         email: email.trim(),
         password,
@@ -419,19 +434,12 @@ export default function SignupDriverScreen() {
         regflag: "Y",
         ratingAvg: 0,
         user_level: 0,
-        driver: {
-          carNum: normalizePlate(plateNo),
-          carType: carType || "CARGO",
-          tonnage: Number.parseFloat(mapTon(ton).replace("t", "")),
-          career: Number.parseInt(digitsOnly(expYears), 10) || 0, // ✅ 필드명 career로 고정
-          address: address, // 주소 필드 추가
-          lat: addressLat ?? undefined,
-          lng: addressLng ?? undefined,
-          bankName: "",
-          accountNum: "",
-        },
+        driver: driverProfilePayload,
       };
-      const response = await AuthService.register(payload);
+
+      await AuthService.register(payload);
+      await UserService.saveDriverProfile(driverProfilePayload);
+
       if (profileImageUri) {
         try {
           const persistedUri = await persistProfileImage(String(profileImageUri));
@@ -451,6 +459,11 @@ export default function SignupDriverScreen() {
         activityAddress: address,
         activityLat: addressLat ?? undefined,
         activityLng: addressLng ?? undefined,
+        driverCarNum: normalizePlate(plateNo),
+        driverCarType: carType || "CARGO",
+        driverType: vehicleType || "NORMAL",
+        driverTonnage: Number.parseFloat(mapTon(ton).replace("t", "")),
+        driverCareer: Number.parseInt(digitsOnly(expYears), 10) || 0,
       });
 
       router.replace("/(driver)/(tabs)");
@@ -465,6 +478,9 @@ export default function SignupDriverScreen() {
     { label: "카고", value: "CARGO" },
     { label: "윙바디", value: "WING" },
     { label: "탑차", value: "TOP" },
+  ];
+  const vehicleTypeOptions = [
+    { label: "일반", value: "NORMAL" },
     { label: "냉동/냉장", value: "COLD" },
     { label: "리프트", value: "LIFT" },
   ];
@@ -543,7 +559,7 @@ export default function SignupDriverScreen() {
 
           <View style={{ height: 16 }} />
 
-          {/* 차종 / 톤수 (2열) */}
+          {/* 차종 / 차량 타입 / 톤수 */}
           <View style={s.grid2}>
             <View style={s.col}>
               <Text style={s.label}>차종</Text>
@@ -557,16 +573,27 @@ export default function SignupDriverScreen() {
             </View>
             <View style={s.rowGap} />
             <View style={s.col}>
-              <Text style={s.label}>톤수</Text>
+              <Text style={s.label}>차량 타입</Text>
               <SelectField
-                label="톤수"
-                value={ton}
-                placeholder="1톤"
-                options={tonOptions}
-                onChange={setTon}
+                label="차량 타입"
+                value={vehicleType}
+                placeholder="일반"
+                options={vehicleTypeOptions}
+                onChange={setVehicleType}
               />
             </View>
           </View>
+
+          <View style={{ height: 16 }} />
+
+          <Text style={s.label}>톤수</Text>
+          <SelectField
+            label="톤수"
+            value={ton}
+            placeholder="1톤"
+            options={tonOptions}
+            onChange={setTon}
+          />
 
           <View style={{ height: 16 }} />
 

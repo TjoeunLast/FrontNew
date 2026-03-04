@@ -9,11 +9,17 @@ export type CurrentUserSnapshot = {
   nickname: string;
   name?: string;
   role: CurrentUserRole;
+  shipperType?: "Y" | "N";
   gender?: "M" | "F";
   birthDate?: string;
   activityAddress?: string;
   activityLat?: number;
   activityLng?: number;
+  driverCarNum?: string;
+  driverCarType?: string;
+  driverType?: string;
+  driverTonnage?: number;
+  driverCareer?: number;
 };
 
 const CURRENT_USER_KEY = "baro_current_user_snapshot";
@@ -67,4 +73,24 @@ export async function getCurrentUserSnapshot(): Promise<CurrentUserSnapshot | nu
 
 export async function clearCurrentUserSnapshot(): Promise<void> {
   await deleteStorageItem(CURRENT_USER_KEY);
+}
+
+export async function upsertCurrentUserSnapshot(
+  patch: Partial<CurrentUserSnapshot> & Pick<CurrentUserSnapshot, "email" | "nickname" | "role">
+): Promise<CurrentUserSnapshot> {
+  const current = await getCurrentUserSnapshot();
+  const next: CurrentUserSnapshot = {
+    ...current,
+    ...patch,
+    email: String(patch.email ?? current?.email ?? "").trim(),
+    nickname: String(patch.nickname ?? current?.nickname ?? "").trim(),
+    role: (patch.role ?? current?.role ?? "USER") as CurrentUserRole,
+  };
+
+  if (!next.email || !next.nickname) {
+    throw new Error("current user snapshot requires email and nickname");
+  }
+
+  await saveCurrentUserSnapshot(next);
+  return next;
 }

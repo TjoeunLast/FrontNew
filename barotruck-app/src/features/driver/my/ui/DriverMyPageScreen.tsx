@@ -30,6 +30,7 @@ type DriverProfileView = {
   vehicleLabel: string;
   carNum: string;
   bankName: string;
+  activityAddress: string;
 };
 
 function toText(v: unknown, fallback = "-") {
@@ -37,22 +38,48 @@ function toText(v: unknown, fallback = "-") {
   return text || fallback;
 }
 
-function toVehicleLabel(inputType?: unknown, inputTonnage?: unknown) {
-  const typeRaw = String(inputType ?? "").trim();
-  const tonnageRaw = String(inputTonnage ?? "").trim();
+function pickFirstText(...values: unknown[]) {
+  for (const value of values) {
+    const text = String(value ?? "").trim();
+    if (text) return text;
+  }
+  return "";
+}
 
-  const normalizedType =
-    typeRaw.toUpperCase() === "WING"
+function pickPositiveNumber(...values: unknown[]) {
+  for (const value of values) {
+    const num = Number(value);
+    if (Number.isFinite(num) && num > 0) return num;
+  }
+  return undefined;
+}
+
+function toVehicleLabel(inputCarType?: unknown, inputTonnage?: unknown, inputVehicleType?: unknown) {
+  const carTypeRaw = String(inputCarType ?? "").trim();
+  const tonnageRaw = String(inputTonnage ?? "").trim();
+  const vehicleTypeRaw = String(inputVehicleType ?? "").trim().toUpperCase();
+
+  const normalizedCarType =
+    carTypeRaw.toUpperCase() === "WING"
       ? "윙바디"
-      : typeRaw.toUpperCase() === "CARGO"
+      : carTypeRaw.toUpperCase() === "CARGO"
         ? "카고"
-        : typeRaw.toUpperCase() === "TOP"
+        : carTypeRaw.toUpperCase() === "TOP"
           ? "탑차"
-          : typeRaw || "윙바디";
+          : carTypeRaw || "윙바디";
+
+  const normalizedVehicleType =
+    vehicleTypeRaw === "COLD"
+      ? "냉동/냉장"
+      : vehicleTypeRaw === "LIFT"
+        ? "리프트"
+        : vehicleTypeRaw === "NORMAL"
+          ? ""
+          : String(inputVehicleType ?? "").trim();
 
   const tonDigits = tonnageRaw.replace(/[^\d.]/g, "");
   const tonLabel = tonDigits ? `${tonDigits}톤` : "1톤";
-  return `${tonLabel} ${normalizedType}`.trim();
+  return [tonLabel, normalizedCarType, normalizedVehicleType].filter(Boolean).join(" ").trim();
 }
 
 export default function DriverMyPageScreen() {
@@ -65,6 +92,7 @@ export default function DriverMyPageScreen() {
     vehicleLabel: "1톤 윙바디",
     carNum: "-",
     bankName: "-",
+    activityAddress: "-",
   });
   const [profileImageUrl, setProfileImageUrl] = React.useState("");
 
@@ -90,16 +118,25 @@ export default function DriverMyPageScreen() {
           setProfile({
             nickname: toText(me?.nickname ?? cached?.nickname, "차주"),
             vehicleLabel: toVehicleLabel(
-              detail?.carType ?? detail?.driver?.carType,
-              detail?.tonnage ?? detail?.driver?.tonnage
+              pickFirstText(detail?.carType, detail?.driver?.carType, cached?.driverCarType),
+              pickPositiveNumber(detail?.tonnage, detail?.driver?.tonnage, cached?.driverTonnage),
+              pickFirstText(detail?.type, detail?.driver?.type, cached?.driverType)
             ),
-            carNum: toText(detail?.carNum ?? detail?.driver?.carNum),
+            carNum: toText(pickFirstText(detail?.carNum, detail?.driver?.carNum, cached?.driverCarNum)),
             bankName: toText(detail?.bankName ?? detail?.driver?.bankName),
+            activityAddress: toText(pickFirstText(detail?.address, detail?.driver?.address, cached?.activityAddress)),
           });
         } catch {
           if (!active) return;
           setProfileImageUrl(localImageUrl ?? "");
-          setProfile((prev) => prev);
+          const cached = await getCurrentUserSnapshot();
+          setProfile({
+            nickname: toText(cached?.nickname, "차주"),
+            vehicleLabel: toVehicleLabel(cached?.driverCarType, cached?.driverTonnage, cached?.driverType),
+            carNum: toText(cached?.driverCarNum),
+            bankName: "-",
+            activityAddress: toText(cached?.activityAddress),
+          });
         }
       })();
 
@@ -296,6 +333,17 @@ export default function DriverMyPageScreen() {
             </View>
             <Text style={s.rowLabel}>내 차량 정보</Text>
             <Text style={[s.rowValue, s.rowValuePrimary]}>{profile.carNum}</Text>
+            <Ionicons name="chevron-forward" size={20} color="#9BA7B7" />
+          </Pressable>
+          <View style={s.divider} />
+          <Pressable style={s.row} onPress={() => router.push("/(common)/settings/profile" as any)}>
+            <View style={s.iconWrap}>
+              <Ionicons name="location-outline" size={22} color="#7EA85B" />
+            </View>
+            <Text style={s.rowLabel}>활동 지역</Text>
+            <Text style={s.rowValue} numberOfLines={1}>
+              {profile.activityAddress}
+            </Text>
             <Ionicons name="chevron-forward" size={20} color="#9BA7B7" />
           </Pressable>
           <View style={s.divider} />

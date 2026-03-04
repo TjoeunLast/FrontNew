@@ -11,6 +11,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
   type ImageStyle,
   type TextStyle,
@@ -23,7 +24,8 @@ import { ReviewService } from "@/shared/api/reviewService";
 import { UserService } from "@/shared/api/userService";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import ShipperScreenHeader from "@/shared/ui/layout/ShipperScreenHeader";
-import { getCurrentUserSnapshot } from "@/shared/utils/currentUserStorage";
+import AddressSearch from "@/shared/utils/AddressSearch";
+import { getCurrentUserSnapshot, upsertCurrentUserSnapshot } from "@/shared/utils/currentUserStorage";
 
 const PROFILE_IMAGE_STORAGE_KEY = "baro_profile_image_url_v1";
 
@@ -37,6 +39,17 @@ type ProfileState = {
   imageUrl: string;
   ratingAvg: number;
   ratingCount: number;
+  activityAddress: string;
+  activityLat?: number;
+  activityLng?: number;
+  driverCarNum?: string;
+  driverCarType?: string;
+  driverType?: string;
+  driverTonnage?: number;
+  driverCareer?: number;
+  driverBankName?: string;
+  driverAccountNum?: string;
+  driverNbhId?: number;
 };
 
 function toShipperTypeLabel(raw?: string) {
@@ -68,21 +81,31 @@ function toShipperTypeLabel(raw?: string) {
   return "-";
 }
 
-function resolveShipperType(me: any, detail?: any) {
+function resolveShipperType(me: any, detail?: any, cached?: { shipperType?: "Y" | "N" }) {
   const explicitType = toShipperTypeLabel(
     me?.isCorporate ??
       detail?.isCorporate ??
       me?.is_corporate ??
       detail?.is_corporate ??
+      me?.user?.isCorporate ??
+      detail?.user?.isCorporate ??
+      me?.user?.is_corporate ??
+      detail?.user?.is_corporate ??
       me?.shipper?.isCorporate ??
       detail?.shipper?.isCorporate ??
       me?.shipper?.is_corporate ??
       detail?.shipper?.is_corporate ??
+      me?.user?.shipper?.isCorporate ??
+      detail?.user?.shipper?.isCorporate ??
+      me?.user?.shipper?.is_corporate ??
+      detail?.user?.shipper?.is_corporate ??
       me?.shipperInfo?.isCorporate ??
       detail?.shipperInfo?.isCorporate ??
       me?.shipperInfo?.is_corporate ??
       detail?.shipperInfo?.is_corporate ??
-      me?.shipperDto?.isCorporate
+      me?.shipperDto?.isCorporate ??
+      me?.shipperType ??
+      cached?.shipperType
   );
   if (explicitType !== "-") return explicitType;
 
@@ -205,6 +228,27 @@ function normalizeNickname(input?: string) {
   return v;
 }
 
+function pickFirstText(...values: unknown[]) {
+  for (const value of values) {
+    const text = String(value ?? "").trim();
+    if (text) return text;
+  }
+  return "";
+}
+
+function pickPositiveNumber(...values: unknown[]) {
+  for (const value of values) {
+    const num = Number(value);
+    if (Number.isFinite(num) && num > 0) return num;
+  }
+  return undefined;
+}
+
+function toEditableNickname(input?: string) {
+  const normalized = normalizeNickname(input);
+  return normalized === "-" ? "" : normalized;
+}
+
 function normalizeRating(input: unknown): number {
   const n = Number(input);
   if (!Number.isFinite(n)) return 0;
@@ -240,9 +284,16 @@ export default function ProfileSettingsScreen() {
     imageUrl: "",
     ratingAvg: 0,
     ratingCount: 0,
+    activityAddress: "-",
   });
   const [draftImageUri, setDraftImageUri] = React.useState("");
   const [loadingImage, setLoadingImage] = React.useState(false);
+  const [draftNickname, setDraftNickname] = React.useState("");
+  const [draftActivityAddress, setDraftActivityAddress] = React.useState("");
+  const [draftActivityLat, setDraftActivityLat] = React.useState<number | undefined>(undefined);
+  const [draftActivityLng, setDraftActivityLng] = React.useState<number | undefined>(undefined);
+  const [isAddressSearchOpen, setIsAddressSearchOpen] = React.useState(false);
+  const [savingProfile, setSavingProfile] = React.useState(false);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -270,16 +321,33 @@ export default function ProfileSettingsScreen() {
             nickname: normalizeNickname(me.nickname ?? cached?.nickname),
             gender: normalizeGenderFromAny(pickGender(me, detail, cached ?? undefined)),
             birthDate: normalizeBirthDateFromAny(pickBirthDate(me, detail, cached ?? undefined)),
-            shipperType: resolveShipperType(me, detail),
+            shipperType: resolveShipperType(me, detail, cached ?? undefined),
             role: String(me?.role ?? cached?.role ?? "").trim().toUpperCase(),
             email: normalizeEmail(me.email ?? cached?.email),
             imageUrl: localImageUrl || me.profileImageUrl || "",
             ratingAvg,
             ratingCount: validRatings.length,
+            activityAddress: normalizeNickname(
+              pickFirstText(detail?.address, detail?.driver?.address, cached?.activityAddress)
+            ),
+            activityLat: detail?.lat ?? detail?.driver?.lat ?? cached?.activityLat,
+            activityLng: detail?.lng ?? detail?.driver?.lng ?? cached?.activityLng,
+            driverCarNum: pickFirstText(detail?.carNum, detail?.driver?.carNum, cached?.driverCarNum),
+            driverCarType: pickFirstText(detail?.carType, detail?.driver?.carType, cached?.driverCarType),
+            driverType: pickFirstText(detail?.type, detail?.driver?.type, cached?.driverType),
+            driverTonnage: pickPositiveNumber(detail?.tonnage, detail?.driver?.tonnage, cached?.driverTonnage),
+            driverCareer: detail?.career ?? detail?.driver?.career ?? cached?.driverCareer,
+            driverBankName: pickFirstText(detail?.bankName, detail?.driver?.bankName),
+            driverAccountNum: pickFirstText(detail?.accountNum, detail?.driver?.accountNum),
+            driverNbhId: detail?.nbhId ?? detail?.driver?.nbhId,
           };
           if (!active) return;
           setProfile(next);
           setDraftImageUri(next.imageUrl);
+          setDraftNickname(toEditableNickname(next.nickname));
+          setDraftActivityAddress(next.activityAddress === "-" ? "" : next.activityAddress);
+          setDraftActivityLat(next.activityLat);
+          setDraftActivityLng(next.activityLng);
           return;
         } catch {
           const cached = await getCurrentUserSnapshot();
@@ -288,15 +356,27 @@ export default function ProfileSettingsScreen() {
             nickname: normalizeNickname(cached?.nickname),
             gender: normalizeGenderFromAny(cached?.gender),
             birthDate: normalizeBirthDateFromAny(cached?.birthDate),
-            shipperType: "-",
+            shipperType: resolveShipperType(cached, undefined, cached ?? undefined),
             role: String(cached?.role ?? "").trim().toUpperCase(),
             email: normalizeEmail(cached?.email),
             imageUrl: localImageUrl,
             ratingAvg: 0,
             ratingCount: 0,
+            activityAddress: normalizeNickname(cached?.activityAddress),
+            activityLat: cached?.activityLat,
+            activityLng: cached?.activityLng,
+            driverCarNum: cached?.driverCarNum,
+            driverCarType: cached?.driverCarType,
+            driverType: cached?.driverType,
+            driverTonnage: cached?.driverTonnage,
+            driverCareer: cached?.driverCareer,
           };
           setProfile(next);
           setDraftImageUri(next.imageUrl);
+          setDraftNickname(toEditableNickname(next.nickname));
+          setDraftActivityAddress(next.activityAddress === "-" ? "" : next.activityAddress);
+          setDraftActivityLat(next.activityLat);
+          setDraftActivityLng(next.activityLng);
         }
       })();
 
@@ -377,28 +457,186 @@ export default function ProfileSettingsScreen() {
     ]);
   };
 
+  const profileNickname = toEditableNickname(profile.nickname);
+  const trimmedDraftNickname = draftNickname.trim();
+  const trimmedDraftActivityAddress = draftActivityAddress.trim();
+  const profileActivityAddress = profile.activityAddress === "-" ? "" : profile.activityAddress;
+  const hasNicknameChange = trimmedDraftNickname !== profileNickname;
+  const hasActivityChange =
+    profile.role === "DRIVER" &&
+    (trimmedDraftActivityAddress !== profileActivityAddress ||
+      draftActivityLat !== profile.activityLat ||
+      draftActivityLng !== profile.activityLng);
   const hasImageChange = draftImageUri !== profile.imageUrl;
+  const hasPendingChanges = hasImageChange || hasNicknameChange || hasActivityChange;
+  const isBusy = loadingImage || savingProfile;
+  const nicknameError = hasNicknameChange && trimmedDraftNickname.length < 2 ? "닉네임은 2글자 이상 입력해 주세요." : "";
+  const activityAddressError =
+    hasActivityChange && (!trimmedDraftActivityAddress || draftActivityLat == null || draftActivityLng == null)
+      ? "활동 지역은 주소 검색으로 다시 선택해 주세요."
+      : "";
 
-  const onSaveImage = async () => {
-    if (!hasImageChange || loadingImage) return;
-    setLoadingImage(true);
+  const saveNicknameChange = async () => {
+    if (!hasNicknameChange) return false;
+    if (trimmedDraftNickname.length < 2) {
+      Alert.alert("닉네임 확인", "닉네임은 2글자 이상 입력해 주세요.");
+      return false;
+    }
+
     try {
-      if (!draftImageUri) {
-        await AsyncStorage.removeItem(PROFILE_IMAGE_STORAGE_KEY);
-        setProfile((prev) => ({ ...prev, imageUrl: "" }));
-        Alert.alert("수정 완료", "프로필 사진이 기본 이미지로 변경되었습니다.");
+      const isDuplicated = await UserService.checkNickname(trimmedDraftNickname);
+      if (isDuplicated) {
+        Alert.alert("중복된 닉네임", "이미 사용 중인 닉네임입니다. 다른 닉네임을 입력해 주세요.");
+        return false;
+      }
+    } catch {}
+
+    const cached = await getCurrentUserSnapshot();
+    const email = normalizeEmail(profile.email) === "-" ? String(cached?.email ?? "").trim() : profile.email.trim();
+    if (!email) {
+      throw new Error("email is required to update nickname");
+    }
+
+    const role = String(profile.role || cached?.role || "SHIPPER").trim().toUpperCase() as "ADMIN" | "DRIVER" | "SHIPPER" | "USER";
+
+    await upsertCurrentUserSnapshot({
+      email,
+      nickname: trimmedDraftNickname,
+      name: String(cached?.name ?? trimmedDraftNickname).trim() || trimmedDraftNickname,
+      role,
+      gender: cached?.gender,
+      birthDate: cached?.birthDate,
+      activityAddress: cached?.activityAddress,
+      activityLat: cached?.activityLat,
+      activityLng: cached?.activityLng,
+    });
+
+    setProfile((prev) => ({ ...prev, nickname: trimmedDraftNickname }));
+    setDraftNickname(trimmedDraftNickname);
+    return true;
+  };
+
+  const saveImageChange = async () => {
+    if (!hasImageChange) return "unchanged" as const;
+    if (!draftImageUri) {
+      await AsyncStorage.removeItem(PROFILE_IMAGE_STORAGE_KEY);
+      setProfile((prev) => ({ ...prev, imageUrl: "" }));
+      setDraftImageUri("");
+      return "reset" as const;
+    }
+
+    const persistedUri = await persistProfileImage(draftImageUri);
+    await AsyncStorage.setItem(PROFILE_IMAGE_STORAGE_KEY, persistedUri);
+    setProfile((prev) => ({ ...prev, imageUrl: persistedUri }));
+    setDraftImageUri(persistedUri);
+    return "saved" as const;
+  };
+
+  const saveActivityAddressChange = async () => {
+    if (!hasActivityChange || profile.role !== "DRIVER") return false;
+    if (!trimmedDraftActivityAddress || draftActivityLat == null || draftActivityLng == null) {
+      Alert.alert("활동 지역 확인", "활동 지역은 주소 검색으로 다시 선택해 주세요.");
+      return false;
+    }
+
+    const cached = await getCurrentUserSnapshot();
+    const email = normalizeEmail(profile.email) === "-" ? String(cached?.email ?? "").trim() : profile.email.trim();
+    const nickname = trimmedDraftNickname || profileNickname || String(cached?.nickname ?? "").trim();
+    const role = String(profile.role || cached?.role || "DRIVER").trim().toUpperCase() as "ADMIN" | "DRIVER" | "SHIPPER" | "USER";
+
+    await UserService.saveDriverProfile({
+      carNum: String(profile.driverCarNum ?? cached?.driverCarNum ?? "").trim(),
+      carType: String(profile.driverCarType ?? cached?.driverCarType ?? "CARGO").trim() || "CARGO",
+      tonnage: Number(profile.driverTonnage ?? cached?.driverTonnage ?? 1) || 1,
+      type: String(profile.driverType ?? cached?.driverType ?? "NORMAL").trim() || "NORMAL",
+      career: Number(profile.driverCareer ?? cached?.driverCareer ?? 0) || 0,
+      bankName: String(profile.driverBankName ?? "").trim(),
+      accountNum: String(profile.driverAccountNum ?? "").trim(),
+      address: trimmedDraftActivityAddress,
+      lat: draftActivityLat,
+      lng: draftActivityLng,
+      nbhId: profile.driverNbhId,
+    });
+
+    await upsertCurrentUserSnapshot({
+      email,
+      nickname,
+      role,
+      name: String(cached?.name ?? nickname).trim() || nickname,
+      gender: cached?.gender,
+      birthDate: cached?.birthDate,
+      activityAddress: trimmedDraftActivityAddress,
+      activityLat: draftActivityLat,
+      activityLng: draftActivityLng,
+      driverCarNum: String(profile.driverCarNum ?? cached?.driverCarNum ?? "").trim() || undefined,
+      driverCarType: String(profile.driverCarType ?? cached?.driverCarType ?? "").trim() || undefined,
+      driverType: String(profile.driverType ?? cached?.driverType ?? "").trim() || undefined,
+      driverTonnage: Number(profile.driverTonnage ?? cached?.driverTonnage ?? 0) || undefined,
+      driverCareer: Number(profile.driverCareer ?? cached?.driverCareer ?? 0) || undefined,
+    });
+
+    setProfile((prev) => ({
+      ...prev,
+      activityAddress: trimmedDraftActivityAddress,
+      activityLat: draftActivityLat,
+      activityLng: draftActivityLng,
+    }));
+    return true;
+  };
+
+  const onSaveProfile = async () => {
+    if (!hasPendingChanges || isBusy) return;
+    setSavingProfile(true);
+    try {
+      const nicknameSaved = await saveNicknameChange();
+      if (hasNicknameChange && !nicknameSaved) return;
+      const activitySaved = await saveActivityAddressChange();
+      if (hasActivityChange && !activitySaved) return;
+      const imageResult = await saveImageChange();
+
+      if (nicknameSaved && activitySaved && imageResult === "saved") {
+        Alert.alert("수정 완료", "닉네임, 활동 지역, 프로필 사진이 저장되었습니다.");
         return;
       }
-
-      const persistedUri = await persistProfileImage(draftImageUri);
-      await AsyncStorage.setItem(PROFILE_IMAGE_STORAGE_KEY, persistedUri);
-      setProfile((prev) => ({ ...prev, imageUrl: persistedUri }));
-      setDraftImageUri(persistedUri);
-      Alert.alert("수정 완료", "프로필 사진이 저장되었습니다.");
+      if (nicknameSaved && activitySaved) {
+        Alert.alert("수정 완료", "닉네임과 활동 지역이 저장되었습니다.");
+        return;
+      }
+      if (activitySaved && imageResult === "saved") {
+        Alert.alert("수정 완료", "활동 지역과 프로필 사진이 저장되었습니다.");
+        return;
+      }
+      if (activitySaved && imageResult === "reset") {
+        Alert.alert("수정 완료", "활동 지역이 저장되고 프로필 사진이 기본 이미지로 변경되었습니다.");
+        return;
+      }
+      if (activitySaved) {
+        Alert.alert("수정 완료", "활동 지역이 저장되었습니다.");
+        return;
+      }
+      if (nicknameSaved && imageResult === "saved") {
+        Alert.alert("수정 완료", "닉네임과 프로필 사진이 저장되었습니다.");
+        return;
+      }
+      if (nicknameSaved && imageResult === "reset") {
+        Alert.alert("수정 완료", "닉네임이 저장되고 프로필 사진이 기본 이미지로 변경되었습니다.");
+        return;
+      }
+      if (nicknameSaved) {
+        Alert.alert("수정 완료", "닉네임이 저장되었습니다.");
+        return;
+      }
+      if (imageResult === "saved") {
+        Alert.alert("수정 완료", "프로필 사진이 저장되었습니다.");
+        return;
+      }
+      if (imageResult === "reset") {
+        Alert.alert("수정 완료", "프로필 사진이 기본 이미지로 변경되었습니다.");
+      }
     } catch {
-      Alert.alert("수정 실패", "이미지 저장 중 문제가 발생했습니다. 다시 시도해 주세요.");
+      Alert.alert("수정 실패", "프로필 저장 중 문제가 발생했습니다. 다시 시도해 주세요.");
     } finally {
-      setLoadingImage(false);
+      setSavingProfile(false);
     }
   };
 
@@ -452,8 +690,8 @@ export default function ProfileSettingsScreen() {
           borderRadius: 12,
           alignItems: "center",
           justifyContent: "center",
-          backgroundColor: hasImageChange ? c.brand.primary : c.bg.muted,
-          opacity: loadingImage ? 0.7 : 1,
+          backgroundColor: hasPendingChanges ? c.brand.primary : c.bg.muted,
+          opacity: isBusy ? 0.7 : 1,
         } as ViewStyle,
         saveBtnOutside: {
           marginHorizontal: 20,
@@ -469,7 +707,7 @@ export default function ProfileSettingsScreen() {
           paddingTop: 10,
         } as ViewStyle,
         saveBtnText: {
-          color: hasImageChange ? c.text.inverse : c.text.secondary,
+          color: hasPendingChanges ? c.text.inverse : c.text.secondary,
           fontSize: 14,
           fontWeight: "800",
         } as TextStyle,
@@ -489,16 +727,73 @@ export default function ProfileSettingsScreen() {
           justifyContent: "space-between",
           backgroundColor: c.bg.surface,
         } as ViewStyle,
+        rowEditable: {
+          alignItems: "flex-start",
+          paddingVertical: 12,
+        } as ViewStyle,
         rowDivider: { height: 1, backgroundColor: c.border.default } as ViewStyle,
         label: { color: c.text.secondary, fontSize: 13, fontWeight: "700" } as TextStyle,
         value: { color: c.text.primary, fontSize: 14, fontWeight: "800" } as TextStyle,
         valueRating: { color: "#B45309" } as TextStyle,
+        fieldBlock: {
+          flex: 1,
+          alignItems: "flex-end",
+          gap: 6,
+          marginLeft: 16,
+        } as ViewStyle,
+        nicknameInput: {
+          width: "100%",
+          minHeight: 40,
+          borderWidth: 1,
+          borderColor: c.border.default,
+          borderRadius: 10,
+          paddingHorizontal: 12,
+          color: c.text.primary,
+          backgroundColor: c.bg.canvas,
+          fontSize: 14,
+          fontWeight: "700",
+          textAlign: "right",
+        } as TextStyle,
+        addressSearchButton: {
+          alignSelf: "flex-end",
+          minHeight: 32,
+          paddingHorizontal: 12,
+          borderRadius: 10,
+          borderWidth: 1,
+          borderColor: c.border.default,
+          backgroundColor: c.bg.surface,
+          justifyContent: "center",
+        } as ViewStyle,
+        addressSearchButtonText: {
+          color: c.text.primary,
+          fontSize: 12,
+          fontWeight: "800",
+        } as TextStyle,
+        helperText: {
+          color: c.text.secondary,
+          fontSize: 11,
+          fontWeight: "700",
+        } as TextStyle,
+        helperError: {
+          color: c.status.danger,
+          fontSize: 11,
+          fontWeight: "700",
+        } as TextStyle,
       }),
-    [c, hasImageChange, loadingImage]
+    [c, hasPendingChanges, isBusy]
   );
 
   return (
     <View style={s.page}>
+      <AddressSearch
+        visible={isAddressSearchOpen}
+        onClose={() => setIsAddressSearchOpen(false)}
+        onComplete={({ address, lat, lng }) => {
+          setDraftActivityAddress(address);
+          setDraftActivityLat(lat);
+          setDraftActivityLng(lng);
+        }}
+      />
       <ShipperScreenHeader
         title="프로필 설정"
         onPressBack={() => {
@@ -506,7 +801,7 @@ export default function ProfileSettingsScreen() {
             router.back();
             return;
           }
-          router.replace("/(shipper)/(tabs)/my" as any);
+          router.replace((profile.role === "DRIVER" ? "/(driver)/(tabs)/mypage" : "/(shipper)/(tabs)/my") as any);
         }}
       />
       <ScrollView
@@ -534,9 +829,22 @@ export default function ProfileSettingsScreen() {
 
           <Text style={s.infoTitle}>기본 정보</Text>
           <View style={s.infoTable}>
-            <View style={s.row}>
+            <View style={[s.row, s.rowEditable]}>
               <Text style={s.label}>닉네임</Text>
-              <Text style={s.value}>{profile.nickname}</Text>
+              <View style={s.fieldBlock}>
+                <TextInput
+                  value={draftNickname}
+                  onChangeText={setDraftNickname}
+                  style={s.nicknameInput}
+                  placeholder="닉네임을 입력하세요"
+                  placeholderTextColor={c.text.secondary}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  maxLength={20}
+                  returnKeyType="done"
+                />
+                {nicknameError ? <Text style={s.helperError}>{nicknameError}</Text> : null}
+              </View>
             </View>
             <View style={s.rowDivider} />
             <View style={s.row}>
@@ -550,6 +858,27 @@ export default function ProfileSettingsScreen() {
               <Text style={s.label}>성별</Text>
               <Text style={s.value}>{profile.gender}</Text>
             </View>
+            {profile.role === "DRIVER" ? (
+              <>
+                <View style={s.rowDivider} />
+                <View style={[s.row, s.rowEditable]}>
+                  <Text style={s.label}>활동 지역</Text>
+                  <View style={s.fieldBlock}>
+                    <TextInput
+                      value={draftActivityAddress}
+                      editable={false}
+                      style={s.nicknameInput}
+                      placeholder="활동 지역을 검색하세요"
+                      placeholderTextColor={c.text.secondary}
+                    />
+                    <Pressable style={s.addressSearchButton} onPress={() => setIsAddressSearchOpen(true)}>
+                      <Text style={s.addressSearchButtonText}>주소 검색</Text>
+                    </Pressable>
+                    {activityAddressError ? <Text style={s.helperError}>{activityAddressError}</Text> : null}
+                  </View>
+                </View>
+              </>
+            ) : null}
             {profile.role !== "DRIVER" ? (
               <>
                 <View style={s.rowDivider} />
@@ -575,10 +904,10 @@ export default function ProfileSettingsScreen() {
       <View style={[s.bottomActionBar, { paddingBottom: Math.max(10, insets.bottom + 6) }]}>
         <Pressable
           style={[s.saveBtn, s.saveBtnOutside]}
-          onPress={() => void onSaveImage()}
-          disabled={!hasImageChange || loadingImage}
+          onPress={() => void onSaveProfile()}
+          disabled={!hasPendingChanges || isBusy}
         >
-          <Text style={s.saveBtnText}>{loadingImage ? "처리 중..." : "수정"}</Text>
+          <Text style={s.saveBtnText}>{isBusy ? "처리 중..." : "수정"}</Text>
         </Pressable>
       </View>
     </View>

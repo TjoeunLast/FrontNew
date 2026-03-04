@@ -16,7 +16,6 @@ import ShipperScreenHeader from "@/shared/ui/layout/ShipperScreenHeader";
 // 기존 import들 사이에 추가!
 import AddressSearch from "@/shared/utils/AddressSearch";
 import { SearchableAddressField } from "./createOrderStep1.components"; // InlineDropdownField 옆에 추가로 불러오세요.
-import { RECENT_START_OPTIONS } from "./createOrderStep1.constants";
 
 import {
   Chip,
@@ -106,8 +105,6 @@ export function ShipperCreateOrderStep1Screen() {
 
   const [isStartModalOpen, setIsStartModalOpen] = useState(false);
   const [isEndModalOpen, setIsEndModalOpen] = useState(false);
-  const [isRecentDropdownOpen, setIsRecentDropdownOpen] = useState(false);
-  const [selectedRecentValue, setSelectedRecentValue] = useState<string | undefined>(undefined);
   
   const [startAddrSuggestions, setStartAddrSuggestions] = useState<string[]>([]);
   const [endAddrSuggestions, setEndAddrSuggestions] = useState<string[]>([]);
@@ -460,30 +457,8 @@ export function ShipperCreateOrderStep1Screen() {
                 placeholder="터치하여 상차지 주소를 검색해주세요"
                 onPress={() => {
                   setIsStartModalOpen(true);
-                  setIsRecentDropdownOpen(false);
                 }}
               />
-
-              {/* 1. 최근 출발지 드롭다운 */}
-              <View style={{ marginBottom: 10 }}>
-                <InlineDropdownField
-                  label=""
-                  placeholder="최근 주소를 선택하세요 (선택)"
-                  valueLabel={startSelected}
-                  open={isRecentDropdownOpen}
-                  options={RECENT_START_OPTIONS}
-                  selectedValue={selectedRecentValue}
-                  onToggle={() => setIsRecentDropdownOpen(!isRecentDropdownOpen)}
-                  onSelect={(op) => {
-                    setStartSelected(op.label);
-                    setStartSearch(op.label); // distanceKm 계산을 위해 둘 다 세팅
-                    setStartLat(undefined);
-                    setStartLng(undefined);
-                    setSelectedRecentValue(op.value);
-                    setIsRecentDropdownOpen(false);
-                  }}
-                />
-              </View>
 
 
               {(startSelected || startSearch).trim() ? (
@@ -927,7 +902,6 @@ export function ShipperCreateOrderStep1Screen() {
           setStartSearch(address);
           setStartLat(lat);
           setStartLng(lng);
-          setSelectedRecentValue(undefined); 
         }}
       />
       <AddressSearch
