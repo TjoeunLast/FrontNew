@@ -46,27 +46,48 @@ export const useOrderList = () => {
   // 내 위치 가져오기
   const getMyLocation = useCallback(async () => {
     const FALLBACK_LOCATION = { lat: 37.494461, lng: 127.029592 };
+
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== "granted") {
         setMyLocation(FALLBACK_LOCATION);
         return;
       }
-      let location = await Location.getLastKnownPositionAsync({});
-      if (!location) {
-        location = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.Balanced,
-        });
-      }
+
+      // 위치 가져오는 작업(Promise) 생성
+      const locationPromise = (async () => {
+        let location = await Location.getLastKnownPositionAsync({});
+        if (!location) {
+          // 정확도를 낮춰서(Lowest) 속도를 끌어올림
+          location = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Lowest,
+          });
+        }
+        return location;
+      })();
+
+      // 2초 타임아웃용 Promise 생성
+      const timeoutPromise = new Promise<null>((resolve) => {
+        setTimeout(() => {
+          resolve(null);
+        }, 2000);
+      });
+
+      // 둘 중 먼저 끝나는 것을 가져옴
+      const location = await Promise.race([locationPromise, timeoutPromise]);
+      console.log("위치 가져오기 완료:", location);
+
       if (location) {
         setMyLocation({
           lat: location.coords.latitude,
           lng: location.coords.longitude,
         });
       } else {
+        console.log("위치 가져오기 2초 초과 -> 기본 위치 사용");
         setMyLocation(FALLBACK_LOCATION);
       }
     } catch (error) {
+      console.log("위치 에러 -> 기본 위치 사용");
       setMyLocation(FALLBACK_LOCATION);
     }
   }, []);
@@ -171,7 +192,6 @@ export const useOrderList = () => {
         if (hasLabor) return false;
       }
 
-      // 8. 상차 일정 (서버 데이터 필드명에 따라 매칭 필요)
       // 8. 상차 일정 필터링 로직 수정
       if (detailFilter.uploadDate) {
         const orderType = (o as any).startType; // DB의 START_TYPE (당상, 익상 등)
