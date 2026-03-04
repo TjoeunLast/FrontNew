@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { OrderResponse } from "@/shared/models/order";
 import { OrderService } from "@/shared/api/orderService";
 import * as Location from "expo-location";
+import { useOrderFilterStore } from "@/features/driver/order-filter/model/useOrderFilterStore";
+
 export type SortType = "LATEST" | "PRICE_HIGH" | "NEARBY";
 
 // 거리 계산 공식
@@ -23,14 +25,17 @@ export const useOrderList = () => {
   // 상태 관리
   const [orders, setOrders] = useState<OrderResponse[]>([]); // 전체 오더
   const [recommendedOrders, setRecommendedOrders] = useState<OrderResponse[]>(
-    [], // 맞춤 오더
-  );
+    [],
+  ); // 맞춤 오더
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  const [filter, setFilter] = useState({
+  const [category, setCategory] = useState({
     dispatchType: "ALL",
   });
+
+  // 상세 필터 스토어 구독
+  const detailFilter = useOrderFilterStore();
 
   const [sortBy, setSortBy] = useState<SortType>("LATEST");
   const [myLocation, setMyLocation] = useState<{
@@ -40,36 +45,38 @@ export const useOrderList = () => {
 
   // 내 위치 가져오기
   const getMyLocation = useCallback(async () => {
+    const FALLBACK_LOCATION = { lat: 37.494461, lng: 127.029592 };
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") return;
-      const location = await Location.getCurrentPositionAsync({});
-      setMyLocation({
-        lat: location.coords.latitude,
-        lng: location.coords.longitude,
-      });
+      if (status !== "granted") {
+        setMyLocation(FALLBACK_LOCATION);
+        return;
+      }
+      let location = await Location.getLastKnownPositionAsync({});
+      if (!location) {
+        location = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+      }
+      if (location) {
+        setMyLocation({
+          lat: location.coords.latitude,
+          lng: location.coords.longitude,
+        });
+      } else {
+        setMyLocation(FALLBACK_LOCATION);
+      }
     } catch (error) {
-      console.error("위치 가져오기 실패:", error);
+      setMyLocation(FALLBACK_LOCATION);
     }
   }, []);
 
   const fetchOrders = useCallback(async () => {
     try {
       setLoading(true);
-
-      // 1. 추천 오더를 일단 찌릅니다.
       const recommendedPromise = OrderService.getRecommendedOrders()
-        .then((data) => {
-          // 성공하면 데이터 반환
-          return Array.isArray(data) ? data : [];
-        })
-        .catch((err) => {
-          // 실패(400 에러 등)하면 "아, 이 사람은 기사가 아니구나" 하고 빈 배열 반환
-          console.log("추천 대상이 아니거나 에러 발생 (무시됨)");
-          return [];
-        });
-
-      // 2. 전체 오더는 누구나 볼 수 있으니 그냥 가져옵니다.
+        .then((data) => (Array.isArray(data) ? data : []))
+        .catch(() => []);
       const availablePromise = OrderService.getAvailableOrders();
 
       const [recommended, allOrders] = await Promise.all([
@@ -84,34 +91,124 @@ export const useOrderList = () => {
     }
   }, []);
 
-  // 초기 로드 시 실행 (데이터 + 내 위치)
   useEffect(() => {
     fetchOrders();
     getMyLocation();
   }, [fetchOrders, getMyLocation]);
 
-  // 필터링 및 정렬
+  // 필터링 및 정렬 로직 최종 통합
   const filteredAndSortedOrders = useMemo(() => {
-    // 1. 필터 유형에 따라 원본 데이터 소스를 결정합니다.
     const sourceData =
-      filter.dispatchType === "RECOMMENDED"
-        ? recommendedOrders
-        : orders;
+      category.dispatchType === "RECOMMENDED" ? recommendedOrders : orders;
 
-    // 2. 상태("REQUESTED") 및 배차 유형에 따라 데이터를 필터링합니다.
     const filtered = sourceData.filter((o) => {
-      // "REQUESTED" 상태가 아닌 오더는 항상 제외합니다.
-      if (o.status !== "REQUESTED") return false;
+      // (1) 오더 상태 확인
+      if (o.status !== "REQUESTED" && o.status !== "APPLIED") return false;
 
-      // 'INSTANT' 또는 'DIRECT' 필터가 활성화된 경우, 해당 조건으로 필터링합니다.
-      if (filter.dispatchType === "INSTANT") return o.instant;
-      if (filter.dispatchType === "DIRECT") return !o.instant;
+      // (2) 배차 유형(탭) 필터링
+      if (category.dispatchType === "INSTANT" && !o.instant) return false;
+      if (category.dispatchType === "DIRECT" && o.instant) return false;
 
-      // 'ALL' 또는 'RECOMMENDED'의 경우, 추가적인 배차 유형 필터링을 하지 않습니다.
+      // (3) 상세 필터링 (Detail Filters) 적용
+
+      // 1. 지역 필터링 (상차지)
+      if (detailFilter.selectedRegions.length > 0) {
+        const isRegionMatch = detailFilter.selectedRegions.some((region) => {
+          const lastWord = region.split(" ").pop() || "";
+          return o.startAddr.includes(lastWord) || o.startAddr.includes(region);
+        });
+        if (!isRegionMatch) return false;
+      }
+
+      // 2. 하차지 필터링 (destRegions 가 스토어에 있을 경우)
+      if (detailFilter.destRegions && detailFilter.destRegions.length > 0) {
+        const isDestMatch = detailFilter.destRegions.some((region) => {
+          const lastWord = region.split(" ").pop() || "";
+          return o.endAddr.includes(lastWord) || o.endAddr.includes(region);
+        });
+        if (!isDestMatch) return false;
+      }
+
+      // 3. 반경 필터링 (전국 999가 아닐 때)
+      if (
+        detailFilter.radius !== 999 &&
+        myLocation &&
+        o.startLat &&
+        o.startLng
+      ) {
+        const dist = getDistance(
+          myLocation.lat,
+          myLocation.lng,
+          o.startLat,
+          o.startLng,
+        );
+        if (dist > detailFilter.radius) return false;
+      }
+
+      // 4. 차종/중량 필터링
+      if (
+        detailFilter.carTypes.length > 0 &&
+        !detailFilter.carTypes.includes(o.reqCarType)
+      )
+        return false;
+      if (
+        detailFilter.tonnages.length > 0 &&
+        !detailFilter.tonnages.includes(o.reqTonnage)
+      )
+        return false;
+
+      // 5. 적재 방식 (독차/혼적)
+      if (detailFilter.loadMethod && o.loadMethod !== detailFilter.loadMethod)
+        return false;
+
+      // 6. 운임 구분 (편도/왕복) 및 작업 조건
+      if (detailFilter.driveMode && o.driveMode !== detailFilter.driveMode)
+        return false;
+
+      // 7. 수작업 여부 (laborFee가 0보다 크면 수작업 오더로 판단)
+      if (detailFilter.isManualWork === false) {
+        const hasLabor = o.laborFee && o.laborFee > 0;
+        if (hasLabor) return false;
+      }
+
+      // 8. 상차 일정 (서버 데이터 필드명에 따라 매칭 필요)
+      // 8. 상차 일정 필터링 로직 수정
+      if (detailFilter.uploadDate) {
+        const orderType = (o as any).startType; // DB의 START_TYPE (당상, 익상 등)
+        const orderSchedule = (o as any).startSchedule; // DB의 START_SCHEDULE (2026-02-28 09:00 등)
+
+        if (
+          detailFilter.uploadDate === "당상" ||
+          detailFilter.uploadDate === "익상"
+        ) {
+          // 1. 당상/익상 텍스트 매칭
+          if (orderType !== detailFilter.uploadDate) return false;
+        } else {
+          // 2. 직접 지정 날짜 매칭 (START_SCHEDULE 날짜 부분만 비교)
+          if (!orderSchedule) return false;
+          const formattedOrderDate = orderSchedule.split(" ")[0]; // "2026-02-28" 추출
+          if (formattedOrderDate !== detailFilter.uploadDate) return false;
+        }
+      }
+      return false;
+
+      // 9. 수익 및 결제 (최소 운임)
+      const totalPrice =
+        (o.basePrice || 0) + (o.laborFee || 0) + (o.packagingPrice || 0);
+      if (detailFilter.minPrice > 0 && totalPrice < detailFilter.minPrice)
+        return false;
+
+      // 10. 결제 방식
+      if (
+        detailFilter.payMethods.length > 0 &&
+        !detailFilter.payMethods.includes(o.payMethod)
+      )
+        return false;
+
       return true;
     });
 
-    // 3. 정렬 로직을 적용합니다. (새로운 배열을 만들어 원본 상태를 변경하지 않도록 함)
+    // 정렬 로직 적용
     const sorted = [...filtered].sort((a, b) => {
       const getTotalPrice = (o: any) =>
         (o.basePrice || 0) + (o.laborFee || 0) + (o.packagingPrice || 0);
@@ -119,7 +216,6 @@ export const useOrderList = () => {
       switch (sortBy) {
         case "PRICE_HIGH":
           return getTotalPrice(b) - getTotalPrice(a);
-
         case "NEARBY":
           if (
             myLocation &&
@@ -140,33 +236,50 @@ export const useOrderList = () => {
               b.startLat,
               b.startLng,
             );
-            return distA - distB; // 가까운 순(오름차순) 정렬
+            return distA - distB;
           }
           return 0;
-
         default:
-          // 날짜 데이터가 유효하지 않을 경우를 대비한 방어 코드
           const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
           const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
           return timeB - timeA;
       }
     });
 
-    console.log(`[DEBUG] Final Filtered Orders: ${sorted.length}`);
     return sorted;
-  }, [orders, recommendedOrders, filter.dispatchType, sortBy, myLocation]);
+  }, [
+    orders,
+    recommendedOrders,
+    category.dispatchType,
+    sortBy,
+    myLocation,
+    detailFilter.selectedRegions,
+    detailFilter.destRegions,
+    detailFilter.radius,
+    detailFilter.carTypes,
+    detailFilter.tonnages,
+    detailFilter.loadMethod,
+    detailFilter.driveMode,
+    detailFilter.isManualWork,
+    detailFilter.uploadDate,
+    detailFilter.minPrice,
+    detailFilter.payMethods,
+  ]);
 
   return {
     filteredOrders: filteredAndSortedOrders,
     loading,
     refreshing,
-    onRefresh: () => {
-      setRefreshing(true);
-      fetchOrders();
-      getMyLocation();
+    onRefresh: async () => {
+      try {
+        setRefreshing(true);
+        await Promise.all([fetchOrders(), getMyLocation()]);
+      } finally {
+        setRefreshing(false);
+      }
     },
-    filter,
-    setFilter,
+    category,
+    setCategory,
     sortBy,
     setSortBy,
     myLocation,

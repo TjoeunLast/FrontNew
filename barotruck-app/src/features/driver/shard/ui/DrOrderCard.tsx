@@ -50,12 +50,16 @@ export const DrOrderCard = ({
     startLat,
     startLng,
     loadMethod,
+    status,
   } = order;
 
   const { colors: c } = useAppTheme();
   const router = useRouter();
 
   const totalPrice = basePrice + (laborFee || 0) + (packagingPrice || 0);
+
+  // 내가 이미 신청한 오더인지 확인
+  const isApplied = status === "APPLIED";
 
   // 시/구 까지만 나오도록 짧게 자르기 (예: "서울특별시 강남구 역삼동" -> "서울 강남구")
   const getShortAddr = (addr: string) => {
@@ -84,16 +88,19 @@ export const DrOrderCard = ({
       onPress={handlePress}
       style={[
         s.container,
-        { borderColor: c.border.default, backgroundColor: c.bg.surface },
-        instant && {
-          borderColor: c.status.danger,
-          borderWidth: 2,
-          elevation: 6,
+        {
+          borderColor: c.border.default,
+          backgroundColor: c.bg.surface,
         },
+        instant &&
+          !isApplied && {
+            borderColor: c.status.danger,
+            borderWidth: 2,
+          },
       ]}
     >
       {/* 1. 내 위치 거리 (옵션) */}
-      {distanceText && !hideDistance && (
+      {!isApplied && distanceText && !hideDistance && (
         <View style={s.centerDistance}>
           <MaterialCommunityIcons
             name="navigation-variant"
@@ -109,23 +116,35 @@ export const DrOrderCard = ({
       {/* 2. 상단 헤더 (뱃지 & 등록시간) */}
       <View style={s.topRow}>
         <View style={s.badgeRow}>
-          <Badge
-            label={instant ? "바로배차" : "직접배차"}
-            tone={instant ? "urgent" : "direct"}
-            style={{ marginRight: 6 }}
-          />
-          <Badge
-            label={driveMode === "왕복" ? "왕복" : "편도"}
-            tone="neutral"
-          />
+          {isApplied ? (
+            // 승인 대기일 때는 이 뱃지만 딱 띄우기
+            <Badge label="승인 대기" tone="warning" />
+          ) : (
+            <>
+              <Badge
+                label={instant ? "바로배차" : "직접배차"}
+                tone={instant ? "urgent" : "direct"}
+                style={{ marginRight: 6 }}
+              />
+              <Badge
+                label={driveMode === "왕복" ? "왕복" : "편도"}
+                tone="neutral"
+              />
+            </>
+          )}
         </View>
-        <Text style={[s.timeText, { color: c.text.secondary }]}>
+        <Text
+          style={[
+            s.timeText,
+            { color: c.text.secondary, opacity: isApplied ? 0.8 : 1 },
+          ]}
+        >
           {createdAt?.substring(5, 10).replace("-", ".")}
         </Text>
       </View>
 
-      {/* 3. 메인: 운송 경로 (큼직하게) */}
-      <View style={s.routeRow}>
+      {/* 3. 메인: 운송 경로 */}
+      <View style={[s.routeRow, { opacity: isApplied ? 0.8 : 1 }]}>
         <View style={s.locGroup}>
           <Text style={[s.locType, { color: c.status.success }]}>
             {startType}
@@ -142,16 +161,14 @@ export const DrOrderCard = ({
           <View
             style={[
               s.distBadge,
-              { backgroundColor: c.bg.canvas, borderColor: c.border.default },
+              { backgroundColor: c.bg.surface, borderColor: c.border.default },
             ]}
           >
             <Text style={[s.distText, { color: c.text.secondary }]}>
               {distance ? `${distance}km` : "-"}
             </Text>
           </View>
-          <View style={[s.line, { backgroundColor: c.border.default }]}>
-            <View style={[s.arrowHead, { borderColor: c.border.default }]} />
-          </View>
+          <View style={[s.line, { backgroundColor: c.border.default }]} />
         </View>
 
         <View style={[s.locGroup, { alignItems: "flex-end" }]}>
@@ -166,22 +183,37 @@ export const DrOrderCard = ({
       </View>
 
       {/* 4. 하단: 요약 정보 & 단가 */}
-      <View style={[s.bottomRow, { borderTopColor: c.bg.canvas }]}>
-        <View style={s.infoColumn}>
+      <View
+        style={[
+          s.bottomRow,
+          { borderTopColor: isApplied ? c.border.default : c.bg.canvas },
+        ]}
+      >
+        <View style={[s.infoColumn, { opacity: isApplied ? 0.8 : 1 }]}>
           <Text style={[s.loadDateText, { color: c.text.primary }]}>
             {startSchedule} 상차
           </Text>
           <Text style={[s.carText, { color: c.text.secondary }]}>
             {`${reqTonnage} ${reqCarType} · `}
 
-            <Text style={{ color: c.brand.primary, fontWeight: "800" }}>
+            {/* 1. 독차/혼적 포인트 컬러 */}
+            <Text
+              style={{
+                color: loadMethod === "혼적" ? c.status.info : c.brand.primary,
+                fontWeight: "700",
+              }}
+            >
               {loadMethod || "독차"}
             </Text>
 
+            {/* 2. 수작업 포인트 컬러 (0원이 아닐 때만 출력) */}
             {order.laborFee && order.laborFee !== 0 ? (
-              <Text style={{ color: c.status.danger, fontWeight: "800" }}>
-                {" · 수작업"}
-              </Text>
+              <>
+                {" · "}
+                <Text style={{ color: c.status.danger, fontWeight: "700" }}>
+                  수작업
+                </Text>
+              </>
             ) : null}
           </Text>
         </View>
@@ -190,16 +222,27 @@ export const DrOrderCard = ({
           <Text
             style={[
               s.priceText,
-              { color: instant ? c.status.danger : c.brand.primary },
+              {
+                color: isApplied
+                  ? c.text.secondary
+                  : instant
+                    ? c.status.danger
+                    : c.brand.primary,
+                opacity: isApplied ? 0.8 : 1,
+              },
             ]}
           >
             {totalPrice.toLocaleString()}원
           </Text>
-          <Badge
-            label={payMethod}
-            tone={payMethod?.includes("선착불") ? "payPrepaid" : "payDeferred"}
-            style={{ marginTop: 4, alignSelf: "flex-end" }}
-          />
+          {!isApplied && (
+            <Badge
+              label={payMethod}
+              tone={
+                payMethod?.includes("선착불") ? "payPrepaid" : "payDeferred"
+              }
+              style={{ marginTop: 4, alignSelf: "flex-end" }}
+            />
+          )}
         </View>
       </View>
     </Pressable>
@@ -212,11 +255,6 @@ const s = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1,
     marginBottom: 12,
-    elevation: 3,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
   },
   centerDistance: {
     flexDirection: "row",

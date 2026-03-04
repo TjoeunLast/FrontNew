@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { OrderResponse } from "@/shared/models/order";
 import { OrderService } from "@/shared/api/orderService";
-import * as Location from "expo-location";
 
 export const useDriverHome = () => {
   const [recommendedOrders, setRecommendedOrders] = useState<OrderResponse[]>(
@@ -10,45 +9,27 @@ export const useDriverHome = () => {
   const [myOrders, setMyOrders] = useState<OrderResponse[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // 차주 현재 위치 상태
-  const [myLocation, setMyLocation] = useState<{
-    lat: number;
-    lng: number;
-  } | null>(null);
-
-  // 위치 가져오기 함수
-  const getMyLocation = async () => {
-    try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") return;
-
-      const location = await Location.getCurrentPositionAsync({});
-      setMyLocation({
-        lat: location.coords.latitude,
-        lng: location.coords.longitude,
-      });
-    } catch (error) {
-      console.error("홈 화면 위치 획득 실패:", error);
-    }
-  };
-
   // 홈 데이터 로드(위치 정보 가져온 후 서버 데이터 가져오기)
   const fetchHomeData = useCallback(async () => {
     try {
       setIsRefreshing(true);
 
-      // 내 위치 파악
-      await getMyLocation();
-
       // 맞춤 오더 가져오기
-      const recommended = await OrderService.getRecommendedOrders();
+      const recommendedPromise = OrderService.getRecommendedOrders();
+      const drivingOrdersPromise = OrderService.getMyDrivingOrders();
+
+      const [recommended, drivingOrders] = await Promise.all([
+        recommendedPromise,
+        drivingOrdersPromise,
+      ]);
+
       const filteredRecommended = recommended.filter(
-        (o) => o.status === "REQUESTED",
+        (o) => o.status === "REQUESTED" || o.status === "APPLIED",
       );
+
       setRecommendedOrders(filteredRecommended);
 
       // 내 전체 운송 목록 가져오기 (상태 카운트용)
-      const drivingOrders = await OrderService.getMyDrivingOrders();
       setMyOrders(drivingOrders);
     } catch (error) {
       console.error("데이터 로드 실패:", error);
@@ -81,7 +62,6 @@ export const useDriverHome = () => {
     recommendedOrders,
     statusCounts,
     isRefreshing,
-    myLocation,
     onRefresh: fetchHomeData,
   };
 };
