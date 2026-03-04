@@ -95,12 +95,20 @@ export const useOrderList = () => {
   const fetchOrders = useCallback(async () => {
     try {
       setLoading(true);
+
       const recommendedPromise = OrderService.getRecommendedOrders()
         .then((data) => (Array.isArray(data) ? data : []))
-        .catch(() => []);
+        .catch((e) => {
+          console.log("⚠️ 추천 오더 에러:", e.response?.data || e.message);
+          return [];
+        });
+
       const availablePromise = OrderService.getAvailableOrders();
 
-      const myInfoPromise = UserService.getMyInfo().catch(() => null);
+      const myInfoPromise = UserService.getMyInfo().catch((e) => {
+        console.log("⚠️ 내 정보 조회 에러:", e.response?.data || e.message);
+        return null;
+      });
 
       const [recommended, allOrders, myInfo] = await Promise.all([
         recommendedPromise,
@@ -108,11 +116,32 @@ export const useOrderList = () => {
         myInfoPromise,
       ]);
 
+      console.log(myInfo);
+
       setRecommendedOrders(recommended);
       setOrders(allOrders);
 
-      if (myInfo && (myInfo as any).address) {
-        setDriverAddress((myInfo as any).address);
+      console.log("🕵️‍♂️ [내 정보 확인] myInfo 데이터:", myInfo);
+
+      const fetchedAddress = myInfo?.DriverInfo?.address;
+
+      if (fetchedAddress) {
+        setDriverAddress(fetchedAddress);
+        console.log("✅ [주소 세팅 완료] driverAddress:", fetchedAddress);
+      } else {
+        console.log(
+          "⚠️ [주소 없음] 백엔드에서 안 줌. 필터 테스트를 위해 강제 세팅합니다!",
+        );
+        setDriverAddress("경기 안산시 상록구");
+      }
+    } catch (error: any) {
+      // 🚨 범인 색출용 콘솔 로그!!
+      console.log("🚨🚨🚨 [API 400 에러 발생] 🚨🚨🚨");
+      if (error.response) {
+        console.log("1. 실패한 API 주소 URL:", error.response.config?.url);
+        console.log("2. 백엔드에서 보낸 에러 메시지:", error.response.data);
+      } else {
+        console.log("에러 내용:", error.message);
       }
     } finally {
       setLoading(false);
@@ -160,7 +189,6 @@ export const useOrderList = () => {
       // 3. 반경 필터링 (전국 999가 아닐 때)
       if (detailFilter.radius !== 999) {
         if (myLocation && o.startLat && o.startLng) {
-          // 3-1. GPS 좌표가 있을 때 -> 정상적인 반경(거리) 계산
           const dist = getDistance(
             myLocation.lat,
             myLocation.lng,
@@ -169,22 +197,23 @@ export const useOrderList = () => {
           );
           if (dist > detailFilter.radius) return false;
         } else {
-          // 3-2. GPS 획득 실패 시 -> 백엔드에서 받아온 기사님의 "XX시 OO구" 주소를 기준으로 필터링
+          // GPS 획득 실패 시 -> 백엔드에서 받아온 기사님의 주소를 기준으로 필터링
           if (driverAddress) {
             // 예: "경기 안산시 상록구" -> "상록구" 추출
             const addressParts = driverAddress.split(" ");
             const lastWord = addressParts.pop() || "";
             // "경기 안산시"
-            const cityAndGu = addressParts.join(" ");
+            const cityAndGu = addressParts.join(" ") || "";
 
             const isAddressMatch =
-              o.startAddr.includes(lastWord) ||
-              o.startAddr.includes(driverAddress) ||
-              (cityAndGu && o.startAddr.includes(cityAndGu));
+              // o.startAddr가 null일 수도 있으니 안전하게 체크
+              (o.startAddr && o.startAddr.includes(lastWord)) ||
+              (o.startAddr && o.startAddr.includes(driverAddress)) ||
+              (cityAndGu && o.startAddr && o.startAddr.includes(cityAndGu));
 
             if (!isAddressMatch) return false;
           } else {
-            // GPS도 없고, 서버에서 주소도 못 받아왔다면 필터링할 기준이 없음
+            // GPS도 없고, 서버에서 주소도 못 받아왔다면 필터링 기준이 없음
             return false;
           }
         }
