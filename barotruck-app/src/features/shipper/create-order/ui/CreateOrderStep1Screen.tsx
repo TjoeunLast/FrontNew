@@ -45,6 +45,7 @@ import {
   type TripType,
 } from "./createOrderStep1.types";
 import { addDays, isSameDay, parseWonInput, toKoreanDateText, won } from "./createOrderStep1.utils";
+import { isShipperActivePaymentMethod } from "@/features/common/payment/lib/paymentMethods";
 
 export function ShipperCreateOrderStep1Screen() {
   const t = useAppTheme();
@@ -90,7 +91,9 @@ export function ShipperCreateOrderStep1Screen() {
   const [weightTon, setWeightTon] = useState(initialDraft?.weightTon ?? "0");
   const [dispatch, setDispatch] = useState<DispatchType>(initialDraft?.dispatch ?? "instant");
   const [tripType, setTripType] = useState<TripType>(initialDraft?.tripType ?? "oneWay");
-  const [pay, setPay] = useState<PayType>(initialDraft?.pay ?? "receipt30");
+  const [pay, setPay] = useState<PayType>(
+    isShipperActivePaymentMethod(initialDraft?.pay) ? initialDraft?.pay : "card"
+  );
   const [fareInput, setFareInput] = useState(
     initialDraft?.appliedFare ? String(initialDraft.appliedFare) : ""
   );

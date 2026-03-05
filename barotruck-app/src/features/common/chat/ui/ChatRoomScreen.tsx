@@ -1,20 +1,24 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   View,
   Text,
   FlatList,
   TextInput,
   TouchableOpacity,
+  Modal,
+  Pressable,
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
   Alert,
 } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 
 import { useChatManager } from '../../../../shared/api/chatApi';
+import { ReportService } from '../../../../shared/api/reviewService';
 import { ChatMessageResponse } from '../../../../shared/models/chat';
 import { getCurrentUserSnapshot } from '../../../../shared/utils/currentUserStorage';
 import {
@@ -64,6 +68,8 @@ function resolveOutgoingReadState(
   return hasLaterOtherMessage ? 'READ' : 'UNREAD';
 }
 
+type ReportType = 'ACCIDENT' | 'NO_SHOW' | 'RUDE' | 'ETC';
+
 const ChatRoomScreen = () => {
   const {
     roomId,
@@ -81,6 +87,10 @@ const ChatRoomScreen = () => {
   const navigation = useNavigation();
   const router = useRouter();
   const [text, setText] = useState('');
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportType, setReportType] = useState<ReportType>('ETC');
+  const [reportDescription, setReportDescription] = useState('');
+  const [reportLoading, setReportLoading] = useState(false);
   const [cachedOrderSummary, setCachedOrderSummary] = useState<ChatOrderSummary | null>(null);
   const [cachedRoomTitle, setCachedRoomTitle] = useState('');
   const listRef = useRef<FlatList<ChatMessageResponse>>(null);
@@ -158,13 +168,69 @@ const ChatRoomScreen = () => {
   }, [paramOrderSummary, roomId]);
 
   const orderSummary = paramOrderSummary ?? cachedOrderSummary;
+  const resolvedReportOrderId = useMemo(() => {
+    const id = Number(String(orderSummary?.orderId ?? '').trim());
+    return Number.isFinite(id) && id > 0 ? id : null;
+  }, [orderSummary?.orderId]);
+
+  const handleCloseReport = useCallback(() => {
+    if (reportLoading) return;
+    setReportOpen(false);
+  }, [reportLoading]);
+
+  const handleOpenReport = useCallback(() => {
+    if (!resolvedReportOrderId) {
+      Alert.alert('안내', '신고 가능한 오더 정보를 찾을 수 없습니다.');
+      return;
+    }
+    setReportOpen(true);
+  }, [resolvedReportOrderId]);
+
+  const handleSubmitReport = useCallback(async () => {
+    const description = reportDescription.trim();
+    if (!resolvedReportOrderId) {
+      Alert.alert('오류', '오더 정보를 확인할 수 없습니다.');
+      return;
+    }
+    if (!description) {
+      Alert.alert('안내', '신고 내용을 입력해주세요.');
+      return;
+    }
+
+    setReportLoading(true);
+    try {
+      await ReportService.createReport({
+        orderId: resolvedReportOrderId,
+        reportType,
+        description,
+      });
+      setReportOpen(false);
+      setReportType('ETC');
+      setReportDescription('');
+      Alert.alert('완료', '신고가 접수되었습니다.');
+    } catch (err) {
+      console.error('채팅방 신고 접수 실패:', err);
+      Alert.alert('오류', '신고 접수에 실패했습니다. 다시 시도해주세요.');
+    } finally {
+      setReportLoading(false);
+    }
+  }, [reportDescription, reportType, resolvedReportOrderId]);
 
   useEffect(() => {
     navigation.setOptions({
       headerShown: true,
       title: roomTitle,
+      headerRight: () => (
+        <TouchableOpacity
+          onPress={handleOpenReport}
+          activeOpacity={0.72}
+          style={[styles.headerReportBtn, !resolvedReportOrderId && styles.headerReportBtnDisabled]}
+        >
+          <MaterialCommunityIcons name="alarm-light-outline" size={22} color="#DC2626" />
+        </TouchableOpacity>
+      ),
     });
-  }, [navigation, roomTitle]);
+  }, [handleOpenReport, navigation, resolvedReportOrderId, roomTitle]);
 
   useEffect(() => {
     if (!roomId || !userId) return;
@@ -353,71 +419,139 @@ const ChatRoomScreen = () => {
   }, [sortedMessages.length]);
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-    >
-      {orderSummary ? (
-        <TouchableOpacity
-          style={styles.orderSummary}
-          activeOpacity={orderSummary.orderId ? 0.86 : 1}
-          onPress={() => void handlePressOrderSummary()}
-          disabled={!orderSummary.orderId}
-        >
-          <View style={styles.orderSummaryLeft}>
-            {!!orderSummary.orderId && <Text style={styles.orderIdText}>오더 #{orderSummary.orderId}</Text>}
-            <Text style={styles.routeText}>{orderSummary.routeText}</Text>
-            <Text style={styles.cargoText}>{orderSummary.cargoText}</Text>
+    <>
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+      >
+        {orderSummary ? (
+          <TouchableOpacity
+            style={styles.orderSummary}
+            activeOpacity={orderSummary.orderId ? 0.86 : 1}
+            onPress={() => void handlePressOrderSummary()}
+            disabled={!orderSummary.orderId}
+          >
+            <View style={styles.orderSummaryLeft}>
+              {!!orderSummary.orderId && <Text style={styles.orderIdText}>오더 #{orderSummary.orderId}</Text>}
+              <Text style={styles.routeText}>{orderSummary.routeText}</Text>
+              <Text style={styles.cargoText}>{orderSummary.cargoText}</Text>
+            </View>
+            {!!orderSummary.priceText && <Text style={styles.priceText}>{orderSummary.priceText}</Text>}
+          </TouchableOpacity>
+        ) : null}
+
+        {!!dateChipLabel && (
+          <View style={styles.dateChipWrap}>
+            <Text style={styles.dateChipText}>{dateChipLabel}</Text>
           </View>
-          {!!orderSummary.priceText && <Text style={styles.priceText}>{orderSummary.priceText}</Text>}
-        </TouchableOpacity>
-      ) : null}
+        )}
 
-      {!!dateChipLabel && (
-        <View style={styles.dateChipWrap}>
-          <Text style={styles.dateChipText}>{dateChipLabel}</Text>
-        </View>
-      )}
-
-      <FlatList
-        ref={listRef}
-        data={sortedMessages}
-        renderItem={renderItem}
-        keyExtractor={(item) => item.messageId.toString()}
-        contentContainerStyle={styles.messageListContent}
-        style={styles.messageList}
-        onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
-      />
-
-      <View style={styles.inputContainer}>
-        <TouchableOpacity style={styles.circleIconButton} onPress={openAttachmentMenu}>
-          <Ionicons name="add" size={22} color="#9aa4b6" />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.circleIconButton} onPress={() => void takePhoto()}>
-          <Ionicons name="camera-outline" size={20} color="#9aa4b6" />
-        </TouchableOpacity>
-        <TextInput
-          style={styles.input}
-          value={text}
-          onChangeText={setText}
-          placeholder="메시지 보내기"
-          placeholderTextColor="#b8bfcc"
-          multiline={false}
-          returnKeyType="send"
-          onSubmitEditing={handleSend}
-          blurOnSubmit={false}
+        <FlatList
+          ref={listRef}
+          data={sortedMessages}
+          renderItem={renderItem}
+          keyExtractor={(item) => item.messageId.toString()}
+          contentContainerStyle={styles.messageListContent}
+          style={styles.messageList}
+          onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
         />
-        <TouchableOpacity onPress={handleSend} style={styles.sendButton}>
-          <Ionicons name="paper-plane" size={18} color="#fff" />
-        </TouchableOpacity>
-      </View>
-    </KeyboardAvoidingView>
+
+        <View style={styles.inputContainer}>
+          <TouchableOpacity style={styles.circleIconButton} onPress={openAttachmentMenu}>
+            <Ionicons name="add" size={22} color="#9aa4b6" />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.circleIconButton} onPress={() => void takePhoto()}>
+            <Ionicons name="camera-outline" size={20} color="#9aa4b6" />
+          </TouchableOpacity>
+          <TextInput
+            style={styles.input}
+            value={text}
+            onChangeText={setText}
+            placeholder="메시지 보내기"
+            placeholderTextColor="#b8bfcc"
+            multiline={false}
+            returnKeyType="send"
+            onSubmitEditing={handleSend}
+            blurOnSubmit={false}
+          />
+          <TouchableOpacity onPress={handleSend} style={styles.sendButton}>
+            <Ionicons name="paper-plane" size={18} color="#fff" />
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
+
+      <Modal
+        visible={reportOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={handleCloseReport}
+      >
+        <View style={styles.reportBackdrop}>
+          <View style={styles.reportCard}>
+            <View style={styles.reportHeader}>
+              <Text style={styles.reportTitle}>신고 접수</Text>
+              <Pressable onPress={handleCloseReport} style={styles.reportCloseBtn}>
+                <Ionicons name="close" size={20} color="#64748B" />
+              </Pressable>
+            </View>
+
+            <Text style={styles.reportLabel}>신고 유형</Text>
+            <View style={styles.reportTypeWrap}>
+              {[
+                { key: 'ACCIDENT' as ReportType, label: '사고' },
+                { key: 'NO_SHOW' as ReportType, label: '노쇼' },
+                { key: 'RUDE' as ReportType, label: '불친절' },
+                { key: 'ETC' as ReportType, label: '기타' },
+              ].map((item) => {
+                const active = reportType === item.key;
+                return (
+                  <Pressable
+                    key={item.key}
+                    onPress={() => setReportType(item.key)}
+                    style={[styles.reportTypeChip, active && styles.reportTypeChipActive]}
+                  >
+                    <Text style={[styles.reportTypeText, active && styles.reportTypeTextActive]}>{item.label}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            <Text style={styles.reportLabel}>상세 내용</Text>
+            <TextInput
+              value={reportDescription}
+              onChangeText={setReportDescription}
+              placeholder="신고 사유를 구체적으로 입력해주세요."
+              placeholderTextColor="#94A3B8"
+              style={styles.reportInput}
+              multiline
+            />
+
+            <Pressable
+              onPress={() => void handleSubmitReport()}
+              disabled={reportLoading}
+              style={({ pressed }) => [
+                styles.reportSubmitBtn,
+                (pressed || reportLoading) && styles.reportSubmitBtnPressed,
+              ]}
+            >
+              {reportLoading ? (
+                <ActivityIndicator color="#FFF" />
+              ) : (
+                <Text style={styles.reportSubmitText}>신고 접수</Text>
+              )}
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+    </>
   );
 };
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f2f4f8' },
+  headerReportBtn: { marginRight: 6, paddingHorizontal: 8, paddingVertical: 4 },
+  headerReportBtnDisabled: { opacity: 0.45 },
   orderSummary: {
     backgroundColor: '#e9ecf8',
     paddingHorizontal: 16,
@@ -501,6 +635,94 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
+  },
+  reportBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.56)',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+  },
+  reportCard: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 16,
+  },
+  reportHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  reportTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  reportCloseBtn: {
+    width: 28,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 14,
+  },
+  reportLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#475569',
+    marginBottom: 8,
+  },
+  reportTypeWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 12,
+  },
+  reportTypeChip: {
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#F8FAFC',
+  },
+  reportTypeChipActive: {
+    borderColor: '#4F46E5',
+    backgroundColor: '#EEF2FF',
+  },
+  reportTypeText: {
+    color: '#64748B',
+    fontWeight: '600',
+    fontSize: 13,
+  },
+  reportTypeTextActive: {
+    color: '#4F46E5',
+    fontWeight: '800',
+  },
+  reportInput: {
+    minHeight: 110,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    color: '#0F172A',
+    textAlignVertical: 'top',
+    marginBottom: 14,
+  },
+  reportSubmitBtn: {
+    borderRadius: 12,
+    minHeight: 46,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#DC2626',
+  },
+  reportSubmitBtnPressed: {
+    opacity: 0.75,
+  },
+  reportSubmitText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '800',
   },
 });
 

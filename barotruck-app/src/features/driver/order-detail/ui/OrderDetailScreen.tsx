@@ -1,4 +1,5 @@
-import React from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import React, { useEffect, useState } from "react";
 import {
   Pressable,
   ScrollView,
@@ -8,10 +9,13 @@ import {
   Dimensions,
   ActivityIndicator,
   Alert,
+  Modal,
+  TextInput,
 } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import apiClient from "@/shared/api/apiClient";
+import { ReportService, ReviewService } from "@/shared/api/reviewService";
 
 import { useOrderDetail } from "../model/useOrderDetail";
 import { Badge } from "@/shared/ui/feedback/Badge";
@@ -20,6 +24,29 @@ import { ReceiptModal } from "@/features/driver/driving/ui/ReceiptModal";
 import OrderDetailPageFrame from "./OrderDetailPageFrame";
 
 const { width } = Dimensions.get("window");
+type ReportType = "ACCIDENT" | "NO_SHOW" | "RUDE" | "ETC";
+const REVIEWED_ORDER_IDS_STORAGE_KEY = "baro_driver_reviewed_order_ids_v1";
+
+async function loadReviewedOrderIds() {
+  try {
+    const raw = await AsyncStorage.getItem(REVIEWED_ORDER_IDS_STORAGE_KEY);
+    if (!raw) return new Set<number>();
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return new Set<number>();
+    return new Set(parsed.map((x) => Number(x)).filter((x) => Number.isFinite(x)));
+  } catch {
+    return new Set<number>();
+  }
+}
+
+async function saveReviewedOrderIds(ids: Set<number>) {
+  try {
+    const arr = Array.from(ids.values()).filter((x) => Number.isFinite(x));
+    await AsyncStorage.setItem(REVIEWED_ORDER_IDS_STORAGE_KEY, JSON.stringify(arr));
+  } catch {
+    // noop
+  }
+}
 
 function buildChatLocationLabel(addr?: string, place?: string) {
   const placeText = String(place ?? "").trim();
@@ -33,6 +60,15 @@ function buildChatLocationLabel(addr?: string, place?: string) {
 export default function OrderDetailScreen() {
   const { colors: c } = useAppTheme();
   const router = useRouter();
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewContent, setReviewContent] = useState("");
+  const [reviewLoading, setReviewLoading] = useState(false);
+  const [reviewSubmitted, setReviewSubmitted] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportType, setReportType] = useState<ReportType>("ETC");
+  const [reportDescription, setReportDescription] = useState("");
+  const [reportLoading, setReportLoading] = useState(false);
 
   // 데이터 밒 기능 로드
   const {
@@ -48,6 +84,67 @@ export default function OrderDetailScreen() {
     startType,
     endType,
   } = useOrderDetail();
+
+  useEffect(() => {
+    let active = true;
+
+    void (async () => {
+      const idNum = Number(order?.orderId);
+      if (!Number.isFinite(idNum)) {
+        if (active) setReviewSubmitted(false);
+        return;
+      }
+
+      if (order?.status && order.status !== "COMPLETED") {
+        if (active) setReviewSubmitted(false);
+        return;
+      }
+
+      const reviewedIds = await loadReviewedOrderIds();
+      if (!active) return;
+
+      if (reviewedIds.has(idNum)) {
+        setReviewSubmitted(true);
+        return;
+      }
+
+      try {
+        const myReviews = await ReviewService.getMyReviews();
+        if (!active || !Array.isArray(myReviews)) {
+          if (active) setReviewSubmitted(false);
+          return;
+        }
+
+        const matched = myReviews.some((row: any) => {
+          const candidateOrderId = Number(
+            row?.orderId ??
+              row?.orderNo ??
+              row?.order?.orderId ??
+              row?.order?.orderNo ??
+              row?.order?.id ??
+              row?.targetOrderId ??
+              row?.targetId
+          );
+          return Number.isFinite(candidateOrderId) && candidateOrderId === idNum;
+        });
+
+        if (matched) {
+          setReviewSubmitted(true);
+          reviewedIds.add(idNum);
+          await saveReviewedOrderIds(reviewedIds);
+          return;
+        }
+
+        setReviewSubmitted(false);
+      } catch {
+        if (active) setReviewSubmitted(false);
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [order?.orderId, order?.status]);
 
   // 방어 코드: 데이터 로딩 중 처리
   if (!order || !buttonConfig) {
@@ -139,9 +236,80 @@ export default function OrderDetailScreen() {
       Alert.alert("오류", "채팅방을 열 수 없습니다.");
     }
   };
-  
-  
 
+  const handleSubmitReview = async () => {
+    const id = Number(order?.orderId);
+    const rating = Math.max(1, Math.min(5, Math.floor(reviewRating)));
+    const content = reviewContent.trim();
+
+    if (!Number.isFinite(id) || id <= 0) {
+      Alert.alert("오류", "오더 정보를 확인할 수 없습니다.");
+      return;
+    }
+    if (!content) {
+      Alert.alert("안내", "리뷰 내용을 입력해주세요.");
+      return;
+    }
+
+    setReviewLoading(true);
+    try {
+      await ReviewService.createReview({
+        orderId: id,
+        rating,
+        content,
+      });
+      setReviewSubmitted(true);
+      {
+        const reviewedIds = await loadReviewedOrderIds();
+        reviewedIds.add(id);
+        await saveReviewedOrderIds(reviewedIds);
+      }
+      setReviewOpen(false);
+      setReviewContent("");
+      Alert.alert("완료", "평점이 등록되었습니다.");
+    } catch (err) {
+      console.error("평점 등록 실패:", err);
+      Alert.alert("오류", "평점 등록에 실패했습니다. 다시 시도해주세요.");
+    } finally {
+      setReviewLoading(false);
+    }
+  };
+
+  const handleReport = () => {
+    setReportOpen(true);
+  };
+
+  const handleSubmitReport = async () => {
+    const id = Number(order?.orderId);
+    const description = reportDescription.trim();
+
+    if (!Number.isFinite(id) || id <= 0) {
+      Alert.alert("오류", "오더 정보를 확인할 수 없습니다.");
+      return;
+    }
+    if (!description) {
+      Alert.alert("안내", "신고 내용을 입력해주세요.");
+      return;
+    }
+
+    setReportLoading(true);
+    try {
+      await ReportService.createReport({
+        orderId: id,
+        reportType,
+        description,
+      });
+      setReportOpen(false);
+      setReportType("ETC");
+      setReportDescription("");
+      Alert.alert("완료", "신고가 접수되었습니다.");
+    } catch (err) {
+      console.error("신고 접수 실패:", err);
+      Alert.alert("오류", "신고 접수에 실패했습니다. 다시 시도해주세요.");
+    } finally {
+      setReportLoading(false);
+    }
+  };
 
   return (
     <View style={[s.container, { backgroundColor: c.bg.canvas }]}>
@@ -503,17 +671,178 @@ export default function OrderDetailScreen() {
             </Pressable>
           </>
         ) : (
-          <Pressable
-            style={[
-              s.mainActionBtn,
-              { backgroundColor: c.text.primary, flex: 1, height: 56 },
-            ]}
-            onPress={actions.goBack}
-          >
-            <Text style={s.mainActionText}>목록으로</Text>
-          </Pressable>
+          <>
+            <View style={s.iconBtnGroup}>
+              <Pressable
+                style={[s.circleBtn, { borderColor: c.border.default }]}
+                onPress={handleReport}
+              >
+                <MaterialCommunityIcons
+                  name="alarm-light-outline"
+                  size={24}
+                  color="#DC2626"
+                />
+              </Pressable>
+            </View>
+
+            <Pressable
+              onPress={reviewSubmitted ? undefined : () => setReviewOpen(true)}
+              disabled={reviewSubmitted || reviewLoading}
+              style={({ pressed }) => [
+                s.mainActionBtn,
+                {
+                  backgroundColor: reviewSubmitted ? c.status.success : c.brand.primary,
+                  opacity: pressed || reviewLoading ? 0.75 : 1,
+                },
+              ]}
+            >
+              <Text style={s.mainActionText}>
+                {reviewSubmitted ? "평점 완료" : "평점 남기기"}
+              </Text>
+            </Pressable>
+          </>
         )}
       </View>
+
+      <Modal
+        visible={reportOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setReportOpen(false)}
+      >
+        <View style={s.modalBackdrop}>
+          <View style={[s.modalCard, { backgroundColor: c.bg.surface }]}>
+            <View style={s.modalHeader}>
+              <Text style={[s.modalTitle, { color: c.text.primary }]}>신고 접수</Text>
+              <Pressable onPress={() => setReportOpen(false)} style={s.modalCloseBtn}>
+                <Ionicons name="close" size={20} color={c.text.secondary} />
+              </Pressable>
+            </View>
+
+            <Text style={[s.reviewLabel, { color: c.text.primary }]}>신고 유형</Text>
+            <View style={s.reportTypeWrap}>
+              {[
+                { key: "ACCIDENT" as ReportType, label: "사고" },
+                { key: "NO_SHOW" as ReportType, label: "노쇼" },
+                { key: "RUDE" as ReportType, label: "불친절" },
+                { key: "ETC" as ReportType, label: "기타" },
+              ].map((item) => {
+                const active = reportType === item.key;
+                return (
+                  <Pressable
+                    key={item.key}
+                    onPress={() => setReportType(item.key)}
+                    style={[
+                      s.reportTypeChip,
+                      {
+                        borderColor: active ? c.brand.primary : c.border.default,
+                        backgroundColor: active ? "#EEF2FF" : c.bg.canvas,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={{
+                        color: active ? c.brand.primary : c.text.secondary,
+                        fontWeight: active ? "800" : "600",
+                        fontSize: 13,
+                      }}
+                    >
+                      {item.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            <Text style={[s.reviewLabel, { color: c.text.primary, marginTop: 8 }]}>상세 내용</Text>
+            <TextInput
+              value={reportDescription}
+              onChangeText={setReportDescription}
+              placeholder="신고 사유를 구체적으로 입력해주세요."
+              placeholderTextColor="#94A3B8"
+              style={[s.reviewInput, { color: c.text.primary, borderColor: c.border.default }]}
+              multiline
+            />
+
+            <Pressable
+              onPress={() => void handleSubmitReport()}
+              disabled={reportLoading}
+              style={({ pressed }) => [
+                s.reviewSubmitBtn,
+                {
+                  backgroundColor: "#DC2626",
+                  opacity: pressed || reportLoading ? 0.75 : 1,
+                },
+              ]}
+            >
+              {reportLoading ? (
+                <ActivityIndicator color="#FFF" />
+              ) : (
+                <Text style={s.reviewSubmitText}>신고 접수</Text>
+              )}
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={reviewOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setReviewOpen(false)}
+      >
+        <View style={s.modalBackdrop}>
+          <View style={[s.modalCard, { backgroundColor: c.bg.surface }]}>
+            <View style={s.modalHeader}>
+              <Text style={[s.modalTitle, { color: c.text.primary }]}>평점 남기기</Text>
+              <Pressable onPress={() => setReviewOpen(false)} style={s.modalCloseBtn}>
+                <Ionicons name="close" size={20} color={c.text.secondary} />
+              </Pressable>
+            </View>
+
+            <Text style={[s.reviewLabel, { color: c.text.primary }]}>별점</Text>
+            <View style={s.starRow}>
+              {[1, 2, 3, 4, 5].map((n) => (
+                <Pressable key={n} onPress={() => setReviewRating(n)} style={s.starBtn}>
+                  <Ionicons
+                    name={n <= reviewRating ? "star" : "star-outline"}
+                    size={30}
+                    color={n <= reviewRating ? "#F59E0B" : "#CBD5E1"}
+                  />
+                </Pressable>
+              ))}
+            </View>
+
+            <Text style={[s.reviewLabel, { color: c.text.primary }]}>리뷰 내용</Text>
+            <TextInput
+              value={reviewContent}
+              onChangeText={setReviewContent}
+              placeholder="화주에 대한 후기를 남겨주세요."
+              placeholderTextColor="#94A3B8"
+              style={[s.reviewInput, { color: c.text.primary, borderColor: c.border.default }]}
+              multiline
+            />
+
+            <Pressable
+              onPress={() => void handleSubmitReview()}
+              disabled={reviewLoading}
+              style={({ pressed }) => [
+                s.reviewSubmitBtn,
+                {
+                  backgroundColor: c.brand.primary,
+                  opacity: pressed || reviewLoading ? 0.75 : 1,
+                },
+              ]}
+            >
+              {reviewLoading ? (
+                <ActivityIndicator color="#FFF" />
+              ) : (
+                <Text style={s.reviewSubmitText}>평점 등록</Text>
+              )}
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
       <ReceiptModal visible={modalOpen} onClose={() => setModalOpen(false)} />
       </OrderDetailPageFrame>
     </View>
@@ -666,5 +995,79 @@ const s = StyleSheet.create({
     fontSize: 15,
     lineHeight: 22, // 줄 간격을 넓혀서 긴 글도 읽기 편하게 함
     fontWeight: "600", // 내용을 좀 더 두껍게 해서 강조
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(15,23,42,0.35)",
+    justifyContent: "center",
+    paddingHorizontal: 20,
+  },
+  modalCard: {
+    borderRadius: 16,
+    padding: 16,
+    maxHeight: "70%",
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+  },
+  modalCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  reviewLabel: {
+    fontSize: 14,
+    fontWeight: "700",
+    marginBottom: 8,
+  },
+  starRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  starBtn: {
+    marginRight: 8,
+  },
+  reportTypeWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 8,
+  },
+  reportTypeChip: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  reviewInput: {
+    borderWidth: 1,
+    borderRadius: 10,
+    minHeight: 100,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    textAlignVertical: "top",
+    marginBottom: 14,
+    fontSize: 14,
+  },
+  reviewSubmitBtn: {
+    height: 46,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  reviewSubmitText: {
+    color: "#FFF",
+    fontSize: 15,
+    fontWeight: "800",
   },
 });
