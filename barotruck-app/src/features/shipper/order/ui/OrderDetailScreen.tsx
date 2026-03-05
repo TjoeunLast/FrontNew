@@ -956,7 +956,7 @@ export default function OrderDetailScreen() {
               <View style={s.iconBtnGroup}>
                 {order.status === "COMPLETED" ? (
                   <Pressable style={s.circleBtn} onPress={handleReport}>
-                    <Ionicons name="notifications-outline" size={24} color="#DC2626" />
+                    <MaterialCommunityIcons name="alarm-light-outline" size={24} color="#DC2626" />
                   </Pressable>
                 ) : (
                   <>
@@ -1522,3 +1522,5 @@ const s = StyleSheet.create({
     fontWeight: "800",
   },
 });
+
+
