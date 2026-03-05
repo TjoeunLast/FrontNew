@@ -1,9 +1,11 @@
 ﻿import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useRouter } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import {
   Alert,
+  Linking,
   Modal,
   Pressable,
   ScrollView,
@@ -13,13 +15,26 @@ import {
   type TextStyle,
   type ViewStyle,
 } from "react-native";
+import { WebView, type WebViewMessageEvent } from "react-native-webview";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { OrderApi } from "@/shared/api/orderService";
+import { PaymentService } from "@/shared/api/paymentService";
 import { SettlementService } from "@/shared/api/settlementService";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import type { OrderResponse } from "@/shared/models/order";
 import ShipperScreenHeader from "@/shared/ui/layout/ShipperScreenHeader";
+import {
+  isShipperActivePaymentMethod,
+  isTossPayment,
+  toPaymentMethodLabel,
+} from "@/features/common/payment/lib/paymentMethods";
+import {
+  calcOrderAmount,
+  toSettlementStatus,
+  statusText,
+  toWon,
+} from "@/features/common/settlement/lib/settlementHelpers";
 
 type SettlementFilter = "ALL" | "UNPAID" | "TAX";
 type SettlementStatus = "UNPAID" | "PENDING" | "PAID" | "TAX_INVOICE";
@@ -30,12 +45,21 @@ type SettlementItem = {
   scheduledAt: Date;
   dateLabel: string;
   status: SettlementStatus;
+  isTransportCompleted: boolean;
   from: string;
   to: string;
   amount: number;
   actionLabel: string;
   vehicleInfo: string;
   payMethodLabel: string;
+  isToss: boolean;
+};
+
+type TossCheckoutSession = {
+  orderId: number;
+  successUrl: string;
+  failUrl: string;
+  html: string;
 };
 
 const PENDING_SETTLEMENT_STORAGE_KEY = "shipper_pending_settlement_order_ids";
@@ -59,17 +83,6 @@ async function savePendingSettlementOrderIds(ids: Set<number>) {
   } catch {
     // noop
   }
-}
-
-function toWon(v: number) {
-  return `${v.toLocaleString("ko-KR")}원`;
-}
-
-function statusLabel(status: SettlementStatus) {
-  if (status === "UNPAID") return "미결제";
-  if (status === "PENDING") return "결제대기";
-  if (status === "PAID") return "결제완료";
-  return "계산서 발행";
 }
 
 function startOfMonth(d: Date) {
@@ -113,38 +126,122 @@ function toDateLabel(d: Date) {
   return `${d.getMonth() + 1}.${d.getDate()} (${w})`;
 }
 
-function toPayMethodLabel(raw?: string) {
-  const text = String(raw ?? "").trim();
-  const v = text.toLowerCase();
-  if (!text) return "-";
-  if (v.includes("card") || v.includes("토스") || v.includes("카드")) return "토스 결제";
-  if (v.includes("prepaid") || text.includes("선/착불")) return "선/착불";
-  if (v.includes("receipt") || text.includes("인수증")) return "인수증 (30일)";
-  if (v.includes("month") || text.includes("익월말")) return "익월말";
-  return text;
+function escapeHtmlValue(v: string) {
+  return v
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
-function toSettlementStatus(order: OrderResponse): SettlementStatus {
-  const payMethod = String(order.payMethod ?? "").toLowerCase();
-  const settlementStatus = String(order.settlementStatus ?? "").toUpperCase();
-
-  if (
-    payMethod.includes("receipt") ||
-    payMethod.includes("month") ||
-    payMethod.includes("계산서") ||
-    payMethod.includes("invoice")
-  ) {
-    return "TAX_INVOICE";
+function parseQueryValue(url: string, key: string) {
+  const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const regex = new RegExp(`[?&]${escaped}=([^&#]*)`);
+  const match = url.match(regex);
+  if (!match) return "";
+  try {
+    return decodeURIComponent(match[1].replace(/\+/g, " "));
+  } catch {
+    return match[1];
   }
-
-  if (settlementStatus === "COMPLETED" || settlementStatus === "PAID" || settlementStatus === "CONFIRMED") return "PAID";
-  if (settlementStatus === "WAIT" || settlementStatus === "DISPUTED") return "PENDING";
-  if (settlementStatus === "READY" || settlementStatus === "CANCELLED") return "UNPAID";
-  return "UNPAID";
 }
 
-function toActionLabel(status: SettlementStatus) {
-  if (status === "UNPAID") return "결제하기";
+function isUrlMatched(targetUrl: string, expectedBaseUrl: string) {
+  if (!targetUrl || !expectedBaseUrl) return false;
+  return targetUrl.startsWith(expectedBaseUrl);
+}
+
+function isWebViewInternalUrl(url: string) {
+  const lower = String(url || "").toLowerCase();
+  return (
+    lower.startsWith("http://") ||
+    lower.startsWith("https://") ||
+    lower.startsWith("about:blank") ||
+    lower.startsWith("data:")
+  );
+}
+
+function buildTossCheckoutHtml(input: {
+  clientKey: string;
+  amount: number;
+  pgOrderId: string;
+  orderName: string;
+  successUrl: string;
+  failUrl: string;
+}) {
+  const clientKey = escapeHtmlValue(input.clientKey);
+  const amount = Number(input.amount) || 0;
+  const pgOrderId = escapeHtmlValue(input.pgOrderId);
+  const orderName = escapeHtmlValue(input.orderName);
+  const successUrl = escapeHtmlValue(input.successUrl);
+  const failUrl = escapeHtmlValue(input.failUrl);
+
+  return `<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <title>Toss Payment</title>
+  <script src="https://js.tosspayments.com/v1/payment"></script>
+  <style>
+    html, body { margin: 0; padding: 0; background: #ffffff; height: 100%; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .wrap { min-height: 100%; display: flex; align-items: center; justify-content: center; color: #334155; }
+    #payBtn {
+      border: 0;
+      border-radius: 12px;
+      height: 48px;
+      padding: 0 18px;
+      background: #2563eb;
+      color: #fff;
+      font-size: 16px;
+      font-weight: 700;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap"><button id="payBtn">토스 결제 진행</button></div>
+  <script>
+    (function () {
+      var started = false;
+      function startPayment() {
+        if (started) return;
+        started = true;
+      try {
+        var tossPayments = TossPayments("${clientKey}");
+        tossPayments.requestPayment("카드", {
+          amount: ${amount},
+          orderId: "${pgOrderId}",
+          orderName: "${orderName}",
+          successUrl: "${successUrl}",
+          failUrl: "${failUrl}"
+        }).catch(function (error) {
+          window.ReactNativeWebView && window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: "REQUEST_ERROR",
+            message: String(error && error.message ? error.message : error)
+          }));
+          started = false;
+        });
+      } catch (e) {
+        window.ReactNativeWebView && window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: "SCRIPT_ERROR",
+          message: String(e && e.message ? e.message : e)
+        }));
+          started = false;
+      }
+      }
+
+      var payBtn = document.getElementById("payBtn");
+      if (payBtn) payBtn.addEventListener("click", startPayment);
+      setTimeout(startPayment, 120);
+    })();
+  </script>
+</body>
+</html>`;
+}
+
+function toActionLabel(status: SettlementStatus, isTransportCompleted = true) {
+  if (status === "UNPAID") return isTransportCompleted ? "결제하기" : "운송완료 후 결제";
   if (status === "PENDING") return "결제대기";
   if (status === "PAID") return "영수증 확인";
   return "계산서 보기";
@@ -157,14 +254,20 @@ function mapOrderToSettlement(order: OrderResponse, pendingOrderIds?: Set<number
     parseDate(order.endSchedule) || parseDate(order.startSchedule) || parseDate(order.updated) || parseDate(order.createdAt);
   if (!scheduledAt) return null;
 
-  const amount =
-    Number(order.basePrice ?? 0) +
-    Number(order.laborFee ?? 0) +
-    Number(order.packagingPrice ?? 0) +
-    Number(order.insuranceFee ?? 0);
+  if (!isShipperActivePaymentMethod(order.payMethod)) return null;
 
-  const baseStatus = toSettlementStatus(order);
+  const amount = calcOrderAmount(order);
+  const normalizedOrderStatus = String(order.status ?? "").trim().toUpperCase();
+  // 일부 레거시 응답은 settlementStatus가 READY여도 order.status에 결제완료 상태가 들어옴.
+  // 이 경우 결제완료 건이 다시 UNPAID로 보이지 않도록 보정.
+  const paidByOrderStatus =
+    normalizedOrderStatus === "PAID" ||
+    normalizedOrderStatus === "CONFIRMED" ||
+    normalizedOrderStatus === "ADMIN_FORCE_CONFIRMED";
+  const rawBaseStatus = toSettlementStatus(order);
+  const baseStatus = rawBaseStatus === "UNPAID" && paidByOrderStatus ? "PAID" : rawBaseStatus;
   const status = baseStatus === "UNPAID" && pendingOrderIds?.has(Number(order.orderId)) ? "PENDING" : baseStatus;
+  const isTransportCompleted = order.status === "COMPLETED";
   if (__DEV__) {
     console.log("[settlement-map]", {
       orderId: order.orderId,
@@ -181,18 +284,21 @@ function mapOrderToSettlement(order: OrderResponse, pendingOrderIds?: Set<number
     scheduledAt,
     dateLabel: toDateLabel(scheduledAt),
     status,
+    isTransportCompleted,
     from: toShortPlace(order.startAddr || order.startPlace),
     to: toShortPlace(order.endAddr || order.endPlace),
     amount,
-    actionLabel: toActionLabel(status),
+    actionLabel: toActionLabel(status, isTransportCompleted),
     vehicleInfo: vehicleInfo || "-",
-    payMethodLabel: toPayMethodLabel(order.payMethod),
+    payMethodLabel: toPaymentMethodLabel(order.payMethod),
+    isToss: isTossPayment(order.payMethod),
   };
 }
 
 export default function ShipperSettlementScreen() {
   const { colors: c } = useAppTheme();
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const currentMonth = startOfMonth(new Date());
 
   const [filter, setFilter] = useState<SettlementFilter>("ALL");
@@ -201,6 +307,9 @@ export default function ShipperSettlementScreen() {
   const [loading, setLoading] = useState(true);
   const [receiptItem, setReceiptItem] = useState<SettlementItem | null>(null);
   const [submittingOrderId, setSubmittingOrderId] = useState<number | null>(null);
+  const [tossCheckout, setTossCheckout] = useState<TossCheckoutSession | null>(null);
+  const [tossConfirming, setTossConfirming] = useState(false);
+  const handledTossResultUrlRef = useRef<string | null>(null);
 
   const fetchItems = useCallback(async () => {
     const pendingOrderIds = await loadPendingSettlementOrderIds();
@@ -267,6 +376,162 @@ export default function ShipperSettlementScreen() {
     [monthItems]
   );
 
+  const closeTossCheckout = useCallback(() => {
+    if (tossConfirming) return;
+    handledTossResultUrlRef.current = null;
+    setTossCheckout(null);
+    setSubmittingOrderId(null);
+  }, [tossConfirming]);
+
+  const openTossCheckout = useCallback(
+    async (item: SettlementItem) => {
+      const prepared = await PaymentService.prepareTossPayment(item.orderId, {
+        method: "CARD",
+        payChannel: "CARD",
+      });
+
+      setTossCheckout({
+        orderId: item.orderId,
+        successUrl: prepared.successUrl,
+        failUrl: prepared.failUrl,
+        html: buildTossCheckoutHtml({
+          clientKey: prepared.clientKey,
+          amount: prepared.amount,
+          pgOrderId: prepared.pgOrderId,
+          orderName: prepared.orderName || `운송 결제 #${item.orderId}`,
+          successUrl: prepared.successUrl,
+          failUrl: prepared.failUrl,
+        }),
+      });
+      handledTossResultUrlRef.current = null;
+    },
+    []
+  );
+
+  const handleTossSuccessUrl = useCallback(
+    async (url: string) => {
+      if (!tossCheckout) return;
+
+      const paymentKey = parseQueryValue(url, "paymentKey");
+      const pgOrderId = parseQueryValue(url, "orderId");
+      const amountRaw = parseQueryValue(url, "amount");
+      const amount = Number(amountRaw);
+
+      if (!paymentKey) {
+        handledTossResultUrlRef.current = null;
+        setTossCheckout(null);
+        setSubmittingOrderId(null);
+        Alert.alert("결제 오류", "결제 키를 확인할 수 없습니다.");
+        return;
+      }
+
+      try {
+        setTossConfirming(true);
+        await PaymentService.confirmTossPayment(tossCheckout.orderId, {
+          paymentKey,
+          pgOrderId: pgOrderId || undefined,
+          amount: Number.isFinite(amount) ? amount : undefined,
+        });
+
+        const pendingOrderIds = await loadPendingSettlementOrderIds();
+        if (pendingOrderIds.delete(tossCheckout.orderId)) {
+          await savePendingSettlementOrderIds(pendingOrderIds);
+        }
+
+        const refreshed = await fetchItems().catch(() => null);
+        if (refreshed) {
+          setItems(
+            refreshed.map((row) =>
+              row.orderId === tossCheckout.orderId
+                ? { ...row, status: "PAID", actionLabel: toActionLabel("PAID", row.isTransportCompleted) }
+                : row
+            )
+          );
+        } else {
+          setItems((prev) =>
+            prev.map((row) =>
+              row.orderId === tossCheckout.orderId
+                ? { ...row, status: "PAID", actionLabel: toActionLabel("PAID") }
+                : row
+            )
+          );
+        }
+
+        handledTossResultUrlRef.current = null;
+        setTossCheckout(null);
+        Alert.alert("결제 완료", "토스 결제가 완료되었습니다.");
+      } catch (error: any) {
+        const msg = error?.response?.data?.message || error?.message || "토스 결제 확정 중 오류가 발생했습니다.";
+        Alert.alert("결제 오류", String(msg));
+      } finally {
+        setTossConfirming(false);
+        setSubmittingOrderId(null);
+      }
+    },
+    [fetchItems, tossCheckout]
+  );
+
+  const handleTossFailUrl = useCallback((url: string) => {
+    const code = parseQueryValue(url, "code");
+    const message = parseQueryValue(url, "message");
+    handledTossResultUrlRef.current = null;
+    setTossCheckout(null);
+    setSubmittingOrderId(null);
+    Alert.alert("결제 실패", message || code || "토스 결제가 취소되었거나 실패했습니다.");
+  }, []);
+
+  const handleTossResultUrl = useCallback(
+    (url: string) => {
+      if (!tossCheckout) return false;
+      if (isUrlMatched(url, tossCheckout.successUrl)) {
+        if (handledTossResultUrlRef.current === url) return true;
+        handledTossResultUrlRef.current = url;
+        void handleTossSuccessUrl(url);
+        return true;
+      }
+      if (isUrlMatched(url, tossCheckout.failUrl)) {
+        if (handledTossResultUrlRef.current === url) return true;
+        handledTossResultUrlRef.current = url;
+        handleTossFailUrl(url);
+        return true;
+      }
+      return false;
+    },
+    [handleTossFailUrl, handleTossSuccessUrl, tossCheckout]
+  );
+
+  const onTossShouldStartLoadWithRequest = useCallback(
+    (request: { url: string }) => {
+      const url = String(request.url ?? "");
+      const handled = handleTossResultUrl(url);
+      if (handled) return false;
+
+      if (!isWebViewInternalUrl(url)) {
+        void Linking.openURL(url).catch(() => {
+          Alert.alert("결제 안내", "외부 결제 앱을 열 수 없습니다. 카드/은행 앱 설치 여부를 확인해 주세요.");
+        });
+        return false;
+      }
+
+      return true;
+    },
+    [handleTossResultUrl]
+  );
+
+  const onTossMessage = useCallback((event: WebViewMessageEvent) => {
+    try {
+      const payload = JSON.parse(event.nativeEvent.data ?? "{}");
+      if (payload?.type === "REQUEST_ERROR" || payload?.type === "SCRIPT_ERROR") {
+        handledTossResultUrlRef.current = null;
+        Alert.alert("결제 오류", String(payload?.message || "토스 결제창을 열 수 없습니다."));
+        setTossCheckout(null);
+        setSubmittingOrderId(null);
+      }
+    } catch {
+      // noop
+    }
+  }, []);
+
   const onPressAction = async (item: SettlementItem) => {
     if (submittingOrderId === item.orderId) return;
     if (item.status === "PAID") {
@@ -280,6 +545,20 @@ export default function ShipperSettlementScreen() {
     }
     if (item.status === "PENDING") {
       Alert.alert("안내", "결제 요청 처리 중입니다.");
+      return;
+    }
+    if (item.status === "UNPAID" && !item.isTransportCompleted) {
+      // 백엔드 정책: 운송 완료(COMPLETED) 이후에만 결제 시작 가능.
+      Alert.alert("안내", "운송 완료 후 결제할 수 있습니다.");
+      return;
+    }
+
+    if (item.isToss) {
+      // 토스 결제는 정산 화면 인라인 모달이 아니라 전용 라우트 화면에서 처리.
+      router.push({
+        pathname: "/(shipper)/payment-checkout",
+        params: { orderId: String(item.orderId) },
+      } as any);
       return;
     }
 
@@ -484,6 +763,36 @@ export default function ShipperSettlementScreen() {
         } as ViewStyle,
         modalHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" } as ViewStyle,
         modalTitle: { fontSize: 18, fontWeight: "900", color: c.text.primary } as TextStyle,
+        tossSheet: {
+          flex: 1,
+          backgroundColor: "#FFFFFF",
+          paddingTop: insets.top,
+        } as ViewStyle,
+        tossHeader: {
+          height: 52,
+          paddingHorizontal: 12,
+          borderBottomWidth: 1,
+          borderBottomColor: c.border.default,
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+        } as ViewStyle,
+        tossTitle: { fontSize: 16, fontWeight: "800", color: c.text.primary } as TextStyle,
+        tossCloseBtn: {
+          width: 36,
+          height: 36,
+          alignItems: "center",
+          justifyContent: "center",
+        } as ViewStyle,
+        tossWebview: { flex: 1 } as ViewStyle,
+        tossLoading: {
+          position: "absolute",
+          right: 12,
+          top: 14,
+          fontSize: 12,
+          fontWeight: "700",
+          color: c.text.secondary,
+        } as TextStyle,
         receiptCard: {
           marginTop: 10,
           borderRadius: 14,
@@ -601,7 +910,7 @@ export default function ShipperSettlementScreen() {
                               { color: isUnpaid ? "#D44B46" : isPending ? "#A16207" : isPaid ? "#15803D" : "#2E6DA4" },
                             ]}
                           >
-                            {statusLabel(item.status)}
+                            {statusText(item.status)}
                           </Text>
                         </View>
                       </View>
@@ -616,15 +925,18 @@ export default function ShipperSettlementScreen() {
                     <View style={s.actionRow}>
                       {(() => {
                         const isSubmitting = submittingOrderId === item.orderId;
+                        const paymentBlocked = isUnpaid && !item.isTransportCompleted;
                         return (
                       <Pressable
-                        style={[s.actionBtn, !isUnpaid && s.actionBtnNeutral]}
-                        disabled={isSubmitting || isPending}
+                        style={[s.actionBtn, (!isUnpaid || paymentBlocked) && s.actionBtnNeutral]}
+                        disabled={isSubmitting || isPending || paymentBlocked}
                         onPress={() => void onPressAction(item)}
                       >
                         <MaterialCommunityIcons
                           name={
-                            item.status === "PAID"
+                            paymentBlocked
+                              ? "lock-outline"
+                              : item.status === "PAID"
                               ? "file-document-outline"
                               : item.status === "PENDING"
                                 ? "timer-sand"
@@ -633,9 +945,9 @@ export default function ShipperSettlementScreen() {
                                 : "credit-card-outline"
                           }
                           size={14}
-                          color={isUnpaid ? "#4E46E5" : isPending ? "#A16207" : "#64748B"}
+                          color={paymentBlocked ? "#94A3B8" : isUnpaid ? "#4E46E5" : isPending ? "#A16207" : "#64748B"}
                         />
-                        <Text style={[s.actionText, !isUnpaid && s.actionTextNeutral]}>
+                        <Text style={[s.actionText, (!isUnpaid || paymentBlocked) && s.actionTextNeutral]}>
                           {isSubmitting ? "요청중..." : item.actionLabel}
                         </Text>
                       </Pressable>
@@ -649,6 +961,34 @@ export default function ShipperSettlementScreen() {
           )}
         </View>
       </ScrollView>
+
+      <Modal visible={!!tossCheckout} animationType="slide" onRequestClose={closeTossCheckout}>
+        <View style={s.tossSheet}>
+          <View style={s.tossHeader}>
+            <Pressable style={s.tossCloseBtn} disabled={tossConfirming} onPress={closeTossCheckout}>
+              <Ionicons name="close" size={24} color={tossConfirming ? "#CBD5E1" : c.text.primary} />
+            </Pressable>
+            <Text style={s.tossTitle}>토스 결제</Text>
+            <View style={s.tossCloseBtn} />
+            {tossConfirming ? <Text style={s.tossLoading}>결제 확인 중...</Text> : null}
+          </View>
+          {tossCheckout ? (
+            <WebView
+              style={s.tossWebview}
+              originWhitelist={["*"]}
+              source={{ html: tossCheckout.html }}
+              onShouldStartLoadWithRequest={onTossShouldStartLoadWithRequest}
+              onNavigationStateChange={(navState) => {
+                handleTossResultUrl(navState.url);
+              }}
+              onMessage={onTossMessage}
+              javaScriptEnabled
+              domStorageEnabled
+              startInLoadingState
+            />
+          ) : null}
+        </View>
+      </Modal>
 
       <Modal visible={!!receiptItem} transparent animationType="fade" onRequestClose={() => setReceiptItem(null)}>
         <Pressable style={s.modalBackdrop} onPress={() => setReceiptItem(null)}>

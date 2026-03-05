@@ -6,6 +6,8 @@ import {
   Pressable,
   TextInput,
   ScrollView,
+  Modal,
+  Platform,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
@@ -13,7 +15,7 @@ import ShipperScreenHeader from "@/shared/ui/layout/ShipperScreenHeader";
 import { AddressApi } from "@/shared/api/addressService";
 import { Ionicons } from "@expo/vector-icons";
 import { useOrderFilterStore } from "../model/useOrderFilterStore";
-import DateTimePickerModal from "react-native-modal-datetime-picker"; // 상차 일정 지정
+import DateTimePicker from "@react-native-community/datetimepicker";
 
 export default function OrderFilterScreen() {
   const { colors: c } = useAppTheme();
@@ -27,12 +29,25 @@ export default function OrderFilterScreen() {
 
   // 상차 일정
   const [isDatePickerVisible, setDatePickerVisibility] = useState(false);
+  const [tempUploadDate, setTempUploadDate] = useState(new Date());
 
   const handleDateConfirm = (date: Date) => {
     // DB의 START_SCHEDULE 형식에 맞춰 YYYY-MM-DD 포맷으로 저장
     const formattedDate = date.toISOString().split("T")[0];
     filter.setFilter("uploadDate", formattedDate);
+    setTempUploadDate(date);
     setDatePickerVisibility(false);
+  };
+
+  const openDatePicker = () => {
+    const current = filter.uploadDate;
+    if (current && /^\d{4}-\d{2}-\d{2}$/.test(current)) {
+      const parsed = new Date(`${current}T00:00:00`);
+      if (!Number.isNaN(parsed.getTime())) {
+        setTempUploadDate(parsed);
+      }
+    }
+    setDatePickerVisibility(true);
   };
 
   useEffect(() => {
@@ -339,16 +354,65 @@ export default function OrderFilterScreen() {
                 filter.uploadDate !== null &&
                 !["당상", "익상"].includes(filter.uploadDate)
               }
-              onPress={() => setDatePickerVisibility(true)}
+              onPress={openDatePicker}
             />
           </View>
 
-          <DateTimePickerModal
-            isVisible={isDatePickerVisible}
-            mode="date"
-            onConfirm={handleDateConfirm}
-            onCancel={() => setDatePickerVisibility(false)}
-          />
+                    <Modal
+            visible={isDatePickerVisible}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setDatePickerVisibility(false)}
+          >
+            <Pressable
+              style={s.dateModalBackdrop}
+              onPress={() => setDatePickerVisibility(false)}
+            >
+              <Pressable
+                style={[s.dateModalCard, { backgroundColor: c.bg.surface }]}
+                onPress={(e) => e.stopPropagation()}
+              >
+                <DateTimePicker
+                  mode="date"
+                  value={tempUploadDate}
+                  display={Platform.OS === "ios" ? "spinner" : "default"}
+                  onChange={(event, selectedDate) => {
+                    if (selectedDate) {
+                      setTempUploadDate(selectedDate);
+                    }
+
+                    if (Platform.OS === "android") {
+                      if (event.type === "set" && selectedDate) {
+                        handleDateConfirm(selectedDate);
+                      } else {
+                        setDatePickerVisibility(false);
+                      }
+                    }
+                  }}
+                />
+                {Platform.OS === "ios" ? (
+                  <View style={s.dateModalActions}>
+                    <Pressable
+                      style={s.dateModalBtn}
+                      onPress={() => setDatePickerVisibility(false)}
+                    >
+                      <Text style={{ color: c.text.secondary, fontWeight: "700" }}>
+                        취소
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      style={[s.dateModalBtn, { backgroundColor: c.brand.primary }]}
+                      onPress={() => handleDateConfirm(tempUploadDate)}
+                    >
+                      <Text style={{ color: "#FFF", fontWeight: "700" }}>
+                        확인
+                      </Text>
+                    </Pressable>
+                  </View>
+                ) : null}
+              </Pressable>
+            </Pressable>
+          </Modal>
         </View>
 
         <View style={s.divider} />
@@ -424,6 +488,32 @@ const s = StyleSheet.create({
     padding: 16,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: "#F1F5F9",
+  },
+  dateModalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.28)",
+    justifyContent: "center",
+    paddingHorizontal: 20,
+  },
+  dateModalCard: {
+    borderRadius: 16,
+    paddingTop: 8,
+    overflow: "hidden",
+  },
+  dateModalActions: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: 10,
+    paddingHorizontal: 12,
+    paddingBottom: 12,
+    paddingTop: 4,
+  },
+  dateModalBtn: {
+    minWidth: 72,
+    height: 36,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
   },
   selectedContainer: {
     flexDirection: "row",

@@ -7,7 +7,7 @@ import { Badge } from "@/shared/ui/feedback/Badge";
 import { orderCardStyles as s } from "@/shared/ui/business/orderCardStyles";
 
 export type RecommendedOrderCardProps = {
-  statusKey: "MATCHING" | "DISPATCHED" | "DRIVING" | "DONE";
+  statusKey: "MATCHING" | "DISPATCHED" | "DRIVING" | "DONE" | "CANCELLED";
   from: string;
   to: string;
   fromDetail?: string;
@@ -41,7 +41,7 @@ export function RecommendedOrderCard({
 }: RecommendedOrderCardProps) {
   const t = useAppTheme();
   const c = t.colors;
-  const isDone = statusKey === "DONE";
+  const isDone = statusKey === "DONE" || statusKey === "CANCELLED";
   const cardTint = isDone
     ? { bg: "#F3F5F8", border: "#D8DFE8", text: "#8B96A8", borderWidth: 1 }
     : isHighlighted
@@ -54,7 +54,9 @@ export function RecommendedOrderCard({
         ? { label: "확정", bg: c.brand.primary }
         : statusKey === "DRIVING"
           ? { label: "운송중", bg: c.status.danger }
-          : { label: "완료", bg: c.text.secondary };
+          : statusKey === "CANCELLED"
+            ? { label: "취소", bg: c.text.secondary }
+            : { label: "완료", bg: c.text.secondary };
   const normalizeText = (v?: string) => (v || "").trim().replace(/\s+/g, " ");
   const formatMainText = (addr?: string) => {
     const parts = normalizeText(addr).split(" ").filter(Boolean);
