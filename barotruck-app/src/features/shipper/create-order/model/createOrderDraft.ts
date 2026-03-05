@@ -1,3 +1,5 @@
+import type { EnabledShipperPaymentMethod } from "@/features/common/payment/lib/paymentMethods";
+
 export type CreateOrderDraft = {
   editOrderId?: string;
   startSelected: string;
@@ -28,7 +30,7 @@ export type CreateOrderDraft = {
 
   dispatch: "instant" | "direct";
   tripType: "oneWay" | "roundTrip";
-  pay: "card" | "prepaid" | "receipt30" | "monthEnd";
+  pay: EnabledShipperPaymentMethod;
 
   distanceKm: number;
   estimatedDurationMin?: number;
