@@ -3,7 +3,9 @@ import React from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 
 import type { OrderResponse } from "@/shared/models/order";
+import type { RoutePreviewData } from "@/features/shipper/order/ui/orderDetailRoute";
 import { Badge } from "@/shared/ui/feedback/Badge";
+import { RoutePreviewWebView } from "@/shared/ui/business/RoutePreviewModal";
 import { s } from "@/features/shipper/order/ui/OrderDetailScreen.styles";
 import {
   formatAddressBig,
@@ -49,12 +51,15 @@ type BaseProps = {
   shipperInfo: ShipperInfo;
   requestTags: string[];
   requestSummary: string;
-  routeLoading: boolean;
   actionLoading: boolean;
   buttonConfig: ActionButtonConfig | null;
   colors: StatusViewColors;
   onOpenRouteMap: () => void;
   onCopyAddress: (baseAddr?: string, detailAddr?: string) => void;
+  routePreviewData: RoutePreviewData | null;
+  routeWebviewError: string;
+  onChangeRouteWebviewError: (value: string) => void;
+  canRenderRouteMap: boolean;
   onMainAction: () => void;
   onStartChat: () => void;
   onCall: () => void;
@@ -84,12 +89,15 @@ function BaseStatusDetailView({
   shipperInfo,
   requestTags,
   requestSummary,
-  routeLoading,
   actionLoading,
   buttonConfig,
   colors,
   onOpenRouteMap,
   onCopyAddress,
+  routePreviewData,
+  routeWebviewError,
+  onChangeRouteWebviewError,
+  canRenderRouteMap,
   onMainAction,
   onStartChat,
   onCall,
@@ -171,19 +179,7 @@ function BaseStatusDetailView({
         </View>
 
         <View style={s.sectionCard}>
-          <View style={s.routeHeaderRow}>
-            <Text style={s.sectionTitle}>운행 경로</Text>
-            <Pressable style={s.routeMapBtn} onPress={onOpenRouteMap} disabled={routeLoading}>
-              {routeLoading ? (
-                <ActivityIndicator size="small" color="#334155" />
-              ) : (
-                <>
-                  <Ionicons name="map-outline" size={14} color="#334155" />
-                  <Text style={s.routeMapBtnText}>경로 보기</Text>
-                </>
-              )}
-            </Pressable>
-          </View>
+          <Text style={s.sectionTitle}>운행 경로</Text>
           <View style={s.timelineContainer}>
             <View style={s.timelineLine} />
 
@@ -217,6 +213,40 @@ function BaseStatusDetailView({
               </View>
             </View>
           </View>
+        </View>
+
+        <View style={[s.routeMiniCard, { backgroundColor: colors.bgSurface, borderColor: colors.borderDefault }]}>
+          <View style={s.routeMiniHeader}>
+            <Text style={[s.routeMiniTitle, { color: colors.textPrimary }]}>경로 지도</Text>
+            <Pressable style={s.routeMiniExpandBtn} onPress={onOpenRouteMap}>
+              <Text style={s.routeMiniExpandText}>확대</Text>
+            </Pressable>
+          </View>
+          {!canRenderRouteMap ? (
+            <View style={[s.routeMiniEmpty, { borderColor: colors.borderDefault, backgroundColor: colors.bgCanvas }]}>
+              <Text style={[s.routeMiniEmptyText, { color: colors.textSecondary }]}>
+                지도 키 설정 후 경로 지도를 표시할 수 있습니다.
+              </Text>
+            </View>
+          ) : routePreviewData ? (
+            <View style={s.routeMiniMapWrap}>
+              <RoutePreviewWebView
+                data={routePreviewData}
+                onChangeError={onChangeRouteWebviewError}
+                style={s.routeMiniMapWebview}
+              />
+            </View>
+          ) : (
+            <View style={[s.routeMiniEmpty, { borderColor: colors.borderDefault, backgroundColor: colors.bgCanvas }]}>
+              <ActivityIndicator size="small" color="#64748B" />
+              <Text style={[s.routeMiniEmptyText, { color: colors.textSecondary }]}>경로를 불러오는 중입니다.</Text>
+            </View>
+          )}
+          {routeWebviewError ? (
+            <Text style={s.routeMiniErrorText} numberOfLines={2}>
+              {routeWebviewError}
+            </Text>
+          ) : null}
         </View>
 
         <View style={s.sectionCard}>

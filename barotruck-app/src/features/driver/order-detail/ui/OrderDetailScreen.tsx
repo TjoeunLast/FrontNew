@@ -18,7 +18,7 @@ import { useRouter } from "expo-router";
 import apiClient from "@/shared/api/apiClient";
 import { KakaoLocalApi } from "@/shared/api/kakaoLocalService";
 import { ReportService, ReviewService } from "@/shared/api/reviewService";
-import { hasKakaoMapJsKey, RoutePreviewModal } from "@/shared/ui/business/RoutePreviewModal";
+import { hasKakaoMapJsKey, RoutePreviewModal, RoutePreviewWebView } from "@/shared/ui/business/RoutePreviewModal";
 
 import { useOrderDetail } from "../model/useOrderDetail";
 import { Badge } from "@/shared/ui/feedback/Badge";
@@ -41,6 +41,11 @@ type RoutePreviewData = {
   startLabel: string;
   endLabel: string;
   path: RoutePathPoint[];
+};
+type RoutePreviewBuildResult = {
+  data: RoutePreviewData | null;
+  usedFallbackLine: boolean;
+  pathErrorMessage: string;
 };
 
 const KAKAO_MAP_JS_KEY = String(process.env.EXPO_PUBLIC_KAKAO_JAVASCRIPT_KEY ?? "").trim();
@@ -497,7 +502,8 @@ export default function OrderDetailScreen() {
     }
   };
 
-  const resolveRouteCoordinates = async () => {
+  const resolveRouteCoordinates = async (showAlert = true) => {
+    if (!order) return null;
     const directStartLat = toFiniteNumber((order as any)?.startLat);
     const directStartLng = toFiniteNumber((order as any)?.startLng);
     const directEndLat = toFiniteNumber((order as any)?.endLat);
@@ -524,45 +530,38 @@ export default function OrderDetailScreen() {
     ]);
 
     if (!startGeo || !endGeo) {
-      Alert.alert("안내", "출발지/도착지 좌표를 찾지 못했어요. 주소를 확인해주세요.");
+      if (showAlert) Alert.alert("안내", "출발지/도착지 좌표를 찾지 못했어요. 주소를 확인해주세요.");
       return null;
     }
 
     return { startGeo, endGeo };
   };
 
-  const handleOpenRouteMap = async () => {
-    if (!order || routeLoading) return;
-    setRouteLoading(true);
+  const buildRoutePreviewData = async (): Promise<RoutePreviewBuildResult> => {
+    const coords = await resolveRouteCoordinates(false);
+    if (!coords || !order) return { data: null, usedFallbackLine: false, pathErrorMessage: "" };
+    const { startGeo, endGeo } = coords;
+
+    let drivingPath: RoutePathPoint[] | null = null;
+    let pathErrorMessage = "";
     try {
-      const coords = await resolveRouteCoordinates();
-      if (!coords) return;
-      const { startGeo, endGeo } = coords;
-      if (!hasKakaoMapJsKey()) {
-        Alert.alert("안내", "지도 키가 없습니다. .env에 EXPO_PUBLIC_KAKAO_JAVASCRIPT_KEY를 추가해주세요.");
-        return;
-      }
+      drivingPath = await requestDrivingRoutePath({
+        startLat: startGeo.lat,
+        startLng: startGeo.lng,
+        endLat: endGeo.lat,
+        endLng: endGeo.lng,
+      });
+    } catch (pathError) {
+      console.error("도로 경로 좌표 조회 실패:", pathError);
+      pathErrorMessage = pathError instanceof Error ? pathError.message : "unknown_error";
+    }
 
-      setRouteWebviewError("");
-      let drivingPath: RoutePathPoint[] | null = null;
-      let drivingPathErrorMessage = "";
-      try {
-        drivingPath = await requestDrivingRoutePath({
-          startLat: startGeo.lat,
-          startLng: startGeo.lng,
-          endLat: endGeo.lat,
-          endLng: endGeo.lng,
-        });
-      } catch (pathError) {
-        console.error("도로 경로 좌표 조회 실패:", pathError);
-        drivingPathErrorMessage = pathError instanceof Error ? pathError.message : "unknown_error";
-      }
-
-      const fallbackLine = [
-        { lat: startGeo.lat, lng: startGeo.lng },
-        { lat: endGeo.lat, lng: endGeo.lng },
-      ];
-      setRoutePreviewData({
+    const fallbackLine = [
+      { lat: startGeo.lat, lng: startGeo.lng },
+      { lat: endGeo.lat, lng: endGeo.lng },
+    ];
+    return {
+      data: {
         startLat: startGeo.lat,
         startLng: startGeo.lng,
         endLat: endGeo.lat,
@@ -570,9 +569,32 @@ export default function OrderDetailScreen() {
         startLabel: normalizeDisplayText(order.startAddr) || "출발지",
         endLabel: normalizeDisplayText(order.endAddr) || "도착지",
         path: drivingPath && drivingPath.length >= 2 ? drivingPath : fallbackLine,
-      });
-      if (!drivingPath || drivingPath.length < 2) {
-        const suffix = drivingPathErrorMessage ? `\n(${drivingPathErrorMessage})` : "";
+      },
+      usedFallbackLine: !drivingPath || drivingPath.length < 2,
+      pathErrorMessage,
+    };
+  };
+
+  const handleOpenRouteMap = async () => {
+    if (!order || routeLoading) return;
+    setRouteLoading(true);
+    try {
+      const result = routePreviewData
+        ? { data: routePreviewData, usedFallbackLine: false, pathErrorMessage: "" }
+        : await buildRoutePreviewData();
+      if (!result.data) {
+        await resolveRouteCoordinates(true);
+        return;
+      }
+      setRoutePreviewData(result.data);
+      if (!hasKakaoMapJsKey()) {
+        Alert.alert("안내", "지도 키가 없습니다. .env에 EXPO_PUBLIC_KAKAO_JAVASCRIPT_KEY를 추가해주세요.");
+        return;
+      }
+
+      setRouteWebviewError("");
+      if (result.usedFallbackLine) {
+        const suffix = result.pathErrorMessage ? `\n(${result.pathErrorMessage})` : "";
         Alert.alert(
           "안내",
           `자동차 도로 경로를 불러오지 못해 직선으로 표시됩니다. REST 키/모빌리티 권한을 확인해주세요.${suffix}`
@@ -758,23 +780,6 @@ export default function OrderDetailScreen() {
           <Text style={[s.sectionTitle, { color: c.text.primary }]}>
             운행 경로
           </Text>
-          <View style={s.routeHeaderRow}>
-            <View />
-            <Pressable
-              style={s.routeMapBtn}
-              onPress={() => void handleOpenRouteMap()}
-              disabled={routeLoading}
-            >
-              {routeLoading ? (
-                <ActivityIndicator size="small" color="#334155" />
-              ) : (
-                <>
-                  <Ionicons name="map-outline" size={14} color="#334155" />
-                  <Text style={s.routeMapBtnText}>경로 보기</Text>
-                </>
-              )}
-            </Pressable>
-          </View>
           <View style={s.timelineContainer}>
             <View
               style={[s.timelineLine, { backgroundColor: c.border.default }]}
@@ -824,6 +829,64 @@ export default function OrderDetailScreen() {
           </View>
         </View>
 
+        <View
+          style={[
+            s.routeMiniCard,
+            {
+              backgroundColor: c.bg.surface,
+              borderColor: c.border.default,
+            },
+          ]}
+        >
+          <View style={s.routeMiniHeader}>
+            <Text style={[s.routeMiniTitle, { color: c.text.primary }]}>경로 지도</Text>
+            <Pressable style={s.routeMiniExpandBtn} onPress={() => void handleOpenRouteMap()}>
+              <Text style={s.routeMiniExpandText}>확대</Text>
+            </Pressable>
+          </View>
+          {!hasKakaoMapJsKey() ? (
+            <View
+              style={[
+                s.routeMiniEmpty,
+                {
+                  borderColor: c.border.default,
+                  backgroundColor: c.bg.canvas,
+                },
+              ]}
+            >
+              <Text style={[s.routeMiniEmptyText, { color: c.text.secondary }]}>
+                지도 키 설정 후 경로 지도를 표시할 수 있습니다.
+              </Text>
+            </View>
+          ) : routePreviewData ? (
+            <View style={s.routeMiniMapWrap}>
+              <RoutePreviewWebView
+                data={routePreviewData}
+                onChangeError={setRouteWebviewError}
+                style={s.routeMiniMapWebview}
+              />
+            </View>
+          ) : (
+            <View
+              style={[
+                s.routeMiniEmpty,
+                {
+                  borderColor: c.border.default,
+                  backgroundColor: c.bg.canvas,
+                },
+              ]}
+            >
+              <Ionicons name="map-outline" size={18} color="#64748B" />
+              <Text style={[s.routeMiniEmptyText, { color: c.text.secondary }]}>확대를 눌러 경로를 불러오세요.</Text>
+            </View>
+          )}
+          {routeWebviewError ? (
+            <Text style={s.routeMiniErrorText} numberOfLines={2}>
+              {routeWebviewError}
+            </Text>
+          ) : null}
+        </View>
+
         {/* 화물 정보 */}
         <View style={[s.sectionCard, { backgroundColor: c.bg.surface }]}>
           <Text style={[s.sectionTitle, { color: c.text.primary }]}>
@@ -834,12 +897,45 @@ export default function OrderDetailScreen() {
               label="화물종류"
               value={cargoName}
               subValue={`포장 여부 ${packagingOx}`}
+              bgColor={c.bg.canvas}
+              textPrimary={c.text.primary}
+              textSecondary={c.text.secondary}
             />
-            <GridItem label="운송방식" value={order.driveMode || "독차"} />
-            <GridItem label="상하차방법" value={order.loadMethod || "지게차"} />
-            <GridItem label="요청차종" value={order.reqCarType || "카고"} />
-            <GridItem label="요청톤수" value={order.reqTonnage || "1톤"} />
-            <GridItem label="작업유형" value={order.workType || "일반"} />
+            <GridItem
+              label="운송방식"
+              value={order.driveMode || "독차"}
+              bgColor={c.bg.canvas}
+              textPrimary={c.text.primary}
+              textSecondary={c.text.secondary}
+            />
+            <GridItem
+              label="상하차방법"
+              value={order.loadMethod || "지게차"}
+              bgColor={c.bg.canvas}
+              textPrimary={c.text.primary}
+              textSecondary={c.text.secondary}
+            />
+            <GridItem
+              label="요청차종"
+              value={order.reqCarType || "카고"}
+              bgColor={c.bg.canvas}
+              textPrimary={c.text.primary}
+              textSecondary={c.text.secondary}
+            />
+            <GridItem
+              label="요청톤수"
+              value={order.reqTonnage || "1톤"}
+              bgColor={c.bg.canvas}
+              textPrimary={c.text.primary}
+              textSecondary={c.text.secondary}
+            />
+            <GridItem
+              label="작업유형"
+              value={order.workType || "일반"}
+              bgColor={c.bg.canvas}
+              textPrimary={c.text.primary}
+              textSecondary={c.text.secondary}
+            />
           </View>
         </View>
 
@@ -1175,18 +1271,23 @@ const GridItem = ({
   label,
   value,
   subValue,
+  bgColor,
+  textPrimary,
+  textSecondary,
 }: {
   label: string;
   value: string;
   subValue?: string;
+  bgColor: string;
+  textPrimary: string;
+  textSecondary: string;
 }) => {
-  const { colors: c } = useAppTheme();
   return (
-    <View style={[s.gridItem, { backgroundColor: c.bg.canvas }]}>
-      <Text style={[s.gridLabel, { color: c.text.secondary }]}>{label}</Text>
-      <Text style={[s.gridValue, { color: c.text.primary }]}>{value}</Text>
+    <View style={[s.gridItem, { backgroundColor: bgColor }]}>
+      <Text style={[s.gridLabel, { color: textSecondary }]}>{label}</Text>
+      <Text style={[s.gridValue, { color: textPrimary }]}>{value}</Text>
       {subValue ? (
-        <Text style={[s.gridSubValue, { color: c.text.secondary }]}>{subValue}</Text>
+        <Text style={[s.gridSubValue, { color: textSecondary }]}>{subValue}</Text>
       ) : null}
     </View>
   );
@@ -1212,30 +1313,69 @@ const s = StyleSheet.create({
   card: { borderRadius: 24, padding: 20, marginBottom: 16 },
   sectionCard: { borderRadius: 24, padding: 20, marginBottom: 16 },
   sectionTitle: { fontSize: 16, fontWeight: "800", marginBottom: 16 },
-  routeHeaderRow: {
+  routeMiniCard: {
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 12,
+    marginBottom: 16,
+  },
+  routeMiniHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginTop: -8,
-    marginBottom: 8,
+    marginBottom: 10,
   },
-  routeMapBtn: {
-    minWidth: 86,
-    height: 30,
+  routeMiniTitle: {
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  routeMiniExpandBtn: {
+    height: 26,
     paddingHorizontal: 10,
     borderRadius: 999,
     borderWidth: 1,
     borderColor: "#CBD5E1",
     backgroundColor: "#F8FAFC",
-    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 4,
   },
-  routeMapBtnText: {
-    fontSize: 12,
+  routeMiniExpandText: {
+    fontSize: 11,
     fontWeight: "700",
     color: "#334155",
+  },
+  routeMiniMapWrap: {
+    height: 180,
+    borderRadius: 12,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    backgroundColor: "#FFFFFF",
+  },
+  routeMiniMapWebview: {
+    flex: 1,
+    backgroundColor: "#FFFFFF",
+  },
+  routeMiniEmpty: {
+    height: 120,
+    borderWidth: 1,
+    borderStyle: "dashed",
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingHorizontal: 12,
+  },
+  routeMiniEmptyText: {
+    fontSize: 12,
+    fontWeight: "600",
+    textAlign: "center",
+  },
+  routeMiniErrorText: {
+    marginTop: 8,
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#B91C1C",
   },
   cardTop: {
     flexDirection: "row",

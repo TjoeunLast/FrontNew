@@ -38,6 +38,11 @@ import type { AssignedDriverInfoResponse, OrderResponse } from "@/shared/models/
 import { hasKakaoMapJsKey } from "@/shared/ui/business/RoutePreviewModal";
 
 type ReportType = "ACCIDENT" | "NO_SHOW" | "RUDE" | "ETC";
+type RoutePreviewBuildResult = {
+  data: RoutePreviewData | null;
+  usedFallbackLine: boolean;
+  pathErrorMessage: string;
+};
 
 const REVIEWED_ORDER_IDS_STORAGE_KEY = "baro_shipper_reviewed_order_ids_v1";
 
@@ -505,65 +510,55 @@ export default function OrderDetailScreen() {
     }
   };
 
-  const handleOpenRouteMap = async () => {
-    if (!order || routeLoading) return;
-    setRouteLoading(true);
+  const buildRoutePreviewData = async (): Promise<RoutePreviewBuildResult> => {
+    if (!order) return { data: null, usedFallbackLine: false, pathErrorMessage: "" };
+
+    const directStartLat = toFiniteNumber((order as any)?.startLat);
+    const directStartLng = toFiniteNumber((order as any)?.startLng);
+    const directEndLat = toFiniteNumber((order as any)?.endLat);
+    const directEndLng = toFiniteNumber((order as any)?.endLng);
+
+    const startAddress = [normalizeDisplayText(order.startAddr), normalizeDisplayText(order.startPlace)]
+      .filter(Boolean)
+      .join(" ");
+    const endAddress = [normalizeDisplayText(order.endAddr), normalizeDisplayText(order.endPlace)]
+      .filter(Boolean)
+      .join(" ");
+
+    const [startGeo, endGeo] = await Promise.all([
+      directStartLat !== null && directStartLng !== null
+        ? Promise.resolve({ lat: directStartLat, lng: directStartLng })
+        : startAddress
+          ? KakaoLocalApi.geocodeAddress(startAddress).catch(() => null)
+          : Promise.resolve(null),
+      directEndLat !== null && directEndLng !== null
+        ? Promise.resolve({ lat: directEndLat, lng: directEndLng })
+        : endAddress
+          ? KakaoLocalApi.geocodeAddress(endAddress).catch(() => null)
+          : Promise.resolve(null),
+    ]);
+    if (!startGeo || !endGeo) return { data: null, usedFallbackLine: false, pathErrorMessage: "" };
+
+    let drivingPath: RoutePathPoint[] | null = null;
+    let pathErrorMessage = "";
     try {
-      const directStartLat = toFiniteNumber((order as any)?.startLat);
-      const directStartLng = toFiniteNumber((order as any)?.startLng);
-      const directEndLat = toFiniteNumber((order as any)?.endLat);
-      const directEndLng = toFiniteNumber((order as any)?.endLng);
+      drivingPath = await requestDrivingRoutePath({
+        startLat: startGeo.lat,
+        startLng: startGeo.lng,
+        endLat: endGeo.lat,
+        endLng: endGeo.lng,
+      });
+    } catch (pathError) {
+      console.error("도로 경로 좌표 조회 실패:", pathError);
+      pathErrorMessage = pathError instanceof Error ? pathError.message : "unknown_error";
+    }
 
-      const startAddress = [normalizeDisplayText(order.startAddr), normalizeDisplayText(order.startPlace)]
-        .filter(Boolean)
-        .join(" ");
-      const endAddress = [normalizeDisplayText(order.endAddr), normalizeDisplayText(order.endPlace)]
-        .filter(Boolean)
-        .join(" ");
-
-      const [startGeo, endGeo] = await Promise.all([
-        directStartLat !== null && directStartLng !== null
-          ? Promise.resolve({ lat: directStartLat, lng: directStartLng })
-          : startAddress
-            ? KakaoLocalApi.geocodeAddress(startAddress).catch(() => null)
-            : Promise.resolve(null),
-        directEndLat !== null && directEndLng !== null
-          ? Promise.resolve({ lat: directEndLat, lng: directEndLng })
-          : endAddress
-            ? KakaoLocalApi.geocodeAddress(endAddress).catch(() => null)
-            : Promise.resolve(null),
-      ]);
-
-      if (!startGeo || !endGeo) {
-        Alert.alert("안내", "출발지/도착지 좌표를 찾지 못했어요. 주소를 확인해주세요.");
-        return;
-      }
-
-      if (!hasKakaoMapJsKey()) {
-        Alert.alert("안내", "지도 키가 없습니다. .env에 EXPO_PUBLIC_KAKAO_JAVASCRIPT_KEY를 추가해주세요.");
-        return;
-      }
-
-      setRouteWebviewError("");
-      let drivingPath: RoutePathPoint[] | null = null;
-      let drivingPathErrorMessage = "";
-      try {
-        drivingPath = await requestDrivingRoutePath({
-          startLat: startGeo.lat,
-          startLng: startGeo.lng,
-          endLat: endGeo.lat,
-          endLng: endGeo.lng,
-        });
-      } catch (pathError) {
-        console.error("도로 경로 좌표 조회 실패:", pathError);
-        drivingPathErrorMessage = pathError instanceof Error ? pathError.message : "unknown_error";
-      }
-
-      const fallbackLine = [
-        { lat: startGeo.lat, lng: startGeo.lng },
-        { lat: endGeo.lat, lng: endGeo.lng },
-      ];
-      setRoutePreviewData({
+    const fallbackLine = [
+      { lat: startGeo.lat, lng: startGeo.lng },
+      { lat: endGeo.lat, lng: endGeo.lng },
+    ];
+    return {
+      data: {
         startLat: startGeo.lat,
         startLng: startGeo.lng,
         endLat: endGeo.lat,
@@ -571,9 +566,56 @@ export default function OrderDetailScreen() {
         startLabel: normalizeDisplayText(order.startAddr) || "출발지",
         endLabel: normalizeDisplayText(order.endAddr) || "도착지",
         path: drivingPath && drivingPath.length >= 2 ? drivingPath : fallbackLine,
-      });
-      if (!drivingPath || drivingPath.length < 2) {
-        const suffix = drivingPathErrorMessage ? `\n(${drivingPathErrorMessage})` : "";
+      },
+      usedFallbackLine: !drivingPath || drivingPath.length < 2,
+      pathErrorMessage,
+    };
+  };
+
+  useEffect(() => {
+    let active = true;
+    setRoutePreviewData(null);
+    setRouteWebviewError("");
+
+    if (!order) return () => void 0;
+
+    setRouteLoading(true);
+    void (async () => {
+      try {
+        const result = await buildRoutePreviewData();
+        if (!active) return;
+        if (result.data) setRoutePreviewData(result.data);
+      } finally {
+        if (active) setRouteLoading(false);
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [order?.orderId]);
+
+  const handleOpenRouteMap = async () => {
+    if (!order || routeLoading) return;
+    setRouteLoading(true);
+    try {
+      const result = routePreviewData
+        ? { data: routePreviewData, usedFallbackLine: false, pathErrorMessage: "" }
+        : await buildRoutePreviewData();
+      if (!result.data) {
+        Alert.alert("안내", "출발지/도착지 좌표를 찾지 못했어요. 주소를 확인해주세요.");
+        return;
+      }
+      setRoutePreviewData(result.data);
+
+      if (!hasKakaoMapJsKey()) {
+        Alert.alert("안내", "지도 키가 없습니다. .env에 EXPO_PUBLIC_KAKAO_JAVASCRIPT_KEY를 추가해주세요.");
+        return;
+      }
+
+      setRouteWebviewError("");
+      if (result.usedFallbackLine) {
+        const suffix = result.pathErrorMessage ? `\n(${result.pathErrorMessage})` : "";
         Alert.alert(
           "안내",
           `자동차 도로 경로를 불러오지 못해 직선으로 표시됩니다. REST 키/모빌리티 권한을 확인해주세요.${suffix}`
@@ -633,7 +675,10 @@ export default function OrderDetailScreen() {
               shipperInfo={shipperInfo}
               requestTags={requestTags}
               requestSummary={requestSummary}
-              routeLoading={routeLoading}
+              routePreviewData={routePreviewData}
+              routeWebviewError={routeWebviewError}
+              onChangeRouteWebviewError={setRouteWebviewError}
+              canRenderRouteMap={hasKakaoMapJsKey()}
               actionLoading={actionLoading}
               buttonConfig={buttonConfig}
               colors={{

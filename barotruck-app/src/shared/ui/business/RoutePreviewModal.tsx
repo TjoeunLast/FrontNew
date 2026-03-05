@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
-import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Modal, Pressable, StyleProp, StyleSheet, Text, View, ViewStyle } from "react-native";
 import { WebView } from "react-native-webview";
 
 export type RoutePathPoint = {
@@ -31,6 +31,12 @@ type RoutePreviewModalProps = {
     textPrimary: string;
     textSecondary: string;
   };
+};
+
+type RoutePreviewWebViewProps = {
+  data: RoutePreviewData | null;
+  onChangeError: (message: string) => void;
+  style?: StyleProp<ViewStyle>;
 };
 
 const KAKAO_MAP_JS_KEY = String(process.env.EXPO_PUBLIC_KAKAO_JAVASCRIPT_KEY ?? "").trim();
@@ -197,10 +203,7 @@ function buildRoutePreviewHtml(payload: RoutePreviewData): string {
           var bounds = new kakao.maps.LatLngBounds();
           bounds.extend(startPos);
           bounds.extend(endPos);
-          map.setBounds(bounds, 40, 40, 40, 40);
-          var currentLevel = map.getLevel();
-          var zoomedLevel = Math.max(1, currentLevel - 1);
-          map.setLevel(zoomedLevel);
+          map.setBounds(bounds, 64, 64, 64, 64);
           window.__notify({ type: "map_ready" });
         });
       })();
@@ -247,40 +250,48 @@ export function RoutePreviewModal({
               <Text style={s.errorText}>{errorMessage}</Text>
             </View>
           ) : null}
-          {data ? (
-            <WebView
-              originWhitelist={["*"]}
-              source={{
-                html: buildRoutePreviewHtml(data),
-                baseUrl: KAKAO_MAP_WEBVIEW_BASE_URL,
-              }}
-              style={s.webview}
-              javaScriptEnabled
-              domStorageEnabled
-              onMessage={(event) => {
-                try {
-                  const payload = JSON.parse(event.nativeEvent.data ?? "{}");
-                  if (payload?.type === "map_ready") {
-                    onChangeError("");
-                    return;
-                  }
-                  if (payload?.type === "sdk_error" || payload?.type === "sdk_missing") {
-                    onChangeError("카카오 지도 SDK 로드 실패: JavaScript 키와 Web 플랫폼 도메인을 확인해주세요.");
-                  }
-                } catch {
-                  // noop
-                }
-              }}
-              onError={() => onChangeError("지도 로딩 중 오류가 발생했습니다. 네트워크/도메인 설정을 확인해주세요.")}
-            />
-          ) : (
-            <View style={s.empty}>
-              <ActivityIndicator color={colors.textSecondary} />
-            </View>
-          )}
+          <RoutePreviewWebView data={data} onChangeError={onChangeError} style={s.webview} />
         </View>
       </View>
     </Modal>
+  );
+}
+
+export function RoutePreviewWebView({ data, onChangeError, style }: RoutePreviewWebViewProps) {
+  if (!data) {
+    return (
+      <View style={s.empty}>
+        <ActivityIndicator color="#64748B" />
+      </View>
+    );
+  }
+
+  return (
+    <WebView
+      originWhitelist={["*"]}
+      source={{
+        html: buildRoutePreviewHtml(data),
+        baseUrl: KAKAO_MAP_WEBVIEW_BASE_URL,
+      }}
+      style={style}
+      javaScriptEnabled
+      domStorageEnabled
+      onMessage={(event) => {
+        try {
+          const payload = JSON.parse(event.nativeEvent.data ?? "{}");
+          if (payload?.type === "map_ready") {
+            onChangeError("");
+            return;
+          }
+          if (payload?.type === "sdk_error" || payload?.type === "sdk_missing") {
+            onChangeError("카카오 지도 SDK 로드 실패: JavaScript 키와 Web 플랫폼 도메인을 확인해주세요.");
+          }
+        } catch {
+          // noop
+        }
+      }}
+      onError={() => onChangeError("지도 로딩 중 오류가 발생했습니다. 네트워크/도메인 설정을 확인해주세요.")}
+    />
   );
 }
 
