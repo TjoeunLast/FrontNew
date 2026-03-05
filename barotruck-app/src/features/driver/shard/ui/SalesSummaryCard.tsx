@@ -1,18 +1,17 @@
 import React from "react";
-import { View, Text, StyleSheet, ViewStyle, StyleProp } from "react-native";
+import { StyleProp, StyleSheet, Text, View, ViewStyle } from "react-native";
 
-// 유틸 함수 (컴포넌트 내부에서만 사용)
 function toWon(v: number) {
   return `${v.toLocaleString("ko-KR")}원`;
 }
 
 interface SalesSummaryCardProps {
-  title?: string; // 직접 타이틀을 지정하고 싶을 때 (예: "이번 달 총 매출")
-  monthNumber?: number; // 월 숫자만 넘겨서 "X월 총 운송 매출"로 표시하고 싶을 때
+  title?: string;
+  monthNumber?: number;
   totalAmount: number;
   settledAmount: number;
   pendingAmount: number;
-  style?: StyleProp<ViewStyle>; // 외부에서 여백(margin) 등을 조정하고 싶을 때
+  style?: StyleProp<ViewStyle>;
 }
 
 export const SalesSummaryCard = ({
@@ -23,26 +22,33 @@ export const SalesSummaryCard = ({
   pendingAmount,
   style,
 }: SalesSummaryCardProps) => {
-  // title prop이 있으면 그걸 쓰고, 없으면 monthNumber를 조합해서 사용, 둘 다 없으면 기본 문구
   const displayTitle =
     title || (monthNumber ? `${monthNumber}월 총 운송 매출` : "총 운송 매출");
 
   return (
-    <View style={[s.summaryCard, style]}>
-      <Text style={s.summaryCaption}>{displayTitle}</Text>
-      <Text style={s.summaryAmount}>{toWon(totalAmount)}</Text>
-      <View style={s.summaryDivider} />
-      <View style={s.summaryBottomRow}>
-        <View style={s.summaryCol}>
-          <Text style={s.summarySmall}>입금 완료</Text>
-          <Text style={s.summaryGreen}>{toWon(settledAmount)}</Text>
-        </View>
-        <View style={s.summaryColDivider} />
-        <View style={s.summaryCol}>
-          <Text style={[s.summarySmall, s.summaryRight]}>입금 예정</Text>
-          <Text style={[s.summaryWhite, s.summaryRight]}>
-            {toWon(pendingAmount)}
-          </Text>
+    <View style={[s.card, style]}>
+      <View style={s.bgCircle1} />
+      <View style={s.bgCircle2} />
+      <View style={s.bgCircle3} />
+
+      <View style={s.content}>
+        <Text style={s.caption}>{displayTitle}</Text>
+        <Text style={s.amount}>{toWon(totalAmount)}</Text>
+
+        <View style={s.divider} />
+
+        <View style={s.bottomRow}>
+          <View style={s.col}>
+            <Text style={s.smallText}>입금 완료</Text>
+            <Text style={s.greenText}>{toWon(settledAmount)}</Text>
+          </View>
+          <View style={s.colDivider} />
+          <View style={s.col}>
+            <Text style={[s.smallText, s.rightAlign]}>입금 예정</Text>
+            <Text style={[s.whiteText, s.rightAlign]}>
+              {toWon(pendingAmount)}
+            </Text>
+          </View>
         </View>
       </View>
     </View>
@@ -50,44 +56,97 @@ export const SalesSummaryCard = ({
 };
 
 const s = StyleSheet.create({
-  summaryCard: {
-    borderRadius: 18,
-    paddingHorizontal: 18,
-    paddingVertical: 16,
+  card: {
+    borderRadius: 20,
     backgroundColor: "#4E46E5",
+    overflow: "hidden",
+    position: "relative",
+    shadowColor: "#4E46E5",
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 4,
   },
-  summaryCaption: { fontSize: 12, fontWeight: "700", color: "#DCD9FF" },
-  summaryAmount: {
-    marginTop: 8,
-    fontSize: 21,
+  bgCircle1: {
+    position: "absolute",
+    top: -40,
+    right: -20,
+    width: 150,
+    height: 150,
+    borderRadius: 75,
+    backgroundColor: "rgba(255, 255, 255, 0.08)",
+  },
+  bgCircle2: {
+    position: "absolute",
+    bottom: -50,
+    left: -30,
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
+  },
+  bgCircle3: {
+    position: "absolute",
+    top: 40,
+    right: 80,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(255, 255, 255, 0.06)",
+  },
+  content: {
+    paddingHorizontal: 24,
+    paddingVertical: 24,
+  },
+  caption: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "rgba(255, 255, 255, 0.8)",
+  },
+  amount: {
+    marginTop: 6,
+    fontSize: 28,
     fontWeight: "900",
     color: "#FFFFFF",
+    letterSpacing: -0.5,
   },
-  summaryDivider: {
-    marginTop: 14,
-    marginBottom: 12,
+  divider: {
+    marginTop: 22,
+    marginBottom: 18,
     height: 1,
-    backgroundColor: "rgba(255,255,255,0.2)",
+    backgroundColor: "rgba(255, 255, 255, 0.15)",
   },
-  summaryBottomRow: { flexDirection: "row", alignItems: "center" },
-  summaryCol: { flex: 1 },
-  summaryColDivider: {
+  bottomRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  col: {
+    flex: 1,
+  },
+  colDivider: {
     width: 1,
-    height: 44,
-    backgroundColor: "rgba(255,255,255,0.3)",
+    height: 36,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    marginHorizontal: 16,
   },
-  summarySmall: { fontSize: 12, fontWeight: "700", color: "#DCD9FF" },
-  summaryGreen: {
-    marginTop: 4,
-    fontSize: 16,
-    fontWeight: "900",
-    color: "#74D39E",
+  smallText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "rgba(255, 255, 255, 0.7)",
   },
-  summaryWhite: {
-    marginTop: 4,
-    fontSize: 16,
-    fontWeight: "900",
+  greenText: {
+    marginTop: 6,
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#4ADE80",
+  },
+  whiteText: {
+    marginTop: 6,
+    fontSize: 18,
+    fontWeight: "800",
     color: "#FFFFFF",
   },
-  summaryRight: { textAlign: "right" },
+  rightAlign: {
+    textAlign: "right",
+  },
 });
