@@ -31,27 +31,10 @@ export const UserService = {
   getMyInfo: async (): Promise<UserProfile> => {
     const snapshot = await getCurrentUserSnapshot();
 
-    if (USE_MOCK) {
-      const session = await readMockSession();
-      const role = session.role ?? "SHIPPER";
-      const baseProfile: UserProfile = {
-        userId: Number(session.userId ?? 1),
-        email: String(session.email ?? "mock@baro.local"),
-        nickname: String(session.nickname ?? "목업유저"),
-        name: String(session.nickname ?? "목업유저"),
-        profileImageUrl: undefined,
-        phone: String(session.phone ?? "01012345678"),
-        role,
-        ratingAvg: 4.8,
-      };
-      return {
-        ...baseProfile,
-        nickname: String(snapshot?.nickname ?? baseProfile.nickname).trim() || baseProfile.nickname,
-        name: String(snapshot?.name ?? snapshot?.nickname ?? baseProfile.name).trim() || baseProfile.name,
-      };
-    }
+
     const res = await apiClient.get('/api/user/me');
     const baseProfile = res.data as UserProfile;
+    console.log("🌐 [UserService] 서버에서 받은 프로필 정보:", baseProfile);
     return {
       ...baseProfile,
       nickname: String(snapshot?.nickname ?? baseProfile.nickname).trim() || baseProfile.nickname,
@@ -62,7 +45,6 @@ export const UserService = {
   /** * 2. 차주 프로필 저장/수정 (DriverController /api/v1/drivers/me) 
    */
   saveDriverProfile: async (data: DriverInfo): Promise<string> => {
-    if (USE_MOCK) return `목업 차주 프로필 저장 완료: ${data.carNum}`;
     const res = await apiClient.post('/api/v1/drivers/me', data);
     return res.data;
   },
@@ -70,7 +52,6 @@ export const UserService = {
   /** * 3. 화주 프로필 저장/수정 (ShipperController /api/v1/shippers/me) 
    */
   saveShipperProfile: async (data: ShipperInfo): Promise<string> => {
-    if (USE_MOCK) return `목업 화주 프로필 저장 완료: ${data.companyName}`;
     const res = await apiClient.post('/api/v1/shippers/me', data);
     return res.data;
   },
@@ -79,7 +60,6 @@ export const UserService = {
    * 백엔드 응답 형식: {"isDuplicated": true/false}
    */
   checkNickname: async (nickname: string): Promise<boolean> => {
-    if (USE_MOCK) return false;
     const res = await apiClient.get('/api/user/check-nickname', {
       params: { nickname }
     });
@@ -104,7 +84,6 @@ export const UserService = {
 
   /** * 6. 회원 탈퇴 (POST /api/user/delete) */
   deleteUser: async (): Promise<string> => {
-    if (USE_MOCK) return "목업 회원 탈퇴 처리되었습니다.";
     const res = await apiClient.post('/api/user/delete');
     return res.data;
   },
