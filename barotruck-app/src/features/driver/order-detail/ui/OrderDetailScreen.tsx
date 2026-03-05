@@ -12,10 +12,13 @@ import {
   Modal,
   TextInput,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import apiClient from "@/shared/api/apiClient";
+import { KakaoLocalApi } from "@/shared/api/kakaoLocalService";
 import { ReportService, ReviewService } from "@/shared/api/reviewService";
+import { hasKakaoMapJsKey, RoutePreviewModal, RoutePreviewWebView } from "@/shared/ui/business/RoutePreviewModal";
 
 import { useOrderDetail } from "../model/useOrderDetail";
 import { Badge } from "@/shared/ui/feedback/Badge";
@@ -26,6 +29,44 @@ import OrderDetailPageFrame from "./OrderDetailPageFrame";
 const { width } = Dimensions.get("window");
 type ReportType = "ACCIDENT" | "NO_SHOW" | "RUDE" | "ETC";
 const REVIEWED_ORDER_IDS_STORAGE_KEY = "baro_driver_reviewed_order_ids_v1";
+type RoutePathPoint = {
+  lat: number;
+  lng: number;
+};
+type RoutePreviewData = {
+  startLat: number;
+  startLng: number;
+  endLat: number;
+  endLng: number;
+  startLabel: string;
+  endLabel: string;
+  path: RoutePathPoint[];
+};
+type RoutePreviewBuildResult = {
+  data: RoutePreviewData | null;
+  usedFallbackLine: boolean;
+  pathErrorMessage: string;
+};
+
+const KAKAO_MAP_JS_KEY = String(process.env.EXPO_PUBLIC_KAKAO_JAVASCRIPT_KEY ?? "").trim();
+const KAKAO_MAP_WEBVIEW_BASE_URL = String(process.env.EXPO_PUBLIC_KAKAO_WEBVIEW_BASE_URL ?? "https://localhost").trim();
+const KAKAO_REST_API_KEY = String(process.env.EXPO_PUBLIC_KAKAO_REST_API_KEY ?? "").trim();
+
+interface KakaoMobilityRoad {
+  vertexes?: unknown;
+}
+
+interface KakaoMobilitySection {
+  roads?: KakaoMobilityRoad[];
+}
+
+interface KakaoMobilityRoute {
+  sections?: KakaoMobilitySection[];
+}
+
+interface KakaoMobilityDirectionsResponse {
+  routes?: KakaoMobilityRoute[];
+}
 
 async function loadReviewedOrderIds() {
   try {
@@ -57,14 +98,136 @@ function buildChatLocationLabel(addr?: string, place?: string) {
   return `${parts[0]} ${parts[1]}`;
 }
 
+function normalizeDisplayText(value?: string) {
+  const s = String(value ?? "").trim();
+  if (!s) return "";
+  if (s.toLowerCase() === "null" || s.toLowerCase() === "undefined") return "";
+  return s;
+}
+
+function parseCargoAndRequests(raw?: string) {
+  const text = String(raw ?? "").trim();
+  if (!text) return { cargo: "", requests: [] as string[], tags: [] as string[], packaging: "" };
+
+  const parts = text
+    .split(/\s*\|\s*/)
+    .map((x) => x.trim())
+    .filter(Boolean);
+
+  if (parts.length <= 1) return { cargo: text, requests: [] as string[], tags: [] as string[], packaging: "" };
+
+  let cargo = "";
+  const requests: string[] = [];
+  const tags: string[] = [];
+  let packaging = "";
+
+  for (const part of parts) {
+    if (part.startsWith("화물:")) {
+      cargo = part.replace(/^화물:/, "").trim();
+      continue;
+    }
+    if (part.startsWith("요청태그:")) {
+      const rawTags = part.replace(/^요청태그:/, "").trim();
+      rawTags
+        .split(",")
+        .map((x) => x.trim())
+        .filter(Boolean)
+        .forEach((t) => tags.push(t));
+      continue;
+    }
+    if (part.startsWith("직접입력:")) {
+      requests.push(`직접 요청: ${part.replace(/^직접입력:/, "").trim()}`);
+      continue;
+    }
+    if (part.startsWith("추가메모:")) {
+      requests.push(`추가 메모: ${part.replace(/^추가메모:/, "").trim()}`);
+      continue;
+    }
+    if (part.startsWith("상하차방식:")) {
+      continue;
+    }
+    if (part.startsWith("포장:")) {
+      packaging = part.replace(/^포장:/, "").trim();
+      continue;
+    }
+  }
+
+  if (!cargo) {
+    cargo = parts.find((x) => !x.includes(":")) ?? "";
+  }
+
+  return { cargo, requests, tags, packaging };
+}
+
+function toFiniteNumber(value: unknown): number | null {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parseKakaoDrivingPath(payload: KakaoMobilityDirectionsResponse): RoutePathPoint[] {
+  const points: RoutePathPoint[] = [];
+  const roads = payload.routes?.[0]?.sections?.flatMap((section) => section.roads ?? []) ?? [];
+  for (const road of roads) {
+    const vertexes = Array.isArray(road.vertexes) ? road.vertexes : [];
+    for (let i = 0; i < vertexes.length - 1; i += 2) {
+      const lng = toFiniteNumber(vertexes[i]);
+      const lat = toFiniteNumber(vertexes[i + 1]);
+      if (lat === null || lng === null) continue;
+      const prev = points[points.length - 1];
+      if (prev && prev.lat === lat && prev.lng === lng) continue;
+      points.push({ lat, lng });
+    }
+  }
+  return points;
+}
+
+async function requestDrivingRoutePath(params: {
+  startLat: number;
+  startLng: number;
+  endLat: number;
+  endLng: number;
+}): Promise<RoutePathPoint[] | null> {
+  if (!KAKAO_REST_API_KEY) return null;
+
+  const query = new URLSearchParams({
+    origin: `${params.startLng},${params.startLat}`,
+    destination: `${params.endLng},${params.endLat}`,
+    priority: "RECOMMEND",
+    alternatives: "false",
+    road_details: "false",
+  });
+
+  const response = await fetch(`https://apis-navi.kakaomobility.com/v1/directions?${query.toString()}`, {
+    method: "GET",
+    headers: {
+      Authorization: `KakaoAK ${KAKAO_REST_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+  });
+  if (!response.ok) {
+    const err = await response.text();
+    throw new Error(`kakao_mobility_directions_failed:${response.status}:${err}`);
+  }
+
+  const payload = (await response.json()) as KakaoMobilityDirectionsResponse;
+  const path = parseKakaoDrivingPath(payload);
+  if (path.length < 2) return null;
+  return path;
+}
+
 export default function OrderDetailScreen() {
   const { colors: c } = useAppTheme();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [reviewOpen, setReviewOpen] = useState(false);
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewContent, setReviewContent] = useState("");
   const [reviewLoading, setReviewLoading] = useState(false);
   const [reviewSubmitted, setReviewSubmitted] = useState(false);
+  const [routeLoading, setRouteLoading] = useState(false);
+  const [routePreviewOpen, setRoutePreviewOpen] = useState(false);
+  const [routePreviewData, setRoutePreviewData] = useState<RoutePreviewData | null>(null);
+  const [routeWebviewError, setRouteWebviewError] = useState("");
   const [reportOpen, setReportOpen] = useState(false);
   const [reportType, setReportType] = useState<ReportType>("ETC");
   const [reportDescription, setReportDescription] = useState("");
@@ -197,6 +360,34 @@ export default function OrderDetailScreen() {
   };
 
   const statusInfo = getStatusInfo(order.status);
+  const parsedCargo = parseCargoAndRequests(order?.cargoContent);
+  const cargoName = (() => {
+    const clean = normalizeDisplayText(parsedCargo.cargo);
+    if (clean && !clean.includes("요청태그:") && !clean.includes("상하차방식:")) return clean;
+    return normalizeDisplayText(order?.cargoContent) || "일반화물";
+  })();
+  const requestSummary = (() => {
+    const rows = [
+      ...parsedCargo.requests,
+      normalizeDisplayText(order?.remark),
+      normalizeDisplayText(order?.memo),
+    ].filter(Boolean);
+    return rows.join("\n");
+  })();
+  const requestTags = (() => {
+    const tags = Array.isArray(order?.tag)
+      ? order.tag.map((x: unknown) => String(x).trim()).filter(Boolean)
+      : [];
+    if (tags.length > 0) return tags;
+    return parsedCargo.tags;
+  })();
+  const packagingOx = (() => {
+    if (Number(order?.packagingPrice ?? 0) > 0) return "O";
+    const parsed = normalizeDisplayText(parsedCargo.packaging);
+    if (parsed.includes("미포장")) return "X";
+    if (parsed.includes("포장")) return "O";
+    return "X";
+  })();
 
   const handleStartChat = async () => {
     // targetId는 오더의 화주 ID (userId)
@@ -308,6 +499,113 @@ export default function OrderDetailScreen() {
       Alert.alert("오류", "신고 접수에 실패했습니다. 다시 시도해주세요.");
     } finally {
       setReportLoading(false);
+    }
+  };
+
+  const resolveRouteCoordinates = async (showAlert = true) => {
+    if (!order) return null;
+    const directStartLat = toFiniteNumber((order as any)?.startLat);
+    const directStartLng = toFiniteNumber((order as any)?.startLng);
+    const directEndLat = toFiniteNumber((order as any)?.endLat);
+    const directEndLng = toFiniteNumber((order as any)?.endLng);
+
+    const startAddress = [normalizeDisplayText(order.startAddr), normalizeDisplayText(order.startPlace)]
+      .filter(Boolean)
+      .join(" ");
+    const endAddress = [normalizeDisplayText(order.endAddr), normalizeDisplayText(order.endPlace)]
+      .filter(Boolean)
+      .join(" ");
+
+    const [startGeo, endGeo] = await Promise.all([
+      directStartLat !== null && directStartLng !== null
+        ? Promise.resolve({ lat: directStartLat, lng: directStartLng })
+        : startAddress
+          ? KakaoLocalApi.geocodeAddress(startAddress).catch(() => null)
+          : Promise.resolve(null),
+      directEndLat !== null && directEndLng !== null
+        ? Promise.resolve({ lat: directEndLat, lng: directEndLng })
+        : endAddress
+          ? KakaoLocalApi.geocodeAddress(endAddress).catch(() => null)
+          : Promise.resolve(null),
+    ]);
+
+    if (!startGeo || !endGeo) {
+      if (showAlert) Alert.alert("안내", "출발지/도착지 좌표를 찾지 못했어요. 주소를 확인해주세요.");
+      return null;
+    }
+
+    return { startGeo, endGeo };
+  };
+
+  const buildRoutePreviewData = async (): Promise<RoutePreviewBuildResult> => {
+    const coords = await resolveRouteCoordinates(false);
+    if (!coords || !order) return { data: null, usedFallbackLine: false, pathErrorMessage: "" };
+    const { startGeo, endGeo } = coords;
+
+    let drivingPath: RoutePathPoint[] | null = null;
+    let pathErrorMessage = "";
+    try {
+      drivingPath = await requestDrivingRoutePath({
+        startLat: startGeo.lat,
+        startLng: startGeo.lng,
+        endLat: endGeo.lat,
+        endLng: endGeo.lng,
+      });
+    } catch (pathError) {
+      console.error("도로 경로 좌표 조회 실패:", pathError);
+      pathErrorMessage = pathError instanceof Error ? pathError.message : "unknown_error";
+    }
+
+    const fallbackLine = [
+      { lat: startGeo.lat, lng: startGeo.lng },
+      { lat: endGeo.lat, lng: endGeo.lng },
+    ];
+    return {
+      data: {
+        startLat: startGeo.lat,
+        startLng: startGeo.lng,
+        endLat: endGeo.lat,
+        endLng: endGeo.lng,
+        startLabel: normalizeDisplayText(order.startAddr) || "출발지",
+        endLabel: normalizeDisplayText(order.endAddr) || "도착지",
+        path: drivingPath && drivingPath.length >= 2 ? drivingPath : fallbackLine,
+      },
+      usedFallbackLine: !drivingPath || drivingPath.length < 2,
+      pathErrorMessage,
+    };
+  };
+
+  const handleOpenRouteMap = async () => {
+    if (!order || routeLoading) return;
+    setRouteLoading(true);
+    try {
+      const result = routePreviewData
+        ? { data: routePreviewData, usedFallbackLine: false, pathErrorMessage: "" }
+        : await buildRoutePreviewData();
+      if (!result.data) {
+        await resolveRouteCoordinates(true);
+        return;
+      }
+      setRoutePreviewData(result.data);
+      if (!hasKakaoMapJsKey()) {
+        Alert.alert("안내", "지도 키가 없습니다. .env에 EXPO_PUBLIC_KAKAO_JAVASCRIPT_KEY를 추가해주세요.");
+        return;
+      }
+
+      setRouteWebviewError("");
+      if (result.usedFallbackLine) {
+        const suffix = result.pathErrorMessage ? `\n(${result.pathErrorMessage})` : "";
+        Alert.alert(
+          "안내",
+          `자동차 도로 경로를 불러오지 못해 직선으로 표시됩니다. REST 키/모빌리티 권한을 확인해주세요.${suffix}`
+        );
+      }
+      setRoutePreviewOpen(true);
+    } catch (error) {
+      console.error("경로 지도 열기 실패:", error);
+      Alert.alert("오류", "경로 지도를 열지 못했습니다. 잠시 후 다시 시도해주세요.");
+    } finally {
+      setRouteLoading(false);
     }
   };
 
@@ -488,7 +786,7 @@ export default function OrderDetailScreen() {
             />
             <View style={s.timelineItem}>
               <View
-                style={[s.timelineDot, { backgroundColor: c.brand.primary }]}
+                style={[s.timelineDot, { backgroundColor: "#1E293B" }]}
               >
                 <Text style={s.dotText}>출발</Text>
               </View>
@@ -497,7 +795,7 @@ export default function OrderDetailScreen() {
                   style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
                 >
                   {/* 상차 정보 */}
-                  <Text style={[s.timeLabel, { color: c.brand.primary }]}>
+                  <Text style={[s.timeLabel, { color: "#1E293B" }]}>
                     {order.startSchedule} {startType}
                   </Text>
                 </View>
@@ -531,6 +829,64 @@ export default function OrderDetailScreen() {
           </View>
         </View>
 
+        <View
+          style={[
+            s.routeMiniCard,
+            {
+              backgroundColor: c.bg.surface,
+              borderColor: c.border.default,
+            },
+          ]}
+        >
+          <View style={s.routeMiniHeader}>
+            <Text style={[s.routeMiniTitle, { color: c.text.primary }]}>경로 지도</Text>
+            <Pressable style={s.routeMiniExpandBtn} onPress={() => void handleOpenRouteMap()}>
+              <Text style={s.routeMiniExpandText}>확대</Text>
+            </Pressable>
+          </View>
+          {!hasKakaoMapJsKey() ? (
+            <View
+              style={[
+                s.routeMiniEmpty,
+                {
+                  borderColor: c.border.default,
+                  backgroundColor: c.bg.canvas,
+                },
+              ]}
+            >
+              <Text style={[s.routeMiniEmptyText, { color: c.text.secondary }]}>
+                지도 키 설정 후 경로 지도를 표시할 수 있습니다.
+              </Text>
+            </View>
+          ) : routePreviewData ? (
+            <View style={s.routeMiniMapWrap}>
+              <RoutePreviewWebView
+                data={routePreviewData}
+                onChangeError={setRouteWebviewError}
+                style={s.routeMiniMapWebview}
+              />
+            </View>
+          ) : (
+            <View
+              style={[
+                s.routeMiniEmpty,
+                {
+                  borderColor: c.border.default,
+                  backgroundColor: c.bg.canvas,
+                },
+              ]}
+            >
+              <Ionicons name="map-outline" size={18} color="#64748B" />
+              <Text style={[s.routeMiniEmptyText, { color: c.text.secondary }]}>확대를 눌러 경로를 불러오세요.</Text>
+            </View>
+          )}
+          {routeWebviewError ? (
+            <Text style={s.routeMiniErrorText} numberOfLines={2}>
+              {routeWebviewError}
+            </Text>
+          ) : null}
+        </View>
+
         {/* 화물 정보 */}
         <View style={[s.sectionCard, { backgroundColor: c.bg.surface }]}>
           <Text style={[s.sectionTitle, { color: c.text.primary }]}>
@@ -539,13 +895,47 @@ export default function OrderDetailScreen() {
           <View style={s.gridContainer}>
             <GridItem
               label="화물종류"
-              value={order.cargoContent || "일반화물"}
+              value={cargoName}
+              subValue={`포장 여부 ${packagingOx}`}
+              bgColor={c.bg.canvas}
+              textPrimary={c.text.primary}
+              textSecondary={c.text.secondary}
             />
-            <GridItem label="운송방식" value={order.driveMode || "독차"} />
-            <GridItem label="상하차방법" value={order.loadMethod || "지게차"} />
-            <GridItem label="요청차종" value={order.reqCarType || "카고"} />
-            <GridItem label="요청톤수" value={order.reqTonnage || "1톤"} />
-            <GridItem label="작업유형" value={order.workType || "일반"} />
+            <GridItem
+              label="운송방식"
+              value={order.driveMode || "독차"}
+              bgColor={c.bg.canvas}
+              textPrimary={c.text.primary}
+              textSecondary={c.text.secondary}
+            />
+            <GridItem
+              label="상하차방법"
+              value={order.loadMethod || "지게차"}
+              bgColor={c.bg.canvas}
+              textPrimary={c.text.primary}
+              textSecondary={c.text.secondary}
+            />
+            <GridItem
+              label="요청차종"
+              value={order.reqCarType || "카고"}
+              bgColor={c.bg.canvas}
+              textPrimary={c.text.primary}
+              textSecondary={c.text.secondary}
+            />
+            <GridItem
+              label="요청톤수"
+              value={order.reqTonnage || "1톤"}
+              bgColor={c.bg.canvas}
+              textPrimary={c.text.primary}
+              textSecondary={c.text.secondary}
+            />
+            <GridItem
+              label="작업유형"
+              value={order.workType || "일반"}
+              bgColor={c.bg.canvas}
+              textPrimary={c.text.primary}
+              textSecondary={c.text.secondary}
+            />
           </View>
         </View>
 
@@ -554,6 +944,15 @@ export default function OrderDetailScreen() {
           <Text style={[s.sectionTitle, { color: c.text.primary }]}>
             요청 사항
           </Text>
+          {requestTags.length > 0 ? (
+            <View style={s.requestTagWrap}>
+              {requestTags.map((tag: string, idx: number) => (
+                <View key={`${tag}-${idx}`} style={s.requestTagChip}>
+                  <Text style={s.requestTagText}>#{tag}</Text>
+                </View>
+              ))}
+            </View>
+          ) : null}
           <View
             style={[
               s.memoBox,
@@ -561,10 +960,11 @@ export default function OrderDetailScreen() {
                 backgroundColor: "#FFFBEB", // 연한 노란색 배경 (포스트잇 느낌)
                 borderColor: "#FDE68A", // 조금 더 진한 노란색 테두리
               },
+              requestTags.length > 0 && { marginTop: 10 },
             ]}
           >
             <Text style={[s.memoText, { color: c.text.primary }]}>
-              {order.memo || "등록된 요청 사항이 없습니다."}
+              {requestSummary || "등록된 요청 사항이 없습니다."}
             </Text>
           </View>
         </View>
@@ -703,6 +1103,24 @@ export default function OrderDetailScreen() {
           </>
         )}
       </View>
+
+      <RoutePreviewModal
+        visible={routePreviewOpen}
+        data={routePreviewData}
+        errorMessage={routeWebviewError}
+        onChangeError={setRouteWebviewError}
+        onClose={() => {
+          setRoutePreviewOpen(false);
+          setRouteWebviewError("");
+        }}
+        insetTop={Math.max(insets.top, 10)}
+        colors={{
+          bgCanvas: c.bg.canvas,
+          borderDefault: c.border.default,
+          textPrimary: c.text.primary,
+          textSecondary: c.text.secondary,
+        }}
+      />
 
       <Modal
         visible={reportOpen}
@@ -849,12 +1267,28 @@ export default function OrderDetailScreen() {
   );
 }
 
-const GridItem = ({ label, value }: { label: string; value: string }) => {
-  const { colors: c } = useAppTheme();
+const GridItem = ({
+  label,
+  value,
+  subValue,
+  bgColor,
+  textPrimary,
+  textSecondary,
+}: {
+  label: string;
+  value: string;
+  subValue?: string;
+  bgColor: string;
+  textPrimary: string;
+  textSecondary: string;
+}) => {
   return (
-    <View style={[s.gridItem, { backgroundColor: c.bg.canvas }]}>
-      <Text style={[s.gridLabel, { color: c.text.secondary }]}>{label}</Text>
-      <Text style={[s.gridValue, { color: c.text.primary }]}>{value}</Text>
+    <View style={[s.gridItem, { backgroundColor: bgColor }]}>
+      <Text style={[s.gridLabel, { color: textSecondary }]}>{label}</Text>
+      <Text style={[s.gridValue, { color: textPrimary }]}>{value}</Text>
+      {subValue ? (
+        <Text style={[s.gridSubValue, { color: textSecondary }]}>{subValue}</Text>
+      ) : null}
     </View>
   );
 };
@@ -879,6 +1313,70 @@ const s = StyleSheet.create({
   card: { borderRadius: 24, padding: 20, marginBottom: 16 },
   sectionCard: { borderRadius: 24, padding: 20, marginBottom: 16 },
   sectionTitle: { fontSize: 16, fontWeight: "800", marginBottom: 16 },
+  routeMiniCard: {
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 12,
+    marginBottom: 16,
+  },
+  routeMiniHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 10,
+  },
+  routeMiniTitle: {
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  routeMiniExpandBtn: {
+    height: 26,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+    backgroundColor: "#F8FAFC",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  routeMiniExpandText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#334155",
+  },
+  routeMiniMapWrap: {
+    height: 180,
+    borderRadius: 12,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    backgroundColor: "#FFFFFF",
+  },
+  routeMiniMapWebview: {
+    flex: 1,
+    backgroundColor: "#FFFFFF",
+  },
+  routeMiniEmpty: {
+    height: 120,
+    borderWidth: 1,
+    borderStyle: "dashed",
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingHorizontal: 12,
+  },
+  routeMiniEmptyText: {
+    fontSize: 12,
+    fontWeight: "600",
+    textAlign: "center",
+  },
+  routeMiniErrorText: {
+    marginTop: 8,
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#B91C1C",
+  },
   cardTop: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -947,10 +1445,64 @@ const s = StyleSheet.create({
   timeLabel: { fontSize: 13, fontWeight: "800", marginBottom: 4 },
   placeTitle: { fontSize: 16, fontWeight: "800" },
   placeDetail: { fontSize: 13, marginTop: 2 },
+  routePreviewWrap: {
+    flex: 1,
+  },
+  routePreviewHeader: {
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  routePreviewTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+  },
+  routePreviewBackBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  routePreviewHeaderPlaceholder: {
+    width: 40,
+    height: 40,
+  },
+  routePreviewBody: {
+    flex: 1,
+  },
+  routePreviewErrorBox: {
+    marginHorizontal: 12,
+    marginTop: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: "#FEF2F2",
+    borderColor: "#FECACA",
+    borderWidth: 1,
+    zIndex: 10,
+  },
+  routePreviewErrorText: {
+    color: "#991B1B",
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  routePreviewWebview: {
+    flex: 1,
+    backgroundColor: "#fff",
+  },
+  routePreviewEmpty: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   gridContainer: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   gridItem: { width: (width - 82) / 2, padding: 16, borderRadius: 16 },
   gridLabel: { fontSize: 12, marginBottom: 6, fontWeight: "600" },
   gridValue: { fontSize: 15, fontWeight: "800" },
+  gridSubValue: { fontSize: 12, marginTop: 4, fontWeight: "600" },
   bottomBar: {
     position: "absolute",
     bottom: 0,
@@ -995,6 +1547,24 @@ const s = StyleSheet.create({
     fontSize: 15,
     lineHeight: 22, // 줄 간격을 넓혀서 긴 글도 읽기 편하게 함
     fontWeight: "600", // 내용을 좀 더 두껍게 해서 강조
+  },
+  requestTagWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  requestTagChip: {
+    backgroundColor: "#FEF3C7",
+    borderWidth: 1,
+    borderColor: "#FCD34D",
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  requestTagText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#92400E",
   },
   modalBackdrop: {
     flex: 1,

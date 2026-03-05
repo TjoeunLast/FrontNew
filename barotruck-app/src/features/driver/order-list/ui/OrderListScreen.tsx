@@ -1,23 +1,23 @@
-import React, { useCallback, useState, useRef, useEffect } from "react";
+import { useOrderFilterStore } from "@/features/driver/order-filter/model/useOrderFilterStore";
+import { DrOrderCard } from "@/features/driver/shard/ui/DrOrderCard";
+import { useAppTheme } from "@/shared/hooks/useAppTheme";
+import ShipperScreenHeader from "@/shared/ui/layout/ShipperScreenHeader";
+import { Ionicons } from "@expo/vector-icons";
+import { useFocusEffect } from "@react-navigation/native";
+import { useRouter } from "expo-router";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  Pressable,
-  RefreshControl,
   ActivityIndicator,
   Animated,
   Easing,
+  FlatList,
+  Pressable,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  View,
 } from "react-native";
-import { useFocusEffect } from "@react-navigation/native";
-import { DrOrderCard } from "@/features/driver/shard/ui/DrOrderCard";
 import { useOrderList } from "../model/useOrderList";
-import { Ionicons } from "@expo/vector-icons";
-import { useAppTheme } from "@/shared/hooks/useAppTheme";
-import ShipperScreenHeader from "@/shared/ui/layout/ShipperScreenHeader";
-import { useRouter } from "expo-router";
-import { useOrderFilterStore } from "@/features/driver/order-filter/model/useOrderFilterStore";
 
 export default function OrderListScreen() {
   const { colors: c } = useAppTheme();
@@ -147,7 +147,7 @@ export default function OrderListScreen() {
               <Ionicons name="refresh" size={14} color="#94A3B8" />
             </Animated.View>
             <Text style={s.refreshText}>
-              {refreshing ? "갱신중" : `${timeLeft}s`}
+              {refreshing ? "업데이트" : `${timeLeft}s`}
             </Text>
           </Pressable>
         </View>

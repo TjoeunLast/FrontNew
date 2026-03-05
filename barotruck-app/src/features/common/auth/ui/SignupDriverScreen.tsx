@@ -1,32 +1,28 @@
-﻿// src/features/common/auth/ui/SignupDriverScreen.tsx
-import React, { useMemo, useState } from "react";
+﻿import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as FileSystem from "expo-file-system/legacy";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import React, { useMemo, useState } from "react";
 import {
   Alert,
   KeyboardAvoidingView,
-  Modal,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
-  type TextStyle,
-  type ViewStyle,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
-import { useRouter, useLocalSearchParams } from "expo-router";
 
-import { useAppTheme } from "@/shared/hooks/useAppTheme";
-import { TextField } from "@/shared/ui/form/TextField";
-import { Button } from "@/shared/ui/base/Button";
-import { withAlpha } from "@/shared/utils/color";
 import { AuthService } from "@/shared/api/authService";
 import { UserService } from "@/shared/api/userService";
+import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import { RegisterRequest } from "@/shared/models/auth";
+import { Button } from "@/shared/ui/base/Button";
+import { TextField } from "@/shared/ui/form/TextField";
 import AddressSearch from "@/shared/utils/AddressSearch";
+import { withAlpha } from "@/shared/utils/color";
 import { saveCurrentUserSnapshot } from "@/shared/utils/currentUserStorage";
 
 const PROFILE_IMAGE_STORAGE_KEY = "baro_profile_image_url_v1";
@@ -36,7 +32,9 @@ async function persistProfileImage(uri: string): Promise<string> {
   if (!docDir) return uri;
 
   const cleanUri = uri.split("?")[0] || uri;
-  const ext = cleanUri.includes(".") ? cleanUri.substring(cleanUri.lastIndexOf(".")) : ".jpg";
+  const ext = cleanUri.includes(".")
+    ? cleanUri.substring(cleanUri.lastIndexOf("."))
+    : ".jpg";
   const safeExt = ext.length >= 2 && ext.length <= 5 ? ext : ".jpg";
   const targetUri = `${docDir}profile-image${safeExt}`;
 
@@ -51,12 +49,17 @@ async function persistProfileImage(uri: string): Promise<string> {
 
 function toUploadFile(uri: string) {
   const normalized = uri.split("?")[0] || uri;
-  const ext = normalized.includes(".") ? normalized.substring(normalized.lastIndexOf(".") + 1).toLowerCase() : "jpg";
+  const ext = normalized.includes(".")
+    ? normalized.substring(normalized.lastIndexOf(".") + 1).toLowerCase()
+    : "jpg";
   const type =
-    ext === "png" ? "image/png" :
-    ext === "heic" ? "image/heic" :
-    ext === "webp" ? "image/webp" :
-    "image/jpeg";
+    ext === "png"
+      ? "image/png"
+      : ext === "heic"
+        ? "image/heic"
+        : ext === "webp"
+          ? "image/webp"
+          : "image/jpeg";
 
   return {
     uri,
@@ -71,12 +74,13 @@ function showMsg(title: string, msg: string) {
 }
 
 function digitsOnly(v: string) {
-  return v.replaceAll(/\D/g, ""); // S7781, S6353 최적화
+  return v.replaceAll(/\D/g, "");
 }
 
 function normalizePlate(v: string) {
   return v.trim().replaceAll(/\s+/g, " ");
 }
+
 function parseBirthDateToAge(v: string): number | undefined {
   const only = v.replace(/[^0-9]/g, "").slice(0, 8);
   const m = /^(\d{4})(\d{2})(\d{2})$/.exec(only);
@@ -85,10 +89,13 @@ function parseBirthDateToAge(v: string): number | undefined {
   const mo = Number(m[2]);
   const d = Number(m[3]);
   const dt = new Date(y, mo - 1, d);
-  if (dt.getFullYear() !== y || dt.getMonth() !== mo - 1 || dt.getDate() !== d) return undefined;
+  if (dt.getFullYear() !== y || dt.getMonth() !== mo - 1 || dt.getDate() !== d)
+    return undefined;
   const today = new Date();
   let age = today.getFullYear() - y;
-  const hasNotHadBirthday = today.getMonth() + 1 < mo || (today.getMonth() + 1 === mo && today.getDate() < d);
+  const hasNotHadBirthday =
+    today.getMonth() + 1 < mo ||
+    (today.getMonth() + 1 === mo && today.getDate() < d);
   if (hasNotHadBirthday) age -= 1;
   return age >= 0 ? age : undefined;
 }
@@ -117,7 +124,6 @@ function mapTon(v: string | null) {
 
 type Option = { readonly label: string; readonly value: string };
 
-// SelectField 컴포넌트 외부 정의
 function SelectField({
   label,
   value,
@@ -145,7 +151,7 @@ function SelectField({
       StyleSheet.create({
         wrap: {
           minHeight: 56,
-          borderRadius: 16,
+          borderRadius: 12,
           paddingHorizontal: 16,
           backgroundColor: c.bg.surface,
           borderWidth: 1,
@@ -154,115 +160,101 @@ function SelectField({
           alignItems: "center",
           justifyContent: "space-between",
         },
-        text: { fontSize: 16, fontWeight: "800", color: c.text.primary },
+        wrapActive: {
+          borderColor: c.brand.primary,
+          borderWidth: 1.5,
+        },
+        text: { fontSize: 16, fontWeight: "600", color: c.text.primary },
         placeholder: { color: c.text.secondary },
-        sheetBackdrop: {
-          flex: 1,
-          backgroundColor: withAlpha("#000000", 0.35),
-          alignItems: "center",
-          justifyContent: "flex-end",
-        },
-        sheet: {
-          width: "100%",
+        dropdownMenu: {
+          marginTop: 8,
+          borderRadius: 12,
           backgroundColor: c.bg.surface,
-          borderTopLeftRadius: 22,
-          borderTopRightRadius: 22,
-          paddingTop: 10,
-          paddingBottom: 16,
-          borderTopWidth: 1,
-          borderTopColor: withAlpha(c.border.default, 0.8),
+          borderWidth: 1,
+          borderColor: c.border.default,
+          overflow: "hidden",
+          shadowColor: "#000",
+          shadowOpacity: 0.05,
+          shadowRadius: 8,
+          shadowOffset: { width: 0, height: 4 },
+          elevation: 2,
         },
-        sheetTitleRow: {
-          paddingHorizontal: 18,
-          paddingVertical: 12,
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-between",
-        },
-        sheetTitle: { fontSize: 16, fontWeight: "900", color: c.text.primary },
         option: {
-          paddingHorizontal: 18,
+          paddingHorizontal: 16,
           paddingVertical: 14,
           flexDirection: "row",
           alignItems: "center",
           justifyContent: "space-between",
+          borderBottomWidth: 1,
+          borderBottomColor: withAlpha(c.border.default, 0.4),
         },
-        optionText: { fontSize: 16, fontWeight: "800", color: c.text.primary },
-        divider: {
-          height: 1,
-          backgroundColor: withAlpha(c.border.default, 0.6),
+        optionLast: {
+          borderBottomWidth: 0,
         },
+        optionText: { fontSize: 15, fontWeight: "600", color: c.text.primary },
+        optionTextActive: { color: c.brand.primary, fontWeight: "800" },
       }),
     [c],
   );
 
   return (
-    <>
+    <View style={{ zIndex: open ? 10 : 1 }}>
       <Pressable
-        onPress={() => setOpen(true)}
+        onPress={() => setOpen(!open)}
         disabled={disabled}
         style={({ pressed }) => [
           s.wrap,
+          value && s.wrapActive,
           disabled && { opacity: 0.6 },
           pressed && !disabled && { backgroundColor: c.bg.muted },
         ]}
-        accessibilityRole="button"
-        accessibilityLabel={label}
       >
         <Text style={[s.text, !selectedLabel && s.placeholder]}>
           {selectedLabel ?? placeholder}
         </Text>
-        <Ionicons name="chevron-down" size={18} color={c.text.secondary} />
+        <Ionicons
+          name={open ? "chevron-up" : "chevron-down"}
+          size={18}
+          color={c.text.secondary}
+        />
       </Pressable>
 
-      <Modal
-        visible={open}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setOpen(false)}
-      >
-        <Pressable style={s.sheetBackdrop} onPress={() => setOpen(false)}>
-          <Pressable style={s.sheet} onPress={() => {}}>
-            <View style={s.sheetTitleRow}>
-              <Text style={s.sheetTitle}>{label}</Text>
-              <Pressable onPress={() => setOpen(false)} hitSlop={10}>
-                <Ionicons name="close" size={22} color={c.text.secondary} />
+      {open && (
+        <View style={s.dropdownMenu}>
+          {options.map((o, index) => {
+            const active = o.value === value;
+            return (
+              <Pressable
+                key={o.value}
+                onPress={() => {
+                  onChange(o.value);
+                  setOpen(false);
+                }}
+                style={({ pressed }) => [
+                  s.option,
+                  index === options.length - 1 && s.optionLast,
+                  pressed && { backgroundColor: c.bg.muted },
+                ]}
+              >
+                <Text style={[s.optionText, active && s.optionTextActive]}>
+                  {o.label}
+                </Text>
+                {active && (
+                  <Ionicons
+                    name="checkmark"
+                    size={18}
+                    color={c.brand.primary}
+                  />
+                )}
               </Pressable>
-            </View>
-
-            <View style={s.divider} />
-
-            {options.map((o) => {
-              const active = o.value === value;
-              return (
-                <Pressable
-                  key={o.value}
-                  onPress={() => {
-                    onChange(o.value);
-                    setOpen(false);
-                  }}
-                  style={({ pressed }) => [
-                    s.option,
-                    pressed && { backgroundColor: c.bg.muted },
-                  ]}
-                >
-                  <Text style={s.optionText}>{o.label}</Text>
-                  {active ? (
-                    <Ionicons
-                      name="checkmark"
-                      size={20}
-                      color={c.brand.primary}
-                    />
-                  ) : null}
-                </Pressable>
-              );
-            })}
-          </Pressable>
-        </Pressable>
-      </Modal>
-    </>
+            );
+          })}
+        </View>
+      )}
+    </View>
   );
 }
+
 export default function SignupDriverScreen() {
   const router = useRouter();
   const { colors: c } = useAppTheme();
@@ -296,12 +288,12 @@ export default function SignupDriverScreen() {
   const [addressLng, setAddressLng] = useState<number | null>(null);
   const [isPostcodeOpen, setIsPostcodeOpen] = useState(false);
 
-  // ✅ 1. 유효성 검사 변수 추가 (에러 해결 핵심)
   const nickFormatOk = nickname.trim().length >= 2;
   const plateOk = normalizePlate(plateNo).length >= 6;
   const expOk = digitsOnly(expYears).length > 0;
   const addressOk = address.trim().length > 0;
   const addressCoordsOk = addressLat !== null && addressLng !== null;
+
   const canSubmit =
     nickFormatOk &&
     plateOk &&
@@ -313,98 +305,7 @@ export default function SignupDriverScreen() {
     addressCoordsOk &&
     !submitting;
 
-  const s = useMemo(() => {
-    const S = { lg: 20, md: 16, xl: 24 };
-    return StyleSheet.create({
-      screen: { flex: 1, backgroundColor: c.bg.surface },
-      header: {
-        paddingHorizontal: S.lg,
-        paddingTop: S.md,
-        paddingBottom: S.md,
-      },
-      backBtn: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        alignItems: "center",
-        justifyContent: "center",
-      },
-      titleWrap: { paddingHorizontal: S.lg, paddingTop: 12 },
-      title: {
-        fontSize: 30,
-        fontWeight: "900",
-        color: c.text.primary,
-        lineHeight: 38,
-      },
-      subtitle: {
-        marginTop: 10,
-        fontSize: 16,
-        fontWeight: "700",
-        color: c.text.secondary,
-        lineHeight: 22,
-      },
-      form: { paddingHorizontal: S.lg, paddingTop: S.xl, paddingBottom: 140 },
-      label: {
-        fontSize: 14,
-        fontWeight: "900",
-        color: c.text.secondary,
-        marginBottom: 8,
-      },
-      row: { flexDirection: "row", alignItems: "center" },
-      rowGap: { width: 12 },
-      tfWrap: {
-        minHeight: 56,
-        borderRadius: 16,
-        paddingHorizontal: 16,
-        backgroundColor: c.bg.surface,
-        borderWidth: 1,
-      },
-      tfInput: { fontSize: 16, fontWeight: "800", paddingVertical: 0 },
-      miniBtn: {
-        height: 56,
-        paddingHorizontal: 14,
-        borderRadius: 16,
-        borderWidth: 1,
-        borderColor: c.border.default,
-        backgroundColor: c.bg.muted,
-        alignItems: "center",
-        justifyContent: "center",
-      },
-      miniBtnText: { fontSize: 15, fontWeight: "900", color: c.text.primary },
-      helper: {
-        marginTop: 8,
-        fontSize: 13,
-        fontWeight: "800",
-        color: c.text.secondary,
-      },
-      grid2: { flexDirection: "row", alignItems: "center" },
-      col: { flex: 1 },
-      bottomBar: {
-        position: "absolute",
-        left: 0,
-        right: 0,
-        bottom: 0,
-        paddingHorizontal: S.lg,
-        paddingBottom: S.lg,
-        paddingTop: 12,
-        backgroundColor: withAlpha(c.bg.surface, 0.98),
-        borderTopWidth: 1,
-        borderTopColor: withAlpha(c.border.default, 0.7),
-      },
-      submitBtn: {
-        height: 62,
-        borderRadius: 18,
-        shadowColor: withAlpha(c.brand.primary, 0.35),
-        shadowOpacity: 1,
-        shadowRadius: 18,
-        shadowOffset: { width: 0, height: 10 },
-        elevation: 6,
-      },
-    });
-  }, [c]);
-
   const onSubmit = async () => {
-    // [추가] 이미 제출 중이면 함수를 실행하지 않고 종료
     if (submitting) return;
     setSubmitting(true);
     try {
@@ -442,7 +343,9 @@ export default function SignupDriverScreen() {
 
       if (profileImageUri) {
         try {
-          const persistedUri = await persistProfileImage(String(profileImageUri));
+          const persistedUri = await persistProfileImage(
+            String(profileImageUri),
+          );
           await UserService.uploadProfileImage(toUploadFile(persistedUri));
           await AsyncStorage.setItem(PROFILE_IMAGE_STORAGE_KEY, persistedUri);
         } catch (imageError) {
@@ -492,6 +395,8 @@ export default function SignupDriverScreen() {
     { label: "11톤", value: "11T" },
   ];
 
+  const s = getStyles(c);
+
   return (
     <SafeAreaView style={s.screen} edges={["top", "bottom"]}>
       <AddressSearch
@@ -503,21 +408,18 @@ export default function SignupDriverScreen() {
           setAddressLng(typeof lng === "number" ? lng : null);
 
           if (typeof lat !== "number" || typeof lng !== "number") {
-            showMsg("좌표 확인 필요", "주소는 선택됐지만 좌표를 가져오지 못했습니다. 다시 선택해주세요.");
+            showMsg(
+              "좌표 확인 필요",
+              "주소는 선택됐지만 좌표를 가져오지 못했습니다. 다시 선택해주세요.",
+            );
           }
         }}
       />
-
 
       <View style={s.header}>
         <Pressable onPress={() => router.back()} style={s.backBtn} hitSlop={10}>
           <Ionicons name="arrow-back" size={26} color={c.text.primary} />
         </Pressable>
-      </View>
-
-      <View style={s.titleWrap}>
-        <Text style={s.title}>차량 정보를{"\n"}입력해주세요.</Text>
-        <Text style={s.subtitle}>정확한 배차를 위해 필수입니다.</Text>
       </View>
 
       <KeyboardAvoidingView
@@ -529,13 +431,21 @@ export default function SignupDriverScreen() {
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={s.form}
         >
+          <View style={s.titleWrap}>
+            <Text style={s.title}>차량 정보를{"\n"}입력해주세요.</Text>
+            {/* <Text style={s.subtitle}>정확한 배차를 위해 필수입니다.</Text> */}
+          </View>
+
           <Text style={s.label}>닉네임</Text>
           <TextField
             value={nickname}
             onChangeText={setNickname}
             placeholder="앱에서 사용할 닉네임"
             autoCapitalize="none"
-            inputWrapStyle={s.tfWrap}
+            inputWrapStyle={[
+              s.tfWrap,
+              nickname.length > 0 && nickFormatOk && s.tfWrapSuccess,
+            ]}
             inputStyle={s.tfInput}
             errorText={
               nickname.length > 0 && !nickFormatOk
@@ -544,67 +454,72 @@ export default function SignupDriverScreen() {
             }
           />
 
-          <View style={{ height: 16 }} />
+          <View style={{ height: 24 }} />
 
-          {/* 차량 번호 */}
           <Text style={s.label}>차량 번호</Text>
           <TextField
             value={plateNo}
             onChangeText={setPlateNo}
             placeholder="예: 80아 1234"
             autoCapitalize="none"
-            inputWrapStyle={s.tfWrap}
+            inputWrapStyle={[
+              s.tfWrap,
+              plateNo.length > 0 && plateOk && s.tfWrapSuccess,
+            ]}
             inputStyle={s.tfInput}
           />
 
-          <View style={{ height: 16 }} />
+          <View style={{ height: 24 }} />
 
-          {/* 차종 / 차량 타입 / 톤수 */}
           <View style={s.grid2}>
-            <View style={s.col}>
+            <View style={[s.col, { zIndex: 10 }]}>
               <Text style={s.label}>차종</Text>
               <SelectField
                 label="차종"
                 value={carType}
-                placeholder="카고"
+                placeholder="선택"
                 options={carTypeOptions}
                 onChange={setCarType}
               />
             </View>
             <View style={s.rowGap} />
-            <View style={s.col}>
+            <View style={[s.col, { zIndex: 9 }]}>
               <Text style={s.label}>차량 타입</Text>
               <SelectField
                 label="차량 타입"
                 value={vehicleType}
-                placeholder="일반"
+                placeholder="선택"
                 options={vehicleTypeOptions}
                 onChange={setVehicleType}
               />
             </View>
           </View>
 
-          <View style={{ height: 16 }} />
+          <View style={{ height: 24, zIndex: 8 }} />
 
-          <Text style={s.label}>톤수</Text>
-          <SelectField
-            label="톤수"
-            value={ton}
-            placeholder="1톤"
-            options={tonOptions}
-            onChange={setTon}
-          />
+          <View style={{ zIndex: 8 }}>
+            <Text style={s.label}>톤수</Text>
+            <SelectField
+              label="톤수"
+              value={ton}
+              placeholder="선택"
+              options={tonOptions}
+              onChange={setTon}
+            />
+          </View>
 
-          <View style={{ height: 16 }} />
+          <View style={{ height: 24, zIndex: 7 }} />
 
-          {/* 경력(년) */}
           <Text style={s.label}>경력 (년)</Text>
           <TextField
             value={expYears}
             onChangeText={setExpYears}
             placeholder="예: 3"
             keyboardType="number-pad"
-            inputWrapStyle={s.tfWrap}
+            inputWrapStyle={[
+              s.tfWrap,
+              expYears.length > 0 && expOk && s.tfWrapSuccess,
+            ]}
             inputStyle={s.tfInput}
             errorText={
               expYears.length > 0 && digitsOnly(expYears).length === 0
@@ -613,16 +528,18 @@ export default function SignupDriverScreen() {
             }
           />
 
-          <View style={{ height: 16 }} />
+          <View style={{ height: 24 }} />
 
-          {/* 주소 입력 필드 추가 */}
           <Text style={s.label}>활동 지역 (주소)</Text>
           <Pressable onPress={() => setIsPostcodeOpen(true)}>
             <View pointerEvents="none">
               <TextField
                 value={address}
                 placeholder="주소 검색"
-                inputWrapStyle={s.tfWrap}
+                inputWrapStyle={[
+                  s.tfWrap,
+                  address.length > 0 && addressCoordsOk && s.tfWrapSuccess,
+                ]}
                 inputStyle={s.tfInput}
                 errorText={
                   address.length > 0 && !addressCoordsOk
@@ -632,17 +549,18 @@ export default function SignupDriverScreen() {
               />
             </View>
           </Pressable>
-          <Text style={s.helper}>
+          <Text
+            style={[s.helper, addressCoordsOk && { color: c.brand.primary }]}
+          >
             {addressCoordsOk
-              ? `좌표 저장됨: ${addressLat?.toFixed(6)}, ${addressLng?.toFixed(6)}`
+              ? `✅ 선택하신 지역을 중심으로 배차가 추천됩니다.`
               : "기사님의 활동 거점을 기준으로 오더가 추천됩니다."}
           </Text>
-
         </ScrollView>
 
         <View style={s.bottomBar} pointerEvents="box-none">
           <Button
-            title="가입 완료"
+            title={submitting ? "가입 중..." : "가입 완료"}
             variant="primary"
             size="lg"
             fullWidth
@@ -655,3 +573,94 @@ export default function SignupDriverScreen() {
     </SafeAreaView>
   );
 }
+
+const getStyles = (c: any) => {
+  const S = { xs: 8, sm: 12, md: 16, lg: 20, xl: 24, xxl: 36 };
+
+  return StyleSheet.create({
+    screen: { flex: 1, backgroundColor: c.bg.surface },
+    header: {
+      paddingHorizontal: S.lg,
+      paddingTop: S.md,
+      paddingBottom: S.md,
+    },
+    backBtn: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    titleWrap: { marginBottom: 24 },
+    title: {
+      fontSize: 32,
+      fontWeight: "800",
+      color: c.text.primary,
+      lineHeight: 40,
+      letterSpacing: -0.5,
+    },
+    subtitle: {
+      marginTop: 12,
+      fontSize: 16,
+      fontWeight: "600",
+      color: c.text.secondary,
+      lineHeight: 22,
+    },
+    form: {
+      paddingHorizontal: S.lg,
+      paddingTop: S.xs,
+      paddingBottom: 140,
+    },
+    label: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: c.text.primary,
+      marginBottom: 8,
+    },
+    row: { flexDirection: "row", alignItems: "center" },
+    rowGap: { width: 10 },
+    tfWrap: {
+      minHeight: 56,
+      borderRadius: 12,
+      paddingHorizontal: 16,
+      backgroundColor: c.bg.surface,
+      borderWidth: 1,
+      borderColor: c.border.default,
+    },
+    tfWrapSuccess: {
+      borderColor: c.brand.primary,
+      borderWidth: 1.5,
+    },
+    tfInput: {
+      fontSize: 16,
+      fontWeight: "600",
+      paddingVertical: 0,
+      height: 56,
+    },
+    grid2: { flexDirection: "row", alignItems: "flex-start", zIndex: 10 },
+    col: { flex: 1 },
+    helper: {
+      marginTop: 8,
+      fontSize: 13,
+      fontWeight: "600",
+      color: c.text.secondary,
+    },
+    bottomBar: {
+      position: "absolute",
+      left: 0,
+      right: 0,
+      bottom: 0,
+      paddingHorizontal: S.lg,
+      paddingBottom: Platform.OS === "ios" ? 34 : S.lg,
+      paddingTop: 16,
+      backgroundColor: c.bg.surface,
+      borderTopWidth: 1,
+      borderTopColor: c.border.default,
+    },
+    submitBtn: {
+      height: 60,
+      borderRadius: 12,
+      alignSelf: "stretch",
+    },
+  });
+};

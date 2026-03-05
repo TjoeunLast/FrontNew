@@ -11,7 +11,7 @@ import type { OrderResponse } from "@/shared/models/order";
 import { RecommendedOrderCard } from "@/shared/ui/business/RecommendedOrderCard";
 import ShipperScreenHeader from "@/shared/ui/layout/ShipperScreenHeader";
 
-type DispatchTab = "WAITING" | "PROGRESS" | "DONE";
+type DispatchTab = "WAITING" | "PROGRESS" | "DONE" | "CANCEL";
 
 type DispatchCardItem = {
   id: string;
@@ -107,6 +107,12 @@ function toWorkToolShort(v?: string) {
   return "-";
 }
 
+function resolveApplicants(order: OrderResponse) {
+  const applicantsRaw = Number((order as any).applicantCount);
+  const applicants = Number.isFinite(applicantsRaw) ? Math.max(0, Math.floor(applicantsRaw)) : 0;
+  return order.instant ? 0 : applicants;
+}
+
 function toUiCard(order: OrderResponse): DispatchCardItem | null {
   const from = order.startAddr || order.startPlace || "출발지 미정";
   const to = order.endAddr || order.endPlace || "도착지 미정";
@@ -120,14 +126,10 @@ function toUiCard(order: OrderResponse): DispatchCardItem | null {
   const workToolShort = toWorkToolShort(order.workType);
 
   if (order.status === "REQUESTED" || order.status === "PENDING" || order.status === "APPLIED") {
-    const applicantsRaw = (order as any).applicantCount;
-    const applicantsNum = Number(applicantsRaw);
-    const applicantsBase = Number.isFinite(applicantsNum) ? Math.max(0, Math.floor(applicantsNum)) : 0;
-    const isInstantDispatch = Boolean(order.instant);
-    const applicants = isInstantDispatch ? 0 : applicantsBase;
+    const applicants = resolveApplicants(order);
     return {
       id: String(order.orderId),
-      isInstantDispatch,
+      isInstantDispatch: Boolean(order.instant),
       tab: "WAITING",
       statusLabel: applicants > 0 ? `신청 ${applicants}명` : "대기중",
       statusTone: applicants > 0 ? "yellow" : "gray",
@@ -222,6 +224,32 @@ function toUiCard(order: OrderResponse): DispatchCardItem | null {
     };
   }
 
+  if (order.status === "CANCELLED") {
+    const applicants = resolveApplicants(order);
+    // 자동 취소 정의: 기사 신청이 없는 상태에서 기간 만료로 취소된 건
+    if (applicants > 0) return null;
+    return {
+      id: String(order.orderId),
+      isInstantDispatch: Boolean(order.instant),
+      tab: "CANCEL",
+      statusLabel: "기간만료 취소",
+      statusTone: "gray",
+      timeLabel,
+      from,
+      to,
+      fromDetail,
+      toDetail,
+      distanceKm,
+      pickupTimeHHmm: toHHmm(order.startSchedule),
+      dropoffTimeHHmm: toHHmm(order.endSchedule),
+      cargoLabel,
+      loadMethodShort,
+      workToolShort,
+      priceWon,
+      applicants,
+    };
+  }
+
   return null;
 }
 
@@ -233,7 +261,8 @@ function badgeStatusOf(item: DispatchCardItem): DispatchStatusKey {
   return "DRIVING";
 }
 
-function toHomeStatusKey(item: DispatchCardItem): "MATCHING" | "DISPATCHED" | "DRIVING" | "DONE" {
+function toHomeStatusKey(item: DispatchCardItem): "MATCHING" | "DISPATCHED" | "DRIVING" | "DONE" | "CANCELLED" {
+  if (item.tab === "CANCEL") return "CANCELLED";
   const k = badgeStatusOf(item);
   if (k === "WAITING") return "MATCHING";
   if (k === "CONFIRMED") return "DISPATCHED";
@@ -252,7 +281,7 @@ export default function ShipperOrdersScreen() {
 
   React.useEffect(() => {
     const resolved = Array.isArray(tabParam) ? tabParam[0] : tabParam;
-    if (resolved === "WAITING" || resolved === "PROGRESS" || resolved === "DONE") {
+    if (resolved === "WAITING" || resolved === "PROGRESS" || resolved === "DONE" || resolved === "CANCEL") {
       setTab(resolved);
     }
   }, [tabParam]);
@@ -313,6 +342,7 @@ export default function ShipperOrdersScreen() {
             { key: "WAITING" as const, label: "배차" },
             { key: "PROGRESS" as const, label: "운송중" },
             { key: "DONE" as const, label: "완료" },
+            { key: "CANCEL" as const, label: "취소" },
           ].map((item) => {
             const active = tab === item.key;
             return (
@@ -358,8 +388,18 @@ export default function ShipperOrdersScreen() {
           const isWaitingWithApplicants = item.tab === "WAITING" && !item.isInstantDispatch && hasApplicants;
           const statusLabel =
             (item.tab === "PROGRESS" && isEtaUrgent ? "곧 도착" : item.drivingStageLabel)
-            || (item.tab === "PROGRESS" ? "배달 중" : item.tab === "DONE" ? "완료" : item.statusLabel === "배차완료" ? "상차 완료" : "대기");
-          const isDone = item.tab === "DONE";
+            || (
+              item.tab === "PROGRESS"
+                ? "배달 중"
+                : item.tab === "DONE"
+                  ? "완료"
+                  : item.tab === "CANCEL"
+                    ? "기간만료 자동취소"
+                    : item.statusLabel === "배차완료"
+                      ? "상차 완료"
+                      : "대기"
+            );
+          const isDone = item.tab === "DONE" || item.tab === "CANCEL";
 
           return (
             <RecommendedOrderCard
@@ -402,5 +442,3 @@ export default function ShipperOrdersScreen() {
     </View>
   );
 }
-
-
