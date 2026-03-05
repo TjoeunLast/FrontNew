@@ -1,7 +1,7 @@
 ﻿import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useRouter } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
+import { useRouter } from "expo-router";
 import React, { useCallback, useMemo, useRef, useState } from "react";
 import {
   Alert,
@@ -15,15 +15,9 @@ import {
   type TextStyle,
   type ViewStyle,
 } from "react-native";
-import { WebView, type WebViewMessageEvent } from "react-native-webview";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { WebView, type WebViewMessageEvent } from "react-native-webview";
 
-import { OrderApi } from "@/shared/api/orderService";
-import { PaymentService } from "@/shared/api/paymentService";
-import { SettlementService } from "@/shared/api/settlementService";
-import { useAppTheme } from "@/shared/hooks/useAppTheme";
-import type { OrderResponse } from "@/shared/models/order";
-import ShipperScreenHeader from "@/shared/ui/layout/ShipperScreenHeader";
 import {
   isShipperActivePaymentMethod,
   isTossPayment,
@@ -31,10 +25,16 @@ import {
 } from "@/features/common/payment/lib/paymentMethods";
 import {
   calcOrderAmount,
-  toSettlementStatus,
   statusText,
+  toSettlementStatus,
   toWon,
 } from "@/features/common/settlement/lib/settlementHelpers";
+import { OrderApi } from "@/shared/api/orderService";
+import { PaymentService } from "@/shared/api/paymentService";
+import { SettlementService } from "@/shared/api/settlementService";
+import { useAppTheme } from "@/shared/hooks/useAppTheme";
+import type { OrderResponse } from "@/shared/models/order";
+import ShipperScreenHeader from "@/shared/ui/layout/ShipperScreenHeader";
 
 type SettlementFilter = "ALL" | "UNPAID" | "TAX";
 type SettlementStatus = "UNPAID" | "PENDING" | "PAID" | "TAX_INVOICE";
@@ -70,7 +70,9 @@ async function loadPendingSettlementOrderIds() {
     if (!raw) return new Set<number>();
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return new Set<number>();
-    return new Set(parsed.map((x) => Number(x)).filter((x) => Number.isFinite(x)));
+    return new Set(
+      parsed.map((x) => Number(x)).filter((x) => Number.isFinite(x)),
+    );
   } catch {
     return new Set<number>();
   }
@@ -79,7 +81,10 @@ async function loadPendingSettlementOrderIds() {
 async function savePendingSettlementOrderIds(ids: Set<number>) {
   try {
     const arr = Array.from(ids.values()).filter((x) => Number.isFinite(x));
-    await AsyncStorage.setItem(PENDING_SETTLEMENT_STORAGE_KEY, JSON.stringify(arr));
+    await AsyncStorage.setItem(
+      PENDING_SETTLEMENT_STORAGE_KEY,
+      JSON.stringify(arr),
+    );
   } catch {
     // noop
   }
@@ -94,7 +99,8 @@ function addMonth(d: Date, diff: number) {
 }
 
 function compareMonth(a: Date, b: Date) {
-  if (a.getFullYear() !== b.getFullYear()) return a.getFullYear() - b.getFullYear();
+  if (a.getFullYear() !== b.getFullYear())
+    return a.getFullYear() - b.getFullYear();
   return a.getMonth() - b.getMonth();
 }
 
@@ -241,23 +247,38 @@ function buildTossCheckoutHtml(input: {
 }
 
 function toActionLabel(status: SettlementStatus, isTransportCompleted = true) {
-  if (status === "UNPAID") return isTransportCompleted ? "결제하기" : "운송완료 후 결제";
+  if (status === "UNPAID")
+    return isTransportCompleted ? "결제하기" : "운송완료 후 결제";
   if (status === "PENDING") return "결제대기";
   if (status === "PAID") return "영수증 확인";
   return "계산서 보기";
 }
 
-function mapOrderToSettlement(order: OrderResponse, pendingOrderIds?: Set<number>): SettlementItem | null {
-  if (order.status === "CANCELLED" || order.status === "REQUESTED" || order.status === "PENDING" || order.status === "APPLIED") return null;
+function mapOrderToSettlement(
+  order: OrderResponse,
+  pendingOrderIds?: Set<number>,
+): SettlementItem | null {
+  if (
+    order.status === "CANCELLED" ||
+    order.status === "REQUESTED" ||
+    order.status === "PENDING" ||
+    order.status === "APPLIED"
+  )
+    return null;
 
   const scheduledAt =
-    parseDate(order.endSchedule) || parseDate(order.startSchedule) || parseDate(order.updated) || parseDate(order.createdAt);
+    parseDate(order.endSchedule) ||
+    parseDate(order.startSchedule) ||
+    parseDate(order.updated) ||
+    parseDate(order.createdAt);
   if (!scheduledAt) return null;
 
   if (!isShipperActivePaymentMethod(order.payMethod)) return null;
 
   const amount = calcOrderAmount(order);
-  const normalizedOrderStatus = String(order.status ?? "").trim().toUpperCase();
+  const normalizedOrderStatus = String(order.status ?? "")
+    .trim()
+    .toUpperCase();
   // 일부 레거시 응답은 settlementStatus가 READY여도 order.status에 결제완료 상태가 들어옴.
   // 이 경우 결제완료 건이 다시 UNPAID로 보이지 않도록 보정.
   const paidByOrderStatus =
@@ -265,8 +286,12 @@ function mapOrderToSettlement(order: OrderResponse, pendingOrderIds?: Set<number
     normalizedOrderStatus === "CONFIRMED" ||
     normalizedOrderStatus === "ADMIN_FORCE_CONFIRMED";
   const rawBaseStatus = toSettlementStatus(order);
-  const baseStatus = rawBaseStatus === "UNPAID" && paidByOrderStatus ? "PAID" : rawBaseStatus;
-  const status = baseStatus === "UNPAID" && pendingOrderIds?.has(Number(order.orderId)) ? "PENDING" : baseStatus;
+  const baseStatus =
+    rawBaseStatus === "UNPAID" && paidByOrderStatus ? "PAID" : rawBaseStatus;
+  const status =
+    baseStatus === "UNPAID" && pendingOrderIds?.has(Number(order.orderId))
+      ? "PENDING"
+      : baseStatus;
   const isTransportCompleted = order.status === "COMPLETED";
   if (__DEV__) {
     console.log("[settlement-map]", {
@@ -276,7 +301,8 @@ function mapOrderToSettlement(order: OrderResponse, pendingOrderIds?: Set<number
       resolvedStatus: status,
     });
   }
-  const vehicleInfo = `${order.reqCarType || "차량"} ${order.reqTonnage || ""}`.trim();
+  const vehicleInfo =
+    `${order.reqCarType || "차량"} ${order.reqTonnage || ""}`.trim();
 
   return {
     id: String(order.orderId),
@@ -306,8 +332,12 @@ export default function ShipperSettlementScreen() {
   const [items, setItems] = useState<SettlementItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [receiptItem, setReceiptItem] = useState<SettlementItem | null>(null);
-  const [submittingOrderId, setSubmittingOrderId] = useState<number | null>(null);
-  const [tossCheckout, setTossCheckout] = useState<TossCheckoutSession | null>(null);
+  const [submittingOrderId, setSubmittingOrderId] = useState<number | null>(
+    null,
+  );
+  const [tossCheckout, setTossCheckout] = useState<TossCheckoutSession | null>(
+    null,
+  );
   const [tossConfirming, setTossConfirming] = useState(false);
   const handledTossResultUrlRef = useRef<string | null>(null);
 
@@ -319,7 +349,9 @@ export default function ShipperSettlementScreen() {
       .filter((x): x is SettlementItem => x !== null)
       .sort((a, b) => b.scheduledAt.getTime() - a.scheduledAt.getTime());
 
-    const paidIds = mapped.filter((x) => x.status === "PAID").map((x) => x.orderId);
+    const paidIds = mapped
+      .filter((x) => x.status === "PAID")
+      .map((x) => x.orderId);
     let dirty = false;
     paidIds.forEach((id) => {
       if (pendingOrderIds.delete(id)) dirty = true;
@@ -351,7 +383,7 @@ export default function ShipperSettlementScreen() {
       return () => {
         active = false;
       };
-    }, [fetchItems])
+    }, [fetchItems]),
   );
 
   const isNextDisabled = compareMonth(viewMonth, currentMonth) >= 0;
@@ -360,20 +392,27 @@ export default function ShipperSettlementScreen() {
 
   const monthItems = useMemo(
     () => items.filter((x) => isSameMonth(x.scheduledAt, viewMonth)),
-    [items, viewMonth]
+    [items, viewMonth],
   );
 
   const filtered = useMemo(() => {
     if (filter === "ALL") return monthItems;
-    if (filter === "UNPAID") return monthItems.filter((x) => x.status === "UNPAID");
+    if (filter === "UNPAID")
+      return monthItems.filter((x) => x.status === "UNPAID");
     return monthItems.filter((x) => x.status === "TAX_INVOICE");
   }, [filter, monthItems]);
 
-  const summaryTotal = useMemo(() => monthItems.reduce((acc, cur) => acc + cur.amount, 0), [monthItems]);
+  const summaryTotal = useMemo(
+    () => monthItems.reduce((acc, cur) => acc + cur.amount, 0),
+    [monthItems],
+  );
   const summaryDoneCount = monthItems.length;
   const summaryUnpaid = useMemo(
-    () => monthItems.filter((x) => x.status === "UNPAID").reduce((acc, cur) => acc + cur.amount, 0),
-    [monthItems]
+    () =>
+      monthItems
+        .filter((x) => x.status === "UNPAID")
+        .reduce((acc, cur) => acc + cur.amount, 0),
+    [monthItems],
   );
 
   const closeTossCheckout = useCallback(() => {
@@ -383,30 +422,27 @@ export default function ShipperSettlementScreen() {
     setSubmittingOrderId(null);
   }, [tossConfirming]);
 
-  const openTossCheckout = useCallback(
-    async (item: SettlementItem) => {
-      const prepared = await PaymentService.prepareTossPayment(item.orderId, {
-        method: "CARD",
-        payChannel: "CARD",
-      });
+  const openTossCheckout = useCallback(async (item: SettlementItem) => {
+    const prepared = await PaymentService.prepareTossPayment(item.orderId, {
+      method: "CARD",
+      payChannel: "CARD",
+    });
 
-      setTossCheckout({
-        orderId: item.orderId,
+    setTossCheckout({
+      orderId: item.orderId,
+      successUrl: prepared.successUrl,
+      failUrl: prepared.failUrl,
+      html: buildTossCheckoutHtml({
+        clientKey: prepared.clientKey,
+        amount: prepared.amount,
+        pgOrderId: prepared.pgOrderId,
+        orderName: prepared.orderName || `운송 결제 #${item.orderId}`,
         successUrl: prepared.successUrl,
         failUrl: prepared.failUrl,
-        html: buildTossCheckoutHtml({
-          clientKey: prepared.clientKey,
-          amount: prepared.amount,
-          pgOrderId: prepared.pgOrderId,
-          orderName: prepared.orderName || `운송 결제 #${item.orderId}`,
-          successUrl: prepared.successUrl,
-          failUrl: prepared.failUrl,
-        }),
-      });
-      handledTossResultUrlRef.current = null;
-    },
-    []
-  );
+      }),
+    });
+    handledTossResultUrlRef.current = null;
+  }, []);
 
   const handleTossSuccessUrl = useCallback(
     async (url: string) => {
@@ -443,17 +479,24 @@ export default function ShipperSettlementScreen() {
           setItems(
             refreshed.map((row) =>
               row.orderId === tossCheckout.orderId
-                ? { ...row, status: "PAID", actionLabel: toActionLabel("PAID", row.isTransportCompleted) }
-                : row
-            )
+                ? {
+                    ...row,
+                    status: "PAID",
+                    actionLabel: toActionLabel(
+                      "PAID",
+                      row.isTransportCompleted,
+                    ),
+                  }
+                : row,
+            ),
           );
         } else {
           setItems((prev) =>
             prev.map((row) =>
               row.orderId === tossCheckout.orderId
                 ? { ...row, status: "PAID", actionLabel: toActionLabel("PAID") }
-                : row
-            )
+                : row,
+            ),
           );
         }
 
@@ -461,14 +504,17 @@ export default function ShipperSettlementScreen() {
         setTossCheckout(null);
         Alert.alert("결제 완료", "토스 결제가 완료되었습니다.");
       } catch (error: any) {
-        const msg = error?.response?.data?.message || error?.message || "토스 결제 확정 중 오류가 발생했습니다.";
+        const msg =
+          error?.response?.data?.message ||
+          error?.message ||
+          "토스 결제 확정 중 오류가 발생했습니다.";
         Alert.alert("결제 오류", String(msg));
       } finally {
         setTossConfirming(false);
         setSubmittingOrderId(null);
       }
     },
-    [fetchItems, tossCheckout]
+    [fetchItems, tossCheckout],
   );
 
   const handleTossFailUrl = useCallback((url: string) => {
@@ -477,7 +523,10 @@ export default function ShipperSettlementScreen() {
     handledTossResultUrlRef.current = null;
     setTossCheckout(null);
     setSubmittingOrderId(null);
-    Alert.alert("결제 실패", message || code || "토스 결제가 취소되었거나 실패했습니다.");
+    Alert.alert(
+      "결제 실패",
+      message || code || "토스 결제가 취소되었거나 실패했습니다.",
+    );
   }, []);
 
   const handleTossResultUrl = useCallback(
@@ -497,7 +546,7 @@ export default function ShipperSettlementScreen() {
       }
       return false;
     },
-    [handleTossFailUrl, handleTossSuccessUrl, tossCheckout]
+    [handleTossFailUrl, handleTossSuccessUrl, tossCheckout],
   );
 
   const onTossShouldStartLoadWithRequest = useCallback(
@@ -508,22 +557,31 @@ export default function ShipperSettlementScreen() {
 
       if (!isWebViewInternalUrl(url)) {
         void Linking.openURL(url).catch(() => {
-          Alert.alert("결제 안내", "외부 결제 앱을 열 수 없습니다. 카드/은행 앱 설치 여부를 확인해 주세요.");
+          Alert.alert(
+            "결제 안내",
+            "외부 결제 앱을 열 수 없습니다. 카드/은행 앱 설치 여부를 확인해 주세요.",
+          );
         });
         return false;
       }
 
       return true;
     },
-    [handleTossResultUrl]
+    [handleTossResultUrl],
   );
 
   const onTossMessage = useCallback((event: WebViewMessageEvent) => {
     try {
       const payload = JSON.parse(event.nativeEvent.data ?? "{}");
-      if (payload?.type === "REQUEST_ERROR" || payload?.type === "SCRIPT_ERROR") {
+      if (
+        payload?.type === "REQUEST_ERROR" ||
+        payload?.type === "SCRIPT_ERROR"
+      ) {
         handledTossResultUrlRef.current = null;
-        Alert.alert("결제 오류", String(payload?.message || "토스 결제창을 열 수 없습니다."));
+        Alert.alert(
+          "결제 오류",
+          String(payload?.message || "토스 결제창을 열 수 없습니다."),
+        );
         setTossCheckout(null);
         setSubmittingOrderId(null);
       }
@@ -564,7 +622,11 @@ export default function ShipperSettlementScreen() {
 
     try {
       setSubmittingOrderId(item.orderId);
-      await SettlementService.initSettlement({ orderId: item.orderId, couponDiscount: 0, levelDiscount: 0 });
+      await SettlementService.initSettlement({
+        orderId: item.orderId,
+        couponDiscount: 0,
+        levelDiscount: 0,
+      });
       const pendingOrderIds = await loadPendingSettlementOrderIds();
       pendingOrderIds.add(item.orderId);
       await savePendingSettlementOrderIds(pendingOrderIds);
@@ -574,13 +636,20 @@ export default function ShipperSettlementScreen() {
       } else {
         setItems((prev) =>
           prev.map((row) =>
-            row.id === item.id ? { ...row, status: "PENDING", actionLabel: toActionLabel("PENDING") } : row
-          )
+            row.id === item.id
+              ? {
+                  ...row,
+                  status: "PENDING",
+                  actionLabel: toActionLabel("PENDING"),
+                }
+              : row,
+          ),
         );
       }
       Alert.alert("결제 요청", "결제 요청이 생성되었습니다.");
     } catch (error: any) {
-      const msg = error?.response?.data?.message || "결제 요청 중 오류가 발생했습니다.";
+      const msg =
+        error?.response?.data?.message || "결제 요청 중 오류가 발생했습니다.";
       const msgText = String(msg);
       const msgLower = msgText.toLowerCase();
       const isAlreadyPaid =
@@ -605,8 +674,10 @@ export default function ShipperSettlementScreen() {
         } else {
           setItems((prev) =>
             prev.map((row) =>
-              row.id === item.id ? { ...row, status: "PAID", actionLabel: toActionLabel("PAID") } : row
-            )
+              row.id === item.id
+                ? { ...row, status: "PAID", actionLabel: toActionLabel("PAID") }
+                : row,
+            ),
           );
         }
         Alert.alert("안내", "이미 결제완료된 건입니다.");
@@ -623,8 +694,14 @@ export default function ShipperSettlementScreen() {
         } else {
           setItems((prev) =>
             prev.map((row) =>
-              row.id === item.id ? { ...row, status: "PENDING", actionLabel: toActionLabel("PENDING") } : row
-            )
+              row.id === item.id
+                ? {
+                    ...row,
+                    status: "PENDING",
+                    actionLabel: toActionLabel("PENDING"),
+                  }
+                : row,
+            ),
           );
         }
         Alert.alert("안내", "이미 결제 요청된 건입니다.");
@@ -652,7 +729,11 @@ export default function ShipperSettlementScreen() {
           borderBottomColor: c.border.default,
           backgroundColor: c.bg.surface,
         } as ViewStyle,
-        monthText: { fontSize: 17, fontWeight: "900", color: c.text.primary } as TextStyle,
+        monthText: {
+          fontSize: 17,
+          fontWeight: "900",
+          color: c.text.primary,
+        } as TextStyle,
         monthNavBtn: {
           width: 28,
           height: 28,
@@ -667,19 +748,43 @@ export default function ShipperSettlementScreen() {
           paddingVertical: 16,
           backgroundColor: "#4E46E5",
         } as ViewStyle,
-        summaryCaption: { fontSize: 12, fontWeight: "700", color: "#DCD9FF" } as TextStyle,
-        summaryAmount: { marginTop: 8, fontSize: 21, fontWeight: "900", color: "#FFFFFF" } as TextStyle,
+        summaryCaption: {
+          fontSize: 12,
+          fontWeight: "700",
+          color: "#DCD9FF",
+        } as TextStyle,
+        summaryAmount: {
+          marginTop: 8,
+          fontSize: 21,
+          fontWeight: "900",
+          color: "#FFFFFF",
+        } as TextStyle,
         summaryDivider: {
           height: 1,
           backgroundColor: "rgba(255,255,255,0.2)",
           marginTop: 14,
           marginBottom: 12,
         } as ViewStyle,
-        summaryBottomRow: { flexDirection: "row", alignItems: "center" } as ViewStyle,
+        summaryBottomRow: {
+          flexDirection: "row",
+          alignItems: "center",
+        } as ViewStyle,
         summaryCol: { flex: 1 } as ViewStyle,
-        summaryColDivider: { width: 1, height: 44, backgroundColor: "rgba(255,255,255,0.3)" } as ViewStyle,
-        summaryBig: { fontSize: 16, fontWeight: "900", color: "#FFFFFF" } as TextStyle,
-        summarySmall: { fontSize: 12, fontWeight: "700", color: "#DCD9FF" } as TextStyle,
+        summaryColDivider: {
+          width: 1,
+          height: 44,
+          backgroundColor: "rgba(255,255,255,0.3)",
+        } as ViewStyle,
+        summaryBig: {
+          fontSize: 16,
+          fontWeight: "900",
+          color: "#FFFFFF",
+        } as TextStyle,
+        summarySmall: {
+          fontSize: 12,
+          fontWeight: "700",
+          color: "#DCD9FF",
+        } as TextStyle,
         summaryBigRight: { textAlign: "right" } as TextStyle,
         summarySmallRight: { textAlign: "right" } as TextStyle,
         section: {
@@ -688,7 +793,11 @@ export default function ShipperSettlementScreen() {
           borderTopWidth: 1,
           borderTopColor: c.border.default,
         } as ViewStyle,
-        filterRow: { flexDirection: "row", gap: 8, paddingHorizontal: 16 } as ViewStyle,
+        filterRow: {
+          flexDirection: "row",
+          gap: 8,
+          paddingHorizontal: 16,
+        } as ViewStyle,
         filterBtn: {
           borderRadius: 18,
           paddingHorizontal: 14,
@@ -702,9 +811,17 @@ export default function ShipperSettlementScreen() {
           backgroundColor: "#0F172A",
           borderColor: "#0F172A",
         } as ViewStyle,
-        filterText: { fontSize: 13, fontWeight: "800", color: "#667085" } as TextStyle,
+        filterText: {
+          fontSize: 13,
+          fontWeight: "800",
+          color: "#667085",
+        } as TextStyle,
         filterTextActive: { color: "#FFFFFF" } as TextStyle,
-        listWrap: { marginTop: 10, paddingHorizontal: 16, gap: 10 } as ViewStyle,
+        listWrap: {
+          marginTop: 10,
+          paddingHorizontal: 16,
+          gap: 10,
+        } as ViewStyle,
         itemCard: {
           borderRadius: 16,
           borderWidth: 1,
@@ -714,17 +831,51 @@ export default function ShipperSettlementScreen() {
           paddingVertical: 12,
         } as ViewStyle,
         unpaidCard: { borderColor: "#E05A55" } as ViewStyle,
-        itemTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" } as ViewStyle,
-        dateRow: { flexDirection: "row", alignItems: "center", gap: 6 } as ViewStyle,
-        dateText: { fontSize: 13, fontWeight: "700", color: "#64748B" } as TextStyle,
-        statusBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 } as ViewStyle,
+        itemTop: {
+          flexDirection: "row",
+          justifyContent: "space-between",
+          alignItems: "center",
+        } as ViewStyle,
+        dateRow: {
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 6,
+        } as ViewStyle,
+        dateText: {
+          fontSize: 13,
+          fontWeight: "700",
+          color: "#64748B",
+        } as TextStyle,
+        statusBadge: {
+          paddingHorizontal: 8,
+          paddingVertical: 4,
+          borderRadius: 8,
+        } as ViewStyle,
         statusText: { fontSize: 12, fontWeight: "800" } as TextStyle,
-        amountText: { fontSize: 16, fontWeight: "900", color: c.text.primary } as TextStyle,
+        amountText: {
+          fontSize: 16,
+          fontWeight: "900",
+          color: c.text.primary,
+        } as TextStyle,
         amountUnpaid: { color: "#E05A55" } as TextStyle,
-        routeText: { marginTop: 10, fontSize: 14, fontWeight: "900", color: c.text.primary } as TextStyle,
-        payMethodText: { marginTop: 6, fontSize: 12, fontWeight: "700", color: c.text.secondary } as TextStyle,
+        routeText: {
+          marginTop: 10,
+          fontSize: 14,
+          fontWeight: "900",
+          color: c.text.primary,
+        } as TextStyle,
+        payMethodText: {
+          marginTop: 6,
+          fontSize: 12,
+          fontWeight: "700",
+          color: c.text.secondary,
+        } as TextStyle,
         arrowText: { color: "#94A3B8" } as TextStyle,
-        actionRow: { marginTop: 8, flexDirection: "row", justifyContent: "flex-end" } as ViewStyle,
+        actionRow: {
+          marginTop: 8,
+          flexDirection: "row",
+          justifyContent: "flex-end",
+        } as ViewStyle,
         actionBtn: {
           height: 34,
           paddingHorizontal: 12,
@@ -735,7 +886,11 @@ export default function ShipperSettlementScreen() {
           backgroundColor: "#EEF2FF",
         } as ViewStyle,
         actionBtnNeutral: { backgroundColor: "#EEF2F7" } as ViewStyle,
-        actionText: { fontSize: 13, fontWeight: "800", color: "#4E46E5" } as TextStyle,
+        actionText: {
+          fontSize: 13,
+          fontWeight: "800",
+          color: "#4E46E5",
+        } as TextStyle,
         actionTextNeutral: { color: "#64748B" } as TextStyle,
         emptyCard: {
           marginHorizontal: 16,
@@ -747,7 +902,11 @@ export default function ShipperSettlementScreen() {
           paddingVertical: 18,
           alignItems: "center",
         } as ViewStyle,
-        emptyText: { fontSize: 13, fontWeight: "700", color: c.text.secondary } as TextStyle,
+        emptyText: {
+          fontSize: 13,
+          fontWeight: "700",
+          color: c.text.secondary,
+        } as TextStyle,
         modalBackdrop: {
           flex: 1,
           backgroundColor: "rgba(0,0,0,0.28)",
@@ -761,8 +920,16 @@ export default function ShipperSettlementScreen() {
           paddingTop: 14,
           paddingBottom: Math.max(14, insets.bottom + 6),
         } as ViewStyle,
-        modalHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" } as ViewStyle,
-        modalTitle: { fontSize: 18, fontWeight: "900", color: c.text.primary } as TextStyle,
+        modalHeader: {
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+        } as ViewStyle,
+        modalTitle: {
+          fontSize: 18,
+          fontWeight: "900",
+          color: c.text.primary,
+        } as TextStyle,
         tossSheet: {
           flex: 1,
           backgroundColor: "#FFFFFF",
@@ -777,7 +944,11 @@ export default function ShipperSettlementScreen() {
           alignItems: "center",
           justifyContent: "space-between",
         } as ViewStyle,
-        tossTitle: { fontSize: 16, fontWeight: "800", color: c.text.primary } as TextStyle,
+        tossTitle: {
+          fontSize: 16,
+          fontWeight: "800",
+          color: c.text.primary,
+        } as TextStyle,
         tossCloseBtn: {
           width: 36,
           height: 36,
@@ -801,8 +972,19 @@ export default function ShipperSettlementScreen() {
           backgroundColor: "#FAFBFD",
           padding: 14,
         } as ViewStyle,
-        receiptAmount: { fontSize: 20, fontWeight: "900", textAlign: "center", color: c.text.primary } as TextStyle,
-        receiptPaid: { fontSize: 12, fontWeight: "700", textAlign: "center", color: "#64748B", marginTop: 2 } as TextStyle,
+        receiptAmount: {
+          fontSize: 20,
+          fontWeight: "900",
+          textAlign: "center",
+          color: c.text.primary,
+        } as TextStyle,
+        receiptPaid: {
+          fontSize: 12,
+          fontWeight: "700",
+          textAlign: "center",
+          color: "#64748B",
+          marginTop: 2,
+        } as TextStyle,
         receiptDash: {
           height: 1,
           borderStyle: "dashed",
@@ -811,21 +993,39 @@ export default function ShipperSettlementScreen() {
           marginTop: 14,
           marginBottom: 10,
         } as ViewStyle,
-        receiptRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 8 } as ViewStyle,
-        receiptKey: { fontSize: 13, fontWeight: "700", color: "#64748B" } as TextStyle,
-        receiptVal: { fontSize: 13, fontWeight: "900", color: c.text.primary } as TextStyle,
+        receiptRow: {
+          flexDirection: "row",
+          justifyContent: "space-between",
+          marginBottom: 8,
+        } as ViewStyle,
+        receiptKey: {
+          fontSize: 13,
+          fontWeight: "700",
+          color: "#64748B",
+        } as TextStyle,
+        receiptVal: {
+          fontSize: 13,
+          fontWeight: "900",
+          color: c.text.primary,
+        } as TextStyle,
         receiptBlockGap: { height: 8 } as ViewStyle,
       }),
-    [c, insets.bottom, insets.top]
+    [c, insets.bottom, insets.top],
   );
 
   return (
     <View style={s.page}>
       <ShipperScreenHeader title="정산 내역" hideBackButton />
 
-      <ScrollView contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={s.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={s.monthRow}>
-          <Pressable style={s.monthNavBtn} onPress={() => setViewMonth((prev) => addMonth(prev, -1))}>
+          <Pressable
+            style={s.monthNavBtn}
+            onPress={() => setViewMonth((prev) => addMonth(prev, -1))}
+          >
             <Ionicons name="chevron-back" size={24} color={c.text.primary} />
           </Pressable>
           <Text style={s.monthText}>{viewMonthLabel}</Text>
@@ -833,10 +1033,18 @@ export default function ShipperSettlementScreen() {
             style={s.monthNavBtn}
             disabled={isNextDisabled}
             onPress={() =>
-              setViewMonth((prev) => (compareMonth(prev, currentMonth) >= 0 ? prev : addMonth(prev, 1)))
+              setViewMonth((prev) =>
+                compareMonth(prev, currentMonth) >= 0
+                  ? prev
+                  : addMonth(prev, 1),
+              )
             }
           >
-            <Ionicons name="chevron-forward" size={24} color={isNextDisabled ? "#CBD5E1" : c.text.primary} />
+            <Ionicons
+              name="chevron-forward"
+              size={24}
+              color={isNextDisabled ? "#CBD5E1" : c.text.primary}
+            />
           </Pressable>
         </View>
 
@@ -851,7 +1059,9 @@ export default function ShipperSettlementScreen() {
             </View>
             <View style={s.summaryColDivider} />
             <View style={s.summaryCol}>
-              <Text style={[s.summaryBig, s.summaryBigRight]}>{toWon(summaryUnpaid)}</Text>
+              <Text style={[s.summaryBig, s.summaryBigRight]}>
+                {toWon(summaryUnpaid)}
+              </Text>
               <Text style={[s.summarySmall, s.summarySmallRight]}>미결제</Text>
             </View>
           </View>
@@ -871,7 +1081,9 @@ export default function ShipperSettlementScreen() {
                   style={[s.filterBtn, active && s.filterBtnActive]}
                   onPress={() => setFilter(key as SettlementFilter)}
                 >
-                  <Text style={[s.filterText, active && s.filterTextActive]}>{label}</Text>
+                  <Text style={[s.filterText, active && s.filterTextActive]}>
+                    {label}
+                  </Text>
                 </Pressable>
               );
             })}
@@ -892,7 +1104,10 @@ export default function ShipperSettlementScreen() {
                 const isPending = item.status === "PENDING";
                 const isPaid = item.status === "PAID";
                 return (
-                  <View key={item.id} style={[s.itemCard, isUnpaid && s.unpaidCard]}>
+                  <View
+                    key={item.id}
+                    style={[s.itemCard, isUnpaid && s.unpaidCard]}
+                  >
                     <View style={s.itemTop}>
                       <View style={s.dateRow}>
                         <Text style={s.dateText}>{item.dateLabel}</Text>
@@ -900,57 +1115,96 @@ export default function ShipperSettlementScreen() {
                           style={[
                             s.statusBadge,
                             {
-                              backgroundColor: isUnpaid ? "#FDE7E5" : isPending ? "#FEF9C3" : isPaid ? "#DCFCE7" : "#E0ECFF",
+                              backgroundColor: isUnpaid
+                                ? "#FDE7E5"
+                                : isPending
+                                  ? "#FEF9C3"
+                                  : isPaid
+                                    ? "#DCFCE7"
+                                    : "#E0ECFF",
                             },
                           ]}
                         >
                           <Text
                             style={[
                               s.statusText,
-                              { color: isUnpaid ? "#D44B46" : isPending ? "#A16207" : isPaid ? "#15803D" : "#2E6DA4" },
+                              {
+                                color: isUnpaid
+                                  ? "#D44B46"
+                                  : isPending
+                                    ? "#A16207"
+                                    : isPaid
+                                      ? "#15803D"
+                                      : "#2E6DA4",
+                              },
                             ]}
                           >
                             {statusText(item.status)}
                           </Text>
                         </View>
                       </View>
-                      <Text style={[s.amountText, isUnpaid && s.amountUnpaid]}>{toWon(item.amount)}</Text>
+                      <Text style={[s.amountText, isUnpaid && s.amountUnpaid]}>
+                        {toWon(item.amount)}
+                      </Text>
                     </View>
 
                     <Text style={s.routeText}>
                       {item.from} <Text style={s.arrowText}>→</Text> {item.to}
                     </Text>
-                    <Text style={s.payMethodText}>결제 방식: {item.payMethodLabel}</Text>
+                    <Text style={s.payMethodText}>
+                      결제 방식: {item.payMethodLabel}
+                    </Text>
 
                     <View style={s.actionRow}>
                       {(() => {
                         const isSubmitting = submittingOrderId === item.orderId;
-                        const paymentBlocked = isUnpaid && !item.isTransportCompleted;
+                        const paymentBlocked =
+                          isUnpaid && !item.isTransportCompleted;
                         return (
-                      <Pressable
-                        style={[s.actionBtn, (!isUnpaid || paymentBlocked) && s.actionBtnNeutral]}
-                        disabled={isSubmitting || isPending || paymentBlocked}
-                        onPress={() => void onPressAction(item)}
-                      >
-                        <MaterialCommunityIcons
-                          name={
-                            paymentBlocked
-                              ? "lock-outline"
-                              : item.status === "PAID"
-                              ? "file-document-outline"
-                              : item.status === "PENDING"
-                                ? "timer-sand"
-                              : item.status === "TAX_INVOICE"
-                                ? "file-outline"
-                                : "credit-card-outline"
-                          }
-                          size={14}
-                          color={paymentBlocked ? "#94A3B8" : isUnpaid ? "#4E46E5" : isPending ? "#A16207" : "#64748B"}
-                        />
-                        <Text style={[s.actionText, (!isUnpaid || paymentBlocked) && s.actionTextNeutral]}>
-                          {isSubmitting ? "요청중..." : item.actionLabel}
-                        </Text>
-                      </Pressable>
+                          <Pressable
+                            style={[
+                              s.actionBtn,
+                              (!isUnpaid || paymentBlocked) &&
+                                s.actionBtnNeutral,
+                            ]}
+                            disabled={
+                              isSubmitting || isPending || paymentBlocked
+                            }
+                            onPress={() => void onPressAction(item)}
+                          >
+                            <MaterialCommunityIcons
+                              name={
+                                paymentBlocked
+                                  ? "lock-outline"
+                                  : item.status === "PAID"
+                                    ? "file-document-outline"
+                                    : item.status === "PENDING"
+                                      ? "timer-sand"
+                                      : item.status === "TAX_INVOICE"
+                                        ? "file-outline"
+                                        : "credit-card-outline"
+                              }
+                              size={14}
+                              color={
+                                paymentBlocked
+                                  ? "#94A3B8"
+                                  : isUnpaid
+                                    ? "#4E46E5"
+                                    : isPending
+                                      ? "#A16207"
+                                      : "#64748B"
+                              }
+                            />
+                            <Text
+                              style={[
+                                s.actionText,
+                                (!isUnpaid || paymentBlocked) &&
+                                  s.actionTextNeutral,
+                              ]}
+                            >
+                              {isSubmitting ? "요청중..." : item.actionLabel}
+                            </Text>
+                          </Pressable>
                         );
                       })()}
                     </View>
@@ -962,15 +1216,29 @@ export default function ShipperSettlementScreen() {
         </View>
       </ScrollView>
 
-      <Modal visible={!!tossCheckout} animationType="slide" onRequestClose={closeTossCheckout}>
+      <Modal
+        visible={!!tossCheckout}
+        animationType="slide"
+        onRequestClose={closeTossCheckout}
+      >
         <View style={s.tossSheet}>
           <View style={s.tossHeader}>
-            <Pressable style={s.tossCloseBtn} disabled={tossConfirming} onPress={closeTossCheckout}>
-              <Ionicons name="close" size={24} color={tossConfirming ? "#CBD5E1" : c.text.primary} />
+            <Pressable
+              style={s.tossCloseBtn}
+              disabled={tossConfirming}
+              onPress={closeTossCheckout}
+            >
+              <Ionicons
+                name="close"
+                size={24}
+                color={tossConfirming ? "#CBD5E1" : c.text.primary}
+              />
             </Pressable>
             <Text style={s.tossTitle}>토스 결제</Text>
             <View style={s.tossCloseBtn} />
-            {tossConfirming ? <Text style={s.tossLoading}>결제 확인 중...</Text> : null}
+            {tossConfirming ? (
+              <Text style={s.tossLoading}>결제 확인 중...</Text>
+            ) : null}
           </View>
           {tossCheckout ? (
             <WebView
@@ -990,7 +1258,12 @@ export default function ShipperSettlementScreen() {
         </View>
       </Modal>
 
-      <Modal visible={!!receiptItem} transparent animationType="fade" onRequestClose={() => setReceiptItem(null)}>
+      <Modal
+        visible={!!receiptItem}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setReceiptItem(null)}
+      >
         <Pressable style={s.modalBackdrop} onPress={() => setReceiptItem(null)}>
           <Pressable style={s.modalSheet} onPress={(e) => e.stopPropagation()}>
             <View style={s.modalHeader}>
@@ -1001,7 +1274,9 @@ export default function ShipperSettlementScreen() {
             </View>
 
             <View style={s.receiptCard}>
-              <Text style={s.receiptAmount}>{receiptItem ? receiptItem.amount.toLocaleString("ko-KR") : "0"}</Text>
+              <Text style={s.receiptAmount}>
+                {receiptItem ? receiptItem.amount.toLocaleString("ko-KR") : "0"}
+              </Text>
               <Text style={s.receiptPaid}>결제완료</Text>
               <View style={s.receiptDash} />
 
@@ -1015,18 +1290,26 @@ export default function ShipperSettlementScreen() {
               </View>
               <View style={s.receiptRow}>
                 <Text style={s.receiptKey}>차량정보</Text>
-                <Text style={s.receiptVal}>{receiptItem?.vehicleInfo ?? "-"}</Text>
+                <Text style={s.receiptVal}>
+                  {receiptItem?.vehicleInfo ?? "-"}
+                </Text>
               </View>
               <View style={s.receiptRow}>
                 <Text style={s.receiptKey}>결제 방식</Text>
-                <Text style={s.receiptVal}>{receiptItem?.payMethodLabel ?? "-"}</Text>
+                <Text style={s.receiptVal}>
+                  {receiptItem?.payMethodLabel ?? "-"}
+                </Text>
               </View>
 
               <View style={s.receiptBlockGap} />
 
               <View style={s.receiptRow}>
                 <Text style={s.receiptKey}>공급가액</Text>
-                <Text style={s.receiptVal}>{receiptItem ? receiptItem.amount.toLocaleString("ko-KR") : "0"}</Text>
+                <Text style={s.receiptVal}>
+                  {receiptItem
+                    ? receiptItem.amount.toLocaleString("ko-KR")
+                    : "0"}
+                </Text>
               </View>
               <View style={s.receiptRow}>
                 <Text style={s.receiptKey}>세액</Text>
