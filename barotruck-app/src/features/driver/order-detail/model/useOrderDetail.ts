@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect, useCallback } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { Alert, Linking } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as Clipboard from "expo-clipboard";
@@ -22,7 +22,7 @@ export const useOrderDetail = () => {
   } | null>(null);
 
   // 내 위치 가져오기 (임시 좌표 적용)
-  const getMyLocation = useCallback(async () => {
+  const getMyLocation = async () => {
     // 임시 기본 좌표 (강남역 근처)
     const FALLBACK_LOCATION = { lat: 37.494461, lng: 127.029592 };
 
@@ -62,10 +62,10 @@ export const useOrderDetail = () => {
       console.warn("위치 가져오기 실패. 기본 위치로 대체합니다:", error);
       setMyLocation(FALLBACK_LOCATION);
     }
-  }, []);
+  };
 
   // 데이터 매칭
-  const fetchDetail = useCallback(async () => {
+  const fetchDetail = async () => {
     try {
       setLoading(true);
 
@@ -86,7 +86,7 @@ export const useOrderDetail = () => {
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  };
 
   const {
     handleUpdateStatus,
@@ -99,9 +99,9 @@ export const useOrderDetail = () => {
 
   // 초기 렌더링 시 데이터 패칭 (위치는 백그라운드로 실행)
   useEffect(() => {
-    if (id) fetchDetail();
-    getMyLocation();
-  }, [id, fetchDetail, getMyLocation]);
+    if (id) void fetchDetail();
+    void getMyLocation();
+  }, [id]);
 
   // 하단 액션 버튼
   const buttonConfig = useMemo(() => {
