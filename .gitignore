@@ -270,3 +270,5 @@ buck-out/
 # End of https://www.toptal.com/developers/gitignore/api/react,reactnative
 barotruck-app/GIT_GUIDE.md
 GIT_GUIDE.md
+barotruck-app/GoogleService-Info.plist
+barotruck-app/GoogleService-Info.plist
