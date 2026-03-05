@@ -1,10 +1,11 @@
 import React from "react";
-import { View, Text, StyleSheet, Pressable, Linking } from "react-native";
+import { View, Text, StyleSheet, Pressable, Linking, Alert } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Badge } from "@/shared/ui/feedback/Badge";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import { useMemo } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { KakaoLocalApi } from "@/shared/api/kakaoLocalService";
 
 // 거리 계산 함수
 function getDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
@@ -24,7 +25,6 @@ function getDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
 export const ActiveOrderCard = ({
   order,
   onNext,
-  onNav,
   onDetail,
   myLocation,
 }: any) => {
@@ -95,6 +95,90 @@ export const ActiveOrderCard = ({
     if (!addr) return "";
     const parts = addr.split(" ");
     return `${parts[0].replace("특별시", "").replace("광역시", "").replace("특별자치도", "")} ${parts[1] || ""}`;
+  };
+
+  const toFiniteNumber = (value: unknown): number | null => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+
+  const normalizeDisplayText = (value: unknown) => {
+    const s = String(value ?? "").trim();
+    if (!s) return "";
+    const lowered = s.toLowerCase();
+    if (lowered === "null" || lowered === "undefined") return "";
+    return s;
+  };
+
+  const resolveRouteCoordinates = async () => {
+    const directStartLat = toFiniteNumber(order?.startLat);
+    const directStartLng = toFiniteNumber(order?.startLng);
+    const directEndLat = toFiniteNumber(order?.endLat);
+    const directEndLng = toFiniteNumber(order?.endLng);
+
+    const startAddress = [normalizeDisplayText(order?.startAddr), normalizeDisplayText(order?.startPlace)]
+      .filter(Boolean)
+      .join(" ");
+    const endAddress = [normalizeDisplayText(order?.endAddr), normalizeDisplayText(order?.endPlace)]
+      .filter(Boolean)
+      .join(" ");
+
+    const [startGeo, endGeo] = await Promise.all([
+      directStartLat !== null && directStartLng !== null
+        ? Promise.resolve({ lat: directStartLat, lng: directStartLng })
+        : startAddress
+          ? KakaoLocalApi.geocodeAddress(startAddress).catch(() => null)
+          : Promise.resolve(null),
+      directEndLat !== null && directEndLng !== null
+        ? Promise.resolve({ lat: directEndLat, lng: directEndLng })
+        : endAddress
+          ? KakaoLocalApi.geocodeAddress(endAddress).catch(() => null)
+          : Promise.resolve(null),
+    ]);
+
+    if (!startGeo || !endGeo) return null;
+    return { startGeo, endGeo };
+  };
+
+  const tryOpenUrl = async (url: string) => {
+    try {
+      await Linking.openURL(url);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  const handleOpenKakaoNavigation = async () => {
+    const startLabel = normalizeDisplayText(order?.startAddr || order?.startPlace) || "출발지";
+    const endLabel = normalizeDisplayText(order?.endAddr || order?.endPlace) || "도착지";
+    const coords = await resolveRouteCoordinates();
+
+    if (coords) {
+      const { startGeo, endGeo } = coords;
+      const appUrl = `kakaomap://route?sp=${startGeo.lat},${startGeo.lng}&ep=${endGeo.lat},${endGeo.lng}&by=CAR`;
+      const appUrlWithName = `kakaomap://route?sp=${encodeURIComponent(startLabel)},${startGeo.lat},${startGeo.lng}&ep=${encodeURIComponent(
+        endLabel
+      )},${endGeo.lat},${endGeo.lng}&by=CAR`;
+      const linkRouteUrl = `https://map.kakao.com/link/from/${encodeURIComponent(startLabel)},${startGeo.lat},${startGeo.lng}/to/${encodeURIComponent(
+        endLabel
+      )},${endGeo.lat},${endGeo.lng}`;
+      const linkToUrl = `https://map.kakao.com/link/to/${encodeURIComponent(endLabel)},${endGeo.lat},${endGeo.lng}`;
+
+      if (await tryOpenUrl(appUrl)) return;
+      if (await tryOpenUrl(appUrlWithName)) return;
+      if (await tryOpenUrl(linkRouteUrl)) return;
+      if (await tryOpenUrl(linkToUrl)) return;
+    }
+
+    const webRouteByName = `https://map.kakao.com/?sName=${encodeURIComponent(startLabel)}&eName=${encodeURIComponent(
+      endLabel
+    )}`;
+    const webSearch = `https://map.kakao.com/?q=${encodeURIComponent(endLabel)}`;
+    if (await tryOpenUrl(webRouteByName)) return;
+    if (await tryOpenUrl(webSearch)) return;
+
+    Alert.alert("오류", "카카오맵 길안내를 열지 못했습니다.");
   };
 
   return (
@@ -192,7 +276,7 @@ export const ActiveOrderCard = ({
         {/* 길안내 버튼 */}
         <Pressable
           style={[s.btnNav, { borderColor: c.border.default }]}
-          onPress={onNav}
+          onPress={() => void handleOpenKakaoNavigation()}
         >
           <Ionicons name="map-outline" size={18} color={c.text.primary} />
           <Text style={[s.btnNavText, { color: c.text.primary }]}> 길안내</Text>

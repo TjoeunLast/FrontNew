@@ -188,9 +188,6 @@ export default function DrivingListScreen() {
                   key={order.orderId}
                   order={order}
                   onNext={handleUpdateStatus}
-                  onNav={() =>
-                    router.push(`/(driver)/driving/${order.orderId}`)
-                  }
                   onDetail={(id: number) =>
                     router.push(`/(driver)/order-detail/${id}`)
                   }
