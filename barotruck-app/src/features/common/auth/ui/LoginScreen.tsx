@@ -1,4 +1,6 @@
-﻿import React, { useState } from "react";
+﻿import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
+import React, { useState } from "react";
 import {
   Alert,
   KeyboardAvoidingView,
@@ -10,15 +12,12 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
 
-import { useAppTheme } from "@/shared/hooks/useAppTheme";
-import { TextField } from "@/shared/ui/form/TextField";
-import { Button } from "@/shared/ui/base/Button";
-import { UserService } from "@/shared/api/userService";
 import { AuthService } from "@/shared/api/authService";
-import { USE_MOCK } from "@/shared/config/mock";
+import { UserService } from "@/shared/api/userService";
+import { useAppTheme } from "@/shared/hooks/useAppTheme";
+import { Button } from "@/shared/ui/base/Button";
+import { TextField } from "@/shared/ui/form/TextField";
 import { saveCurrentUserSnapshot } from "@/shared/utils/currentUserStorage";
 
 const ROUTES = {
@@ -39,7 +38,8 @@ export default function LoginScreen() {
   const [autoLogin, setAutoLogin] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  const canLogin = email.trim().length > 0 && pw.trim().length > 0 && !submitting;
+  const canLogin =
+    email.trim().length > 0 && pw.trim().length > 0 && !submitting;
 
   const showError = (msg: string) => {
     if (Platform.OS === "web") window.alert(msg);
@@ -59,7 +59,15 @@ export default function LoginScreen() {
         role: me.role,
         gender: me.gender ?? me.sex,
         age: Number.isFinite(Number(me.age)) ? Number(me.age) : undefined,
-        birthDate: String(me.birthDate ?? me.birthday ?? me.birth ?? me.dateOfBirth ?? me.dob ?? "").trim() || undefined,
+        birthDate:
+          String(
+            me.birthDate ??
+              me.birthday ??
+              me.birth ??
+              me.dateOfBirth ??
+              me.dob ??
+              "",
+          ).trim() || undefined,
       }).catch(() => {});
 
       if (me.role === "DRIVER") {
@@ -70,7 +78,10 @@ export default function LoginScreen() {
         throw new Error("정의되지 않은 사용자 권한입니다.");
       }
     } catch (e: any) {
-      const errorMsg = e.response?.data?.error || e.response?.data?.message || "로그인 정보를 확인해주세요.";
+      const errorMsg =
+        e.response?.data?.error ||
+        e.response?.data?.message ||
+        "로그인 정보를 확인해주세요.";
       showError(errorMsg);
     } finally {
       setSubmitting(false);
@@ -82,118 +93,149 @@ export default function LoginScreen() {
     await executeLogin(email, pw);
   };
 
-  const onQuickLoginShipper = async () => {
-    await executeLogin("shipper@mock.local", "mock1234");
-  };
-
-  const onQuickLoginDriver = async () => {
-    await executeLogin("driver@mock.local", "mock1234");
-  };
-
   return (
-    <SafeAreaView style={[s.screen, { backgroundColor: c.bg.surface }]} edges={["top", "bottom"]}>
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
+    <SafeAreaView
+      style={[s.screen, { backgroundColor: c.bg.surface }]}
+      edges={["top", "bottom"]}
+    >
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={{ flex: 1 }}
+      >
         <ScrollView
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={s.content}
         >
           <View style={s.container}>
-            <View style={s.brandWrap}>
-              <Text style={[s.brandTitle, { color: c.brand.primary }]}>Baro Truck</Text>
-              <Text style={[s.brandSubtitle, { color: c.text.secondary }]}>빠르고 간편한 화물 배차를 시작하세요</Text>
+            {/* 상단 폼 영역 */}
+            <View style={s.formArea}>
+              <View style={s.brandWrap}>
+                <Text style={[s.brandTitle, { color: c.brand.primary }]}>
+                  Baro Truck
+                </Text>
+                <Text style={[s.brandSubtitle, { color: c.text.secondary }]}>
+                  빠르고 간편한 화물 배차를 시작하세요
+                </Text>
+              </View>
+
+              <View style={{ height: 32 }} />
+
+              <TextField
+                value={email}
+                onChangeText={setEmail}
+                placeholder="이메일"
+                keyboardType="email-address"
+                autoCapitalize="none"
+                editable={!submitting}
+                inputWrapStyle={[
+                  s.inputWrap,
+                  {
+                    backgroundColor: c.bg.surface,
+                    borderColor: c.border.default,
+                  },
+                ]}
+                inputStyle={s.tfInput}
+              />
+
+              <View style={{ height: 16 }} />
+
+              <TextField
+                value={pw}
+                onChangeText={setPw}
+                placeholder="비밀번호"
+                secureTextEntry
+                autoCapitalize="none"
+                editable={!submitting}
+                inputWrapStyle={[
+                  s.inputWrap,
+                  {
+                    backgroundColor: c.bg.surface,
+                    borderColor: c.border.default,
+                  },
+                ]}
+                inputStyle={s.tfInput}
+              />
+
+              <View style={s.row}>
+                <Pressable
+                  onPress={() => setAutoLogin((v) => !v)}
+                  style={s.checkboxRow}
+                  disabled={submitting}
+                >
+                  <View
+                    style={[
+                      s.checkboxBox,
+                      {
+                        borderColor: autoLogin
+                          ? c.brand.primary
+                          : c.border.default,
+                        backgroundColor: autoLogin
+                          ? c.brand.primary
+                          : "transparent",
+                      },
+                    ]}
+                  >
+                    {autoLogin && (
+                      <Ionicons name="checkmark" size={16} color="#fff" />
+                    )}
+                  </View>
+                  <Text style={[s.checkboxLabel, { color: c.text.primary }]}>
+                    자동 로그인
+                  </Text>
+                </Pressable>
+
+                <View style={{ flexDirection: "row", alignItems: "center" }}>
+                  <Pressable
+                    onPress={() => router.push(ROUTES.findEmail)}
+                    disabled={submitting}
+                  >
+                    <Text style={[s.link, { color: c.text.secondary }]}>
+                      이메일 찾기
+                    </Text>
+                  </Pressable>
+                  <Text
+                    style={{ marginHorizontal: 8, color: c.border.default }}
+                  >
+                    |
+                  </Text>
+                  <Pressable
+                    onPress={() => router.push(ROUTES.resetPw)}
+                    disabled={submitting}
+                  >
+                    <Text style={[s.link, { color: c.text.secondary }]}>
+                      비밀번호 찾기
+                    </Text>
+                  </Pressable>
+                </View>
+              </View>
+
+              <View style={{ height: 16 }} />
+
+              <Button
+                title={submitting ? "로그인 중..." : "로그인"}
+                variant="primary"
+                size="lg"
+                fullWidth
+                disabled={!canLogin || submitting}
+                loading={submitting}
+                onPress={onLogin}
+                style={[s.loginBtn, !canLogin && s.disabledBtn]}
+              />
             </View>
 
-            <View style={{ height: 14 }} />
-
-            <TextField
-              value={email}
-              onChangeText={setEmail}
-              placeholder="이메일"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              editable={!submitting}
-              inputWrapStyle={[
-                s.inputWrap,
-                { backgroundColor: c.bg.surface, borderColor: c.border.default },
-              ]}
-              inputStyle={s.tfInput}
-            />
-
-            <View style={{ height: 12 }} />
-
-            <TextField
-              value={pw}
-              onChangeText={setPw}
-              placeholder="비밀번호"
-              secureTextEntry
-              autoCapitalize="none"
-              editable={!submitting}
-              inputWrapStyle={[
-                s.inputWrap,
-                { backgroundColor: c.bg.surface, borderColor: c.border.default },
-              ]}
-              inputStyle={s.tfInput}
-            />
-
-            <View style={s.row}>
-              <Pressable onPress={() => setAutoLogin((v) => !v)} style={s.checkboxRow} disabled={submitting}>
-                <View style={[s.checkboxBox, { borderColor: c.border.default }]}>
-                  {autoLogin && <Ionicons name="checkmark" size={16} color={c.brand.primary} />}
-                </View>
-                <Text style={[s.checkboxLabel, { color: c.text.primary }]}>자동 로그인</Text>
-              </Pressable>
-
-              <View style={{ flexDirection: "row", alignItems: "center" }}>
-                <Pressable onPress={() => router.push(ROUTES.findEmail)} disabled={submitting}>
-                  <Text style={[s.link, { color: c.text.secondary }]}>이메일 찾기</Text>
-                </Pressable>
-                <Text style={{ marginHorizontal: 8, color: c.border.default }}>|</Text>
-                <Pressable onPress={() => router.push(ROUTES.resetPw)} disabled={submitting}>
-                  <Text style={[s.link, { color: c.text.secondary }]}>비밀번호 찾기</Text>
-                </Pressable>
-              </View>
-            </View>
-
-            <Button
-              title={submitting ? "로그인 중..." : "로그인"}
-              variant="primary"
-              size="lg"
-              fullWidth
-              disabled={!canLogin || submitting}
-              loading={submitting}
-              onPress={onLogin}
-              style={s.loginBtn}
-            />
-
-            {USE_MOCK && (
-              <View style={s.quickWrap}>
-                <Text style={[s.quickTitle, { color: c.text.secondary }]}>목업 빠른 로그인</Text>
-                <View style={s.quickRow}>
-                  <Button
-                    title="화주 자동 로그인"
-                    variant="outline"
-                    size="md"
-                    disabled={submitting}
-                    onPress={onQuickLoginShipper}
-                    style={s.quickBtn}
-                  />
-                  <Button
-                    title="차주 자동 로그인"
-                    variant="outline"
-                    size="md"
-                    disabled={submitting}
-                    onPress={onQuickLoginDriver}
-                    style={s.quickBtn}
-                  />
-                </View>
-              </View>
-            )}
-
+            {/* 하단 회원가입 영역 */}
             <View style={s.bottom}>
-              <Text style={[s.bottomText, { color: c.text.secondary }]}>아직 계정이 없으신가요?</Text>
-              <Pressable onPress={() => router.push(ROUTES.signup)} disabled={submitting}>
-                <Text style={[s.bottomLink, { color: c.brand.primary }]}>회원가입</Text>
+              <Text style={[s.bottomText, { color: c.text.secondary }]}>
+                아직 계정이 없으신가요?
+              </Text>
+              <Pressable
+                onPress={() => router.push(ROUTES.signup)}
+                disabled={submitting}
+              >
+                <Text style={[s.bottomLink, { color: c.brand.primary }]}>
+                  회원가입
+                </Text>
               </Pressable>
             </View>
           </View>
@@ -207,61 +249,76 @@ const s = StyleSheet.create({
   screen: { flex: 1 },
   content: {
     flexGrow: 1,
-    paddingHorizontal: 20,
-    paddingTop: 44,
-    paddingBottom: 28,
+    paddingHorizontal: 24,
+    justifyContent: "center",
     alignItems: "center",
   },
-  container: { width: "100%", maxWidth: 520 },
+  container: {
+    width: "100%",
+    maxWidth: 400,
+    minHeight: "70%",
+    justifyContent: "space-between",
+    paddingVertical: 40,
+  },
+  formArea: {
+    width: "100%",
+    justifyContent: "center",
+  },
 
-  brandWrap: { alignItems: "center", marginTop: 16, marginBottom: 18 },
-  brandTitle: { fontSize: 42, fontWeight: "900", letterSpacing: -0.4 },
-  brandSubtitle: { marginTop: 10, fontSize: 16, fontWeight: "700" },
+  brandWrap: { alignItems: "center", marginBottom: 16 },
+  brandTitle: { fontSize: 44, fontWeight: "900", letterSpacing: -0.5 },
+  brandSubtitle: { marginTop: 12, fontSize: 15, fontWeight: "600" },
 
   inputWrap: {
-    borderRadius: 18,
-    paddingHorizontal: 18,
-    minHeight: 60,
-    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    minHeight: 56,
+    borderWidth: 1.5,
   },
-  tfInput: { fontSize: 18, fontWeight: "800", paddingVertical: 0 },
+  tfInput: { fontSize: 16, fontWeight: "600", paddingVertical: 0 },
 
   row: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginTop: 12,
-    marginBottom: 18,
+    marginTop: 16,
   },
-  checkboxRow: { flexDirection: "row", alignItems: "center" },
+  checkboxRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 4,
+  },
   checkboxBox: {
-    width: 22,
-    height: 22,
-    borderRadius: 4,
-    borderWidth: 1,
+    width: 20,
+    height: 20,
+    borderRadius: 6,
+    borderWidth: 1.5,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 10,
+    marginRight: 8,
   },
-  checkboxLabel: { fontSize: 15, fontWeight: "700" },
-  link: { fontSize: 14, fontWeight: "700" },
+  checkboxLabel: { fontSize: 14, fontWeight: "600" },
+  link: { fontSize: 13, fontWeight: "600" },
+
+  loginBtn: {
+    height: 60,
+    borderRadius: 12,
+  },
+  disabledBtn: {
+    opacity: 0.6,
+  },
 
   bottom: {
-    marginTop: 22,
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
+    paddingTop: 40,
   },
-  bottomText: { fontSize: 16, fontWeight: "700" },
-  bottomLink: { marginLeft: 10, fontSize: 16, fontWeight: "900", textDecorationLine: "underline" },
-
-  loginBtn: {
-    height: 64,
-    borderRadius: 18,
-    marginTop: 20,
+  bottomText: { fontSize: 15, fontWeight: "500" },
+  bottomLink: {
+    marginLeft: 8,
+    fontSize: 15,
+    fontWeight: "800",
+    textDecorationLine: "underline",
   },
-  quickWrap: { marginTop: 14 },
-  quickTitle: { fontSize: 13, fontWeight: "700", marginBottom: 8 },
-  quickRow: { flexDirection: "row", gap: 8 },
-  quickBtn: { flex: 1, minHeight: 44, borderRadius: 12 },
 });
