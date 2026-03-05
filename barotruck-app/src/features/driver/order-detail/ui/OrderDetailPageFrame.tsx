@@ -5,6 +5,10 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 type OrderDetailPageFrameProps = {
   title: string;
   onPressBack: () => void;
+  rightActionLabel?: string;
+  onPressRightAction?: () => void;
+  rightActionDisabled?: boolean;
+  rightActionColor?: string;
   isCompleted?: boolean;
   isSettled?: boolean;
   surfaceColor: string;
@@ -21,6 +25,10 @@ type OrderDetailPageFrameProps = {
 export default function OrderDetailPageFrame({
   title,
   onPressBack,
+  rightActionLabel,
+  onPressRightAction,
+  rightActionDisabled = false,
+  rightActionColor,
   isCompleted = false,
   isSettled = false,
   surfaceColor,
@@ -49,7 +57,20 @@ export default function OrderDetailPageFrame({
           <Ionicons name="arrow-back" size={24} color={textSecondary} />
         </Pressable>
         <Text style={[s.headerTitle, { color: textPrimary }]}>{title}</Text>
-        <View style={{ width: 40 }} />
+        {onPressRightAction && rightActionLabel ? (
+          <Pressable
+            onPress={rightActionDisabled ? undefined : onPressRightAction}
+            disabled={rightActionDisabled}
+            style={({ pressed }) => [
+              s.rightActionBtn,
+              { opacity: pressed || rightActionDisabled ? 0.55 : 1 },
+            ]}
+          >
+            <Text style={[s.rightActionText, { color: rightActionColor ?? "#DC2626" }]}>{rightActionLabel}</Text>
+          </Pressable>
+        ) : (
+          <View style={s.rightActionPlaceholder} />
+        )}
       </View>
 
       {isCompleted && (
@@ -95,6 +116,15 @@ const s = StyleSheet.create({
   },
   headerBtn: { padding: 8 },
   headerTitle: { fontSize: 16, fontWeight: "800" },
+  rightActionBtn: {
+    minWidth: 40,
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    alignItems: "flex-end",
+    justifyContent: "center",
+  },
+  rightActionText: { fontSize: 14, fontWeight: "800" },
+  rightActionPlaceholder: { width: 40 },
   statusHeader: { margin: 16, marginBottom: 0, padding: 14, borderRadius: 16 },
   statusHeaderRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   statusHeaderText: { fontSize: 14, fontWeight: "700", flex: 1 },

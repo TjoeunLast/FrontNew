@@ -241,10 +241,21 @@ export default function OrderDetailScreen() {
     const phone = parsedCargo.pickupContact || "-";
     return { label, name, phone };
   }, [order?.user, parsedCargo.pickupContact]);
+  const hasCancellationMeta = useMemo(() => {
+    return Boolean(
+      order?.cancellation?.cancelledAt ||
+        order?.cancellation?.cancelReason ||
+        order?.cancellation?.cancelledBy ||
+        (order as any)?.cancelledAt ||
+        (order as any)?.cancelReason ||
+        (order as any)?.cancelledBy
+    );
+  }, [order]);
   const isCompleted = isCompletedStatus(order?.status);
-  const statusGroup = getOrderDetailStatusGroup(order?.status);
+  const canCancelOrder = isWaitingStatus(order?.status) && !hasCancellationMeta;
+  const statusGroup = hasCancellationMeta ? "CANCELLED" : getOrderDetailStatusGroup(order?.status);
   const isSettled = order?.settlementStatus === "COMPLETED";
-  const statusInfo = getOrderStatusInfo(order?.status);
+  const statusInfo = getOrderStatusInfo(hasCancellationMeta ? "CANCELLED" : order?.status);
 
   const buttonConfig = useMemo<ActionButtonConfig | null>(() => {
     return getMainActionButtonConfig({
@@ -343,6 +354,47 @@ export default function OrderDetailScreen() {
     } finally {
       setActionLoading(false);
     }
+  };
+
+  const runCancelOrder = async () => {
+    if (!order) return;
+    setActionLoading(true);
+    try {
+      await OrderApi.cancelOrder(order.orderId, "화주 직접 취소");
+      setApplicantsOpen(false);
+      setOrder((prev) =>
+        prev
+          ? {
+              ...prev,
+              status: "CANCELLED",
+              cancellation: {
+                ...prev.cancellation,
+                cancelReason: "화주 직접 취소",
+                cancelledAt: new Date().toISOString(),
+                cancelledBy: "SHIPPER",
+              },
+            }
+          : prev
+      );
+      router.replace("/(shipper)/(tabs)/orders?tab=CANCEL" as any);
+    } catch (error: any) {
+      const message = error?.response?.data?.message ?? "취소 처리에 실패했습니다. 잠시 후 다시 시도해주세요.";
+      Alert.alert("취소 실패", message);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleCancelOrder = () => {
+    if (!order || !canCancelOrder || actionLoading) return;
+    Alert.alert("화물 취소", "등록한 화물을 취소하시겠습니까?", [
+      { text: "아니오", style: "cancel" },
+      {
+        text: "취소하기",
+        style: "destructive",
+        onPress: () => void runCancelOrder(),
+      },
+    ]);
   };
 
   const handleSubmitReview = async () => {
@@ -641,6 +693,10 @@ export default function OrderDetailScreen() {
           }
           router.replace("/(shipper)/(tabs)/orders" as any);
         }}
+        rightActionLabel={canCancelOrder ? "취소" : undefined}
+        onPressRightAction={canCancelOrder ? () => void handleCancelOrder() : undefined}
+        rightActionDisabled={actionLoading}
+        rightActionColor={c.status.danger}
         isCompleted={isCompleted}
         isSettled={isSettled}
         surfaceColor={c.bg.surface}

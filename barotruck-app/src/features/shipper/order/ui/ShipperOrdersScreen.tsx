@@ -114,6 +114,17 @@ function resolveApplicants(order: OrderResponse) {
 }
 
 function toUiCard(order: OrderResponse): DispatchCardItem | null {
+  const statusUpper = String(order.status ?? "").toUpperCase();
+  const hasCancellationMeta = Boolean(
+    order.cancellation?.cancelledAt ||
+      order.cancellation?.cancelReason ||
+      order.cancellation?.cancelledBy ||
+      (order as any)?.cancelledAt ||
+      (order as any)?.cancelReason ||
+      (order as any)?.cancelledBy
+  );
+  const isCancelledLike =
+    statusUpper === "CANCELLED" || statusUpper === "CANCELED" || statusUpper === "CANCEL" || hasCancellationMeta;
   const from = order.startAddr || order.startPlace || "출발지 미정";
   const to = order.endAddr || order.endPlace || "도착지 미정";
   const fromDetail = order.startPlace || "";
@@ -125,7 +136,31 @@ function toUiCard(order: OrderResponse): DispatchCardItem | null {
   const loadMethodShort = toLoadMethodShort(order.loadMethod);
   const workToolShort = toWorkToolShort(order.workType);
 
-  if (order.status === "REQUESTED" || order.status === "PENDING" || order.status === "APPLIED") {
+  if (isCancelledLike) {
+    const applicants = resolveApplicants(order);
+    return {
+      id: String(order.orderId),
+      isInstantDispatch: Boolean(order.instant),
+      tab: "CANCEL",
+      statusLabel: "취소",
+      statusTone: "gray",
+      timeLabel,
+      from,
+      to,
+      fromDetail,
+      toDetail,
+      distanceKm,
+      pickupTimeHHmm: toHHmm(order.startSchedule),
+      dropoffTimeHHmm: toHHmm(order.endSchedule),
+      cargoLabel,
+      loadMethodShort,
+      workToolShort,
+      priceWon,
+      applicants,
+    };
+  }
+
+  if (statusUpper === "REQUESTED" || statusUpper === "PENDING" || statusUpper === "APPLIED") {
     const applicants = resolveApplicants(order);
     return {
       id: String(order.orderId),
@@ -149,7 +184,7 @@ function toUiCard(order: OrderResponse): DispatchCardItem | null {
     };
   }
 
-  if (order.status === "ACCEPTED") {
+  if (statusUpper === "ACCEPTED") {
     return {
       id: String(order.orderId),
       isInstantDispatch: Boolean(order.instant),
@@ -174,7 +209,7 @@ function toUiCard(order: OrderResponse): DispatchCardItem | null {
     };
   }
 
-  if (["LOADING", "IN_TRANSIT", "UNLOADING"].includes(order.status)) {
+  if (["LOADING", "IN_TRANSIT", "UNLOADING"].includes(statusUpper)) {
     return {
       id: String(order.orderId),
       isInstantDispatch: Boolean(order.instant),
@@ -197,11 +232,11 @@ function toUiCard(order: OrderResponse): DispatchCardItem | null {
       driverName: order.user?.nickname || "김기사",
       driverVehicle: cargoLabel,
       drivingStageLabel:
-        order.status === "LOADING" ? "상차중" : order.status === "UNLOADING" ? "하차중" : "배달 중",
+        statusUpper === "LOADING" ? "상차중" : statusUpper === "UNLOADING" ? "하차중" : "배달 중",
     };
   }
 
-  if (order.status === "COMPLETED") {
+  if (statusUpper === "COMPLETED") {
     return {
       id: String(order.orderId),
       isInstantDispatch: Boolean(order.instant),
@@ -221,32 +256,6 @@ function toUiCard(order: OrderResponse): DispatchCardItem | null {
       workToolShort,
       priceWon,
       receiptLabel: "인수증 확인",
-    };
-  }
-
-  if (order.status === "CANCELLED") {
-    const applicants = resolveApplicants(order);
-    // 자동 취소 정의: 기사 신청이 없는 상태에서 기간 만료로 취소된 건
-    if (applicants > 0) return null;
-    return {
-      id: String(order.orderId),
-      isInstantDispatch: Boolean(order.instant),
-      tab: "CANCEL",
-      statusLabel: "기간만료 취소",
-      statusTone: "gray",
-      timeLabel,
-      from,
-      to,
-      fromDetail,
-      toDetail,
-      distanceKm,
-      pickupTimeHHmm: toHHmm(order.startSchedule),
-      dropoffTimeHHmm: toHHmm(order.endSchedule),
-      cargoLabel,
-      loadMethodShort,
-      workToolShort,
-      priceWon,
-      applicants,
     };
   }
 
@@ -289,7 +298,9 @@ export default function ShipperOrdersScreen() {
   useFocusEffect(
     React.useCallback(() => {
       let active = true;
-      void (async () => {
+      let retryTimer: ReturnType<typeof setTimeout> | null = null;
+
+      const loadCards = async () => {
         try {
           const rows = await OrderApi.getMyShipperOrders();
 
@@ -305,10 +316,18 @@ export default function ShipperOrdersScreen() {
           if (!active) return;
           setCards([]);
         }
+      };
+
+      void (async () => {
+        await loadCards();
+        retryTimer = setTimeout(() => {
+          void loadCards();
+        }, 1200);
       })();
 
       return () => {
         active = false;
+        if (retryTimer) clearTimeout(retryTimer);
       };
     }, [])
   );
@@ -394,7 +413,7 @@ export default function ShipperOrdersScreen() {
                 : item.tab === "DONE"
                   ? "완료"
                   : item.tab === "CANCEL"
-                    ? "기간만료 자동취소"
+                    ? item.statusLabel || "취소"
                     : item.statusLabel === "배차완료"
                       ? "상차 완료"
                       : "대기"

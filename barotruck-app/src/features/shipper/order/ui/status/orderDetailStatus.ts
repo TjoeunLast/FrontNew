@@ -29,6 +29,8 @@ export function getOrderStatusInfo(status?: string): OrderStatusInfo {
     case "COMPLETED":
       return { label: "운송 완료", tone: "neutral" };
     case "CANCELLED":
+    case "CANCELED":
+    case "CANCEL":
       return { label: "취소", tone: "neutral" };
     default:
       return { label: "배차 대기", tone: "warning" };
@@ -51,7 +53,8 @@ export function isCompletedStatus(status?: OrderStatus | string) {
 }
 
 export function isCancelledStatus(status?: OrderStatus | string) {
-  return status === "CANCELLED";
+  const v = String(status ?? "").toUpperCase();
+  return v === "CANCELLED" || v === "CANCELED" || v === "CANCEL";
 }
 
 export function getMainActionButtonConfig(params: {
