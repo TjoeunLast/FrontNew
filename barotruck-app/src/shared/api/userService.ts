@@ -34,7 +34,6 @@ export const UserService = {
 
     const res = await apiClient.get('/api/user/me');
     const baseProfile = res.data as UserProfile;
-    console.log("🌐 [UserService] 서버에서 받은 프로필 정보:", baseProfile);
     return {
       ...baseProfile,
       nickname: String(snapshot?.nickname ?? baseProfile.nickname).trim() || baseProfile.nickname,

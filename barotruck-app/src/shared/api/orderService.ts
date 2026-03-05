@@ -358,34 +358,15 @@ export const OrderApi = {
     return res.data;
   },
 
+/**
+   * 1. 화주: 오더 수정
+   * 정석적인 PUT /api/v1/orders/{orderId} 호출
+   */
   updateOrder: async (orderId: number, data: OrderRequest): Promise<OrderResponse> => {
-    const candidates: Array<{ method: 'patch' | 'put' | 'post'; url: string }> = [
-      { method: 'patch', url: `${API_BASE}/${orderId}` },
-      { method: 'put', url: `${API_BASE}/${orderId}` },
-      { method: 'patch', url: `${API_BASE}/${orderId}/update` },
-      { method: 'put', url: `${API_BASE}/${orderId}/update` },
-      { method: 'post', url: `${API_BASE}/${orderId}/update` },
-      { method: 'patch', url: `${API_BASE}/update/${orderId}` },
-    ];
-
-    let lastError: any = null;
-    for (const candidate of candidates) {
-      try {
-        const res =
-          candidate.method === 'patch'
-            ? await apiClient.patch(candidate.url, data)
-            : candidate.method === 'put'
-              ? await apiClient.put(candidate.url, data)
-              : await apiClient.post(candidate.url, data);
-        return res.data;
-      } catch (error: any) {
-        const status = Number(error?.response?.status ?? 0);
-        if (status !== 404 && status !== 405) throw error;
-        lastError = error;
-      }
-    }
-
-    throw lastError ?? new Error('order_update_endpoint_not_found');
+    // 기존에 만드신 candidates 로직도 좋지만, 
+    // 백엔드가 확정되었다면 깔끔하게 하나만 호출하는 것이 관리에 용이합니다.
+    const res = await apiClient.put(`${API_BASE}/${orderId}`, data);
+    return res.data;
   },
 
   getAvailableOrders: async (): Promise<OrderResponse[]> => {
@@ -510,5 +491,7 @@ export const OrderService = {
           return { totalAmount: 0, receivedAmount: 0, pendingAmount: 0, orders: [] };
       }
   },
+
+
 
 };
