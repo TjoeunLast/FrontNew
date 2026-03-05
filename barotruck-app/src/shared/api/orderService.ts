@@ -5,6 +5,9 @@ const API_BASE = '/api/v1/orders';
 
 function normalizeStatus(raw: any): OrderStatus {
   const v = String(raw ?? '').toUpperCase();
+  // 레거시 백엔드 상태값을 표준 주문 상태값으로 정규화
+  if (v === 'COMPLETE') return 'COMPLETED';
+  if (v === 'MOVING') return 'IN_TRANSIT';
   if (
     v === 'REQUESTED' ||
     v === 'APPLIED' ||
@@ -45,13 +48,12 @@ function normalizeSettlementStatus(raw: any): OrderResponse['settlementStatus'] 
 function findNestedSettlementStatus(node: any, depth = 0): OrderResponse['settlementStatus'] {
   if (!node || typeof node !== 'object' || depth > 3) return undefined;
 
+  // node.status/state는 운송 상태일 수 있어서 정산 상태 판별에 사용하지 않음
   const direct = normalizeSettlementStatus(
-      (node as any).status ??
       (node as any).settlementStatus ??
       (node as any).settlement_status ??
       (node as any).paymentStatus ??
-      (node as any).payStatus ??
-      (node as any).state
+      (node as any).payStatus
   );
   if (direct) return direct;
 
