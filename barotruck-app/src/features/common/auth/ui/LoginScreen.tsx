@@ -3,6 +3,7 @@ import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
   Alert,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -111,9 +112,11 @@ export default function LoginScreen() {
             {/* 상단 폼 영역 */}
             <View style={s.formArea}>
               <View style={s.brandWrap}>
-                <Text style={[s.brandTitle, { color: c.brand.primary }]}>
-                  Baro Truck
-                </Text>
+                <Image
+                  source={require("../../../../../assets/images/logo-text.png")}
+                  style={s.iconImage}
+                  resizeMode="contain"
+                />
                 <Text style={[s.brandSubtitle, { color: c.text.secondary }]}>
                   빠르고 간편한 화물 배차를 시작하세요
                 </Text>
@@ -259,6 +262,9 @@ const s = StyleSheet.create({
     minHeight: "70%",
     justifyContent: "space-between",
     paddingVertical: 40,
+  },
+  iconImage: {
+    height: 40,
   },
   formArea: {
     width: "100%",
