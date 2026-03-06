@@ -1,11 +1,24 @@
 import { Ionicons } from "@expo/vector-icons";
-import DateTimePicker, { type DateTimePickerEvent } from "@react-native-community/datetimepicker";
+import DateTimePicker, {
+  type DateTimePickerEvent,
+} from "@react-native-community/datetimepicker";
 import { useRouter } from "expo-router";
 import React, { useMemo, useState } from "react";
-import { Alert, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import {
+  Alert,
+  Platform,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { getCreateOrderDraft, setCreateOrderDraft } from "@/features/shipper/create-order/model/createOrderDraft";
+import {
+  getCreateOrderDraft,
+  setCreateOrderDraft,
+} from "@/features/shipper/create-order/model/createOrderDraft";
 import { AddressApi } from "@/shared/api/addressService";
 import { RouteApi } from "@/shared/api/routeService";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
@@ -17,6 +30,7 @@ import ShipperScreenHeader from "@/shared/ui/layout/ShipperScreenHeader";
 import AddressSearch from "@/shared/utils/AddressSearch";
 import { SearchableAddressField } from "./createOrderStep1.components"; // InlineDropdownField 옆에 추가로 불러오세요.
 
+import { isShipperActivePaymentMethod } from "@/features/common/payment/lib/paymentMethods";
 import {
   Chip,
   ChoiceCard,
@@ -44,8 +58,13 @@ import {
   TRIP_OPTIONS,
   type TripType,
 } from "./createOrderStep1.types";
-import { addDays, isSameDay, parseWonInput, toKoreanDateText, won } from "./createOrderStep1.utils";
-import { isShipperActivePaymentMethod } from "@/features/common/payment/lib/paymentMethods";
+import {
+  addDays,
+  isSameDay,
+  parseWonInput,
+  toKoreanDateText,
+  won,
+} from "./createOrderStep1.utils";
 
 export function ShipperCreateOrderStep1Screen() {
   const t = useAppTheme();
@@ -59,75 +78,124 @@ export function ShipperCreateOrderStep1Screen() {
     return "직접 지정";
   };
 
-  const [startSelected, setStartSelected] = useState(initialDraft?.startSelected ?? "");
-  const [startLat, setStartLat] = useState<number | undefined>(initialDraft?.startLat);
-  const [startLng, setStartLng] = useState<number | undefined>(initialDraft?.startLng);
-  const [startAddrDetail, setStartAddrDetail] = useState(initialDraft?.startAddrDetail ?? "");
-  const [startContact, setStartContact] = useState(initialDraft?.startContact ?? "");
-  const [startSearch, setStartSearch] = useState(initialDraft?.startSelected ?? "");
-  const [loadDay, setLoadDay] = useState<LoadDayType>(normalizeLoadDay(initialDraft?.loadDay));
+  const [startSelected, setStartSelected] = useState(
+    initialDraft?.startSelected ?? "",
+  );
+  const [startLat, setStartLat] = useState<number | undefined>(
+    initialDraft?.startLat,
+  );
+  const [startLng, setStartLng] = useState<number | undefined>(
+    initialDraft?.startLng,
+  );
+  const [startAddrDetail, setStartAddrDetail] = useState(
+    initialDraft?.startAddrDetail ?? "",
+  );
+  const [startContact, setStartContact] = useState(
+    initialDraft?.startContact ?? "",
+  );
+  const [startSearch, setStartSearch] = useState(
+    initialDraft?.startSelected ?? "",
+  );
+  const [loadDay, setLoadDay] = useState<LoadDayType>(
+    normalizeLoadDay(initialDraft?.loadDay),
+  );
   const [loadDate, setLoadDate] = useState(
-    initialDraft?.loadDateISO ? new Date(initialDraft.loadDateISO) : new Date()
+    initialDraft?.loadDateISO ? new Date(initialDraft.loadDateISO) : new Date(),
   );
   const [loadDatePickerOpen, setLoadDatePickerOpen] = useState(false);
-  const [startTimeHHmm, setStartTimeHHmm] = useState(initialDraft?.startTimeHHmm ?? "09:00");
+  const [startTimeHHmm, setStartTimeHHmm] = useState(
+    initialDraft?.startTimeHHmm ?? "09:00",
+  );
   const [startTimePickerOpen, setStartTimePickerOpen] = useState(false);
   const [endAddr, setEndAddr] = useState(initialDraft?.endAddr ?? "");
-  const [endLat, setEndLat] = useState<number | undefined>(initialDraft?.endLat);
-  const [endLng, setEndLng] = useState<number | undefined>(initialDraft?.endLng);
-  const [endAddrDetail, setEndAddrDetail] = useState(initialDraft?.endAddrDetail ?? "");
+  const [endLat, setEndLat] = useState<number | undefined>(
+    initialDraft?.endLat,
+  );
+  const [endLng, setEndLng] = useState<number | undefined>(
+    initialDraft?.endLng,
+  );
+  const [endAddrDetail, setEndAddrDetail] = useState(
+    initialDraft?.endAddrDetail ?? "",
+  );
   const [endContact, setEndContact] = useState(initialDraft?.endContact ?? "");
-  const [endTimeHHmm, setEndTimeHHmm] = useState(initialDraft?.endTimeHHmm ?? "");
+  const [endTimeHHmm, setEndTimeHHmm] = useState(
+    initialDraft?.endTimeHHmm ?? "",
+  );
   const [lastEndTimeHHmm, setLastEndTimeHHmm] = useState(() => {
     const initial = (initialDraft?.endTimeHHmm ?? "").trim();
     return /^([01]\d|2[0-3]):([0-5]\d)$/.test(initial) ? initial : "18:00";
   });
   const [endTimePickerOpen, setEndTimePickerOpen] = useState(false);
-  const [arriveType, setArriveType] = useState<ArriveType>(initialDraft?.arriveType ?? "당착");
+  const [arriveType, setArriveType] = useState<ArriveType>(
+    initialDraft?.arriveType ?? "당착",
+  );
 
-  const [carType, setCarType] = useState<Option>(initialDraft?.carType ?? CAR_TYPE_OPTIONS[1]);
+  const [carType, setCarType] = useState<Option>(
+    initialDraft?.carType ?? CAR_TYPE_OPTIONS[1],
+  );
   const [ton, setTon] = useState<Option>(initialDraft?.ton ?? TON_OPTIONS[3]);
-  const [cargoDetail, setCargoDetail] = useState(initialDraft?.cargoDetail ?? "");
+  const [cargoDetail, setCargoDetail] = useState(
+    initialDraft?.cargoDetail ?? "",
+  );
   const [weightTon, setWeightTon] = useState(initialDraft?.weightTon ?? "0");
-  const [dispatch, setDispatch] = useState<DispatchType>(initialDraft?.dispatch ?? "instant");
-  const [tripType, setTripType] = useState<TripType>(initialDraft?.tripType ?? "oneWay");
+  const [dispatch, setDispatch] = useState<DispatchType>(
+    initialDraft?.dispatch ?? "instant",
+  );
+  const [tripType, setTripType] = useState<TripType>(
+    initialDraft?.tripType ?? "oneWay",
+  );
   const [pay, setPay] = useState<PayType>(
-    isShipperActivePaymentMethod(initialDraft?.pay) ? initialDraft?.pay : "card"
+    isShipperActivePaymentMethod(initialDraft?.pay)
+      ? initialDraft?.pay
+      : "card",
   );
   const [fareInput, setFareInput] = useState(
-    initialDraft?.appliedFare ? String(initialDraft.appliedFare) : ""
+    initialDraft?.appliedFare ? String(initialDraft.appliedFare) : "",
   );
   const [appliedBaseFare, setAppliedBaseFare] = useState(() => {
     if (!initialDraft) return 0;
-    if (initialDraft.tripType === "roundTrip") return Math.max(0, Math.round(initialDraft.appliedFare / 1.8));
+    if (initialDraft.tripType === "roundTrip")
+      return Math.max(0, Math.round(initialDraft.appliedFare / 1.8));
     return initialDraft.appliedFare;
   });
   const [carDropdownOpen, setCarDropdownOpen] = useState(false);
   const [tonDropdownOpen, setTonDropdownOpen] = useState(false);
-  
 
   const [isStartModalOpen, setIsStartModalOpen] = useState(false);
   const [isEndModalOpen, setIsEndModalOpen] = useState(false);
-  
-  const [startAddrSuggestions, setStartAddrSuggestions] = useState<string[]>([]);
+
+  const [startAddrSuggestions, setStartAddrSuggestions] = useState<string[]>(
+    [],
+  );
   const [endAddrSuggestions, setEndAddrSuggestions] = useState<string[]>([]);
   const fallbackDistanceKm = useMemo(
     () => getEstimatedDistanceKm(startSelected || startSearch, endAddr),
-    [startSelected, startSearch, endAddr]
+    [startSelected, startSearch, endAddr],
   );
-  const [distanceKm, setDistanceKm] = useState(initialDraft?.distanceKm ?? fallbackDistanceKm);
-  const [estimatedDurationMin, setEstimatedDurationMin] = useState<number | undefined>(
-    initialDraft?.estimatedDurationMin
+  const [distanceKm, setDistanceKm] = useState(
+    initialDraft?.distanceKm ?? fallbackDistanceKm,
   );
-  const aiFare = useMemo(() => getRecommendedFareByDistance(distanceKm), [distanceKm]);
+  const [estimatedDurationMin, setEstimatedDurationMin] = useState<
+    number | undefined
+  >(initialDraft?.estimatedDurationMin);
+  const aiFare = useMemo(
+    () => getRecommendedFareByDistance(distanceKm),
+    [distanceKm],
+  );
 
   const adjustFareByTripType = (baseFare: number) => {
     if (tripType === "roundTrip") return Math.round(baseFare * 1.8);
     return baseFare;
   };
 
-  const aiDisplayedFare = useMemo(() => adjustFareByTripType(aiFare), [aiFare, tripType]);
-  const appliedFare = useMemo(() => adjustFareByTripType(appliedBaseFare), [appliedBaseFare, tripType]);
+  const aiDisplayedFare = useMemo(
+    () => adjustFareByTripType(aiFare),
+    [aiFare, tripType],
+  );
+  const appliedFare = useMemo(
+    () => adjustFareByTripType(appliedBaseFare),
+    [appliedBaseFare, tripType],
+  );
 
   const fee = useMemo(() => {
     if (pay === "card") return Math.round(appliedFare * 0.1);
@@ -137,7 +205,11 @@ export function ShipperCreateOrderStep1Screen() {
   const totalPay = useMemo(() => appliedFare + fee, [appliedFare, fee]);
 
   const fetchAddressSuggestions = React.useCallback(
-    async (rawQuery: string, onDone: (rows: string[]) => void, minLength: number) => {
+    async (
+      rawQuery: string,
+      onDone: (rows: string[]) => void,
+      minLength: number,
+    ) => {
       const q = rawQuery.trim();
       if (q.length < minLength) {
         onDone([]);
@@ -150,7 +222,7 @@ export function ShipperCreateOrderStep1Screen() {
         onDone([]);
       }
     },
-    []
+    [],
   );
 
   React.useEffect(() => {
@@ -218,7 +290,7 @@ export function ShipperCreateOrderStep1Screen() {
           if (!active) return;
           setStartAddrSuggestions(rows);
         },
-        1
+        1,
       );
     }, 250);
 
@@ -243,7 +315,7 @@ export function ShipperCreateOrderStep1Screen() {
           if (!active) return;
           setEndAddrSuggestions(rows);
         },
-        1
+        1,
       );
     }, 250);
 
@@ -275,8 +347,10 @@ export function ShipperCreateOrderStep1Screen() {
     setAppliedBaseFare(aiFare);
   };
 
-  const isValidHHmm = (v: string) => /^([01]\d|2[0-3]):([0-5]\d)$/.test(v.trim());
-  const formatHHmm = (d: Date) => `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  const isValidHHmm = (v: string) =>
+    /^([01]\d|2[0-3]):([0-5]\d)$/.test(v.trim());
+  const formatHHmm = (d: Date) =>
+    `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
   const hhmmToDate = (hhmm: string) => {
     const d = new Date();
     const m = hhmm.match(/^([01]\d|2[0-3]):([0-5]\d)$/);
@@ -444,15 +518,18 @@ export function ShipperCreateOrderStep1Screen() {
           <View style={s.timelineRow}>
             <View style={s.timelineLeft}>
               <View style={[s.circle, { backgroundColor: c.brand.primary }]}>
-                <Text style={[s.circleText, { color: c.text.inverse }]}>출발</Text>
+                <Text style={[s.circleText, { color: c.text.inverse }]}>
+                  출발
+                </Text>
               </View>
               <View style={[s.lineV, { backgroundColor: c.border.default }]} />
             </View>
 
             <View style={s.timelineBody}>
-              <Text style={[s.fieldLabel, { color: c.text.primary }]}>상차지 정보</Text>
+              <Text style={[s.fieldLabel, { color: c.text.primary }]}>
+                상차지 정보
+              </Text>
 
-              
               {/* 2. 주소 검색창 (터치하면 모달 오픈) */}
               <SearchableAddressField
                 label=""
@@ -463,12 +540,21 @@ export function ShipperCreateOrderStep1Screen() {
                 }}
               />
 
-
               {(startSelected || startSearch).trim() ? (
                 <>
                   <View style={{ marginTop: 10 }}>
-                    <Text style={[s.fieldLabel, { color: c.text.primary }]}>상세 주소</Text>
-                    <View style={[s.inputWrap, { backgroundColor: c.bg.surface, borderColor: c.border.default }]}>
+                    <Text style={[s.fieldLabel, { color: c.text.primary }]}>
+                      상세 주소
+                    </Text>
+                    <View
+                      style={[
+                        s.inputWrap,
+                        {
+                          backgroundColor: c.bg.surface,
+                          borderColor: c.border.default,
+                        },
+                      ]}
+                    >
                       <TextInput
                         value={startAddrDetail}
                         onChangeText={setStartAddrDetail}
@@ -480,8 +566,18 @@ export function ShipperCreateOrderStep1Screen() {
                   </View>
 
                   <View style={{ marginTop: 10 }}>
-                    <Text style={[s.fieldLabel, { color: c.text.primary }]}>연락처</Text>
-                    <View style={[s.inputWrap, { backgroundColor: c.bg.surface, borderColor: c.border.default }]}>
+                    <Text style={[s.fieldLabel, { color: c.text.primary }]}>
+                      연락처
+                    </Text>
+                    <View
+                      style={[
+                        s.inputWrap,
+                        {
+                          backgroundColor: c.bg.surface,
+                          borderColor: c.border.default,
+                        },
+                      ]}
+                    >
                       <TextInput
                         value={startContact}
                         onChangeText={(v) => setStartContact(digitsOnly(v))}
@@ -494,20 +590,39 @@ export function ShipperCreateOrderStep1Screen() {
                   </View>
 
                   <View style={{ marginTop: 10 }}>
-                    <Text style={[s.fieldLabel, { color: c.text.primary }]}>상차 시간</Text>
+                    <Text style={[s.fieldLabel, { color: c.text.primary }]}>
+                      상차 시간
+                    </Text>
                     <Pressable
                       onPress={() => setStartTimePickerOpen((v) => !v)}
-                      style={[s.inputWrap, { backgroundColor: c.bg.surface, borderColor: c.border.default, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }]}
+                      style={[
+                        s.inputWrap,
+                        {
+                          backgroundColor: c.bg.surface,
+                          borderColor: c.border.default,
+                          flexDirection: "row",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                        },
+                      ]}
                     >
-                      <Text style={[s.input, { color: c.text.primary }]}>{startTimeHHmm}</Text>
-                      <Ionicons name="time-outline" size={16} color={c.text.secondary} />
+                      <Text style={[s.input, { color: c.text.primary }]}>
+                        {startTimeHHmm}
+                      </Text>
+                      <Ionicons
+                        name="time-outline"
+                        size={16}
+                        color={c.text.secondary}
+                      />
                     </Pressable>
                     {startTimePickerOpen ? (
                       <View style={{ marginTop: 8 }}>
                         <DateTimePicker
                           value={hhmmToDate(startTimeHHmm)}
                           mode="time"
-                          display={Platform.OS === "ios" ? "spinner" : "default"}
+                          display={
+                            Platform.OS === "ios" ? "spinner" : "default"
+                          }
                           onChange={onChangeStartTime}
                         />
                       </View>
@@ -518,20 +633,39 @@ export function ShipperCreateOrderStep1Screen() {
 
               <View style={s.chipRow}>
                 {LOAD_DAY_OPTIONS.map((v) => (
-                  <Chip key={v} label={v} selected={loadDay === v} onPress={() => onSelectLoadDay(v)} />
+                  <Chip
+                    key={v}
+                    label={v}
+                    selected={loadDay === v}
+                    onPress={() => onSelectLoadDay(v)}
+                  />
                 ))}
               </View>
 
               {loadDay === "직접 지정" ? (
                 <Pressable
                   onPress={() => setLoadDatePickerOpen((v) => !v)}
-                  style={[s.dateRow, { borderColor: c.border.default, backgroundColor: c.bg.surface }]}
+                  style={[
+                    s.dateRow,
+                    {
+                      borderColor: c.border.default,
+                      backgroundColor: c.bg.surface,
+                    },
+                  ]}
                 >
                   <View style={s.dateLabelRow}>
-                    <Ionicons name="calendar-outline" size={16} color={c.text.secondary} />
-                    <Text style={[s.dateValueText, { color: c.text.primary }]}>상차일: {toKoreanDateText(loadDate)}</Text>
+                    <Ionicons
+                      name="calendar-outline"
+                      size={16}
+                      color={c.text.secondary}
+                    />
+                    <Text style={[s.dateValueText, { color: c.text.primary }]}>
+                      상차일: {toKoreanDateText(loadDate)}
+                    </Text>
                   </View>
-                  <Text style={[s.dateValueText, { color: c.brand.primary }]}>날짜 선택</Text>
+                  <Text style={[s.dateValueText, { color: c.brand.primary }]}>
+                    날짜 선택
+                  </Text>
                 </Pressable>
               ) : null}
 
@@ -551,12 +685,16 @@ export function ShipperCreateOrderStep1Screen() {
           <View style={[s.timelineRow, { marginTop: 14 }]}>
             <View style={s.timelineLeft}>
               <View style={[s.circle, { backgroundColor: c.text.primary }]}>
-                <Text style={[s.circleText, { color: c.text.inverse }]}>도착</Text>
+                <Text style={[s.circleText, { color: c.text.inverse }]}>
+                  도착
+                </Text>
               </View>
             </View>
 
             <View style={s.timelineBody}>
-              <Text style={[s.fieldLabel, { color: c.text.primary }]}>하차지 정보</Text>
+              <Text style={[s.fieldLabel, { color: c.text.primary }]}>
+                하차지 정보
+              </Text>
 
               <SearchableAddressField
                 label=""
@@ -565,12 +703,21 @@ export function ShipperCreateOrderStep1Screen() {
                 onPress={() => setIsEndModalOpen(true)}
               />
 
-
               {endAddr.trim() ? (
                 <>
                   <View style={{ marginTop: 10 }}>
-                    <Text style={[s.fieldLabel, { color: c.text.primary }]}>상세 주소</Text>
-                    <View style={[s.inputWrap, { backgroundColor: c.bg.surface, borderColor: c.border.default }]}>
+                    <Text style={[s.fieldLabel, { color: c.text.primary }]}>
+                      상세 주소
+                    </Text>
+                    <View
+                      style={[
+                        s.inputWrap,
+                        {
+                          backgroundColor: c.bg.surface,
+                          borderColor: c.border.default,
+                        },
+                      ]}
+                    >
                       <TextInput
                         value={endAddrDetail}
                         onChangeText={setEndAddrDetail}
@@ -582,8 +729,18 @@ export function ShipperCreateOrderStep1Screen() {
                   </View>
 
                   <View style={{ marginTop: 10 }}>
-                    <Text style={[s.fieldLabel, { color: c.text.primary }]}>연락처</Text>
-                    <View style={[s.inputWrap, { backgroundColor: c.bg.surface, borderColor: c.border.default }]}>
+                    <Text style={[s.fieldLabel, { color: c.text.primary }]}>
+                      연락처
+                    </Text>
+                    <View
+                      style={[
+                        s.inputWrap,
+                        {
+                          backgroundColor: c.bg.surface,
+                          borderColor: c.border.default,
+                        },
+                      ]}
+                    >
                       <TextInput
                         value={endContact}
                         onChangeText={(v) => setEndContact(digitsOnly(v))}
@@ -596,8 +753,17 @@ export function ShipperCreateOrderStep1Screen() {
                   </View>
 
                   <View style={{ marginTop: 10 }}>
-                    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-                      <Text style={[s.fieldLabel, { color: c.text.primary }]}>하차 시간 (선택)</Text>
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        marginBottom: 6,
+                      }}
+                    >
+                      <Text style={[s.fieldLabel, { color: c.text.primary }]}>
+                        하차 시간 (선택)
+                      </Text>
                       <Pressable
                         onPress={() => {
                           if (endTimeHHmm.trim()) {
@@ -615,15 +781,23 @@ export function ShipperCreateOrderStep1Screen() {
                             borderWidth: 1,
                           },
                           endTimeHHmm.trim()
-                            ? { borderColor: c.border.default, backgroundColor: c.bg.surface }
-                            : { borderColor: c.brand.primary, backgroundColor: c.brand.primarySoft },
+                            ? {
+                                borderColor: c.border.default,
+                                backgroundColor: c.bg.surface,
+                              }
+                            : {
+                                borderColor: c.brand.primary,
+                                backgroundColor: c.brand.primarySoft,
+                              },
                         ]}
                       >
                         <Text
                           style={{
                             fontSize: 12,
                             fontWeight: "800",
-                            color: endTimeHHmm.trim() ? c.text.secondary : c.brand.primary,
+                            color: endTimeHHmm.trim()
+                              ? c.text.secondary
+                              : c.brand.primary,
                           }}
                         >
                           미정
@@ -632,19 +806,43 @@ export function ShipperCreateOrderStep1Screen() {
                     </View>
                     <Pressable
                       onPress={() => setEndTimePickerOpen((v) => !v)}
-                      style={[s.inputWrap, { backgroundColor: c.bg.surface, borderColor: c.border.default, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }]}
+                      style={[
+                        s.inputWrap,
+                        {
+                          backgroundColor: c.bg.surface,
+                          borderColor: c.border.default,
+                          flexDirection: "row",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                        },
+                      ]}
                     >
-                      <Text style={[s.input, { color: endTimeHHmm.trim() ? c.text.primary : c.text.secondary }]}>
+                      <Text
+                        style={[
+                          s.input,
+                          {
+                            color: endTimeHHmm.trim()
+                              ? c.text.primary
+                              : c.text.secondary,
+                          },
+                        ]}
+                      >
                         {endTimeHHmm.trim() || "하차시간 미정"}
                       </Text>
-                      <Ionicons name="time-outline" size={16} color={c.text.secondary} />
+                      <Ionicons
+                        name="time-outline"
+                        size={16}
+                        color={c.text.secondary}
+                      />
                     </Pressable>
                     {endTimePickerOpen ? (
                       <View style={{ marginTop: 8 }}>
                         <DateTimePicker
                           value={hhmmToDate(endTimeHHmm)}
                           mode="time"
-                          display={Platform.OS === "ios" ? "spinner" : "default"}
+                          display={
+                            Platform.OS === "ios" ? "spinner" : "default"
+                          }
                           onChange={onChangeEndTime}
                         />
                       </View>
@@ -655,7 +853,12 @@ export function ShipperCreateOrderStep1Screen() {
 
               <View style={s.chipRow}>
                 {ARRIVE_OPTIONS.map((v) => (
-                  <Chip key={v} label={v} selected={arriveType === v} onPress={() => setArriveType(v)} />
+                  <Chip
+                    key={v}
+                    label={v}
+                    selected={arriveType === v}
+                    onPress={() => setArriveType(v)}
+                  />
                 ))}
               </View>
             </View>
@@ -702,8 +905,18 @@ export function ShipperCreateOrderStep1Screen() {
 
           <View style={s.twoCol}>
             <View style={{ flex: 1 }}>
-              <Text style={[s.fieldLabel, { color: c.text.primary }]}>물품상세</Text>
-              <View style={[s.inputWrap, { backgroundColor: c.bg.surface, borderColor: c.border.default }]}>
+              <Text style={[s.fieldLabel, { color: c.text.primary }]}>
+                물품상세
+              </Text>
+              <View
+                style={[
+                  s.inputWrap,
+                  {
+                    backgroundColor: c.bg.surface,
+                    borderColor: c.border.default,
+                  },
+                ]}
+              >
                 <TextInput
                   value={cargoDetail}
                   onChangeText={setCargoDetail}
@@ -717,8 +930,18 @@ export function ShipperCreateOrderStep1Screen() {
             <View style={{ width: 10 }} />
 
             <View style={{ width: 110 }}>
-              <Text style={[s.fieldLabel, { color: c.text.primary }]}>중량(톤)</Text>
-              <View style={[s.inputWrap, { backgroundColor: c.bg.surface, borderColor: c.border.default }]}>
+              <Text style={[s.fieldLabel, { color: c.text.primary }]}>
+                중량(톤)
+              </Text>
+              <View
+                style={[
+                  s.inputWrap,
+                  {
+                    backgroundColor: c.bg.surface,
+                    borderColor: c.border.default,
+                  },
+                ]}
+              >
                 <TextInput
                   value={weightTon}
                   onChangeText={setWeightTon}
@@ -751,9 +974,19 @@ export function ShipperCreateOrderStep1Screen() {
             />
           </View>
 
-          <View style={[s.aiBox, { backgroundColor: c.brand.primarySoft, borderColor: c.border.default }]}>
+          <View
+            style={[
+              s.aiBox,
+              {
+                backgroundColor: c.brand.primarySoft,
+                borderColor: c.border.default,
+              },
+            ]}
+          >
             <View style={s.tripHeaderRow}>
-              <Text style={[s.tripHeaderLabel, { color: c.text.primary }]}>운행 형태</Text>
+              <Text style={[s.tripHeaderLabel, { color: c.text.primary }]}>
+                운행 형태
+              </Text>
               <View style={s.tripPillRow}>
                 {TRIP_OPTIONS.map((item) => {
                   const selected = tripType === item.value;
@@ -766,14 +999,24 @@ export function ShipperCreateOrderStep1Screen() {
                       style={[
                         s.tripPill,
                         selected
-                          ? { borderColor: c.brand.primary, backgroundColor: c.brand.primarySoft }
-                          : { borderColor: c.border.default, backgroundColor: c.bg.surface },
+                          ? {
+                              borderColor: c.brand.primary,
+                              backgroundColor: c.brand.primarySoft,
+                            }
+                          : {
+                              borderColor: c.border.default,
+                              backgroundColor: c.bg.surface,
+                            },
                       ]}
                     >
                       <Text
                         style={[
                           s.tripPillText,
-                          { color: selected ? c.brand.primary : c.text.secondary },
+                          {
+                            color: selected
+                              ? c.brand.primary
+                              : c.text.secondary,
+                          },
                           selected ? s.tripPillTextActive : null,
                         ]}
                       >
@@ -787,21 +1030,42 @@ export function ShipperCreateOrderStep1Screen() {
 
             <View style={s.aiBottomRow}>
               <View style={s.aiTextWrap}>
-                <Text style={[s.aiLabel, { color: c.brand.primary }]}>AI 추천 운임 (거리 {distanceKm}km)</Text>
-                <Text style={[s.aiPrice, { color: c.brand.primary }]}>{won(aiDisplayedFare)}</Text>
+                <Text style={[s.aiLabel, { color: c.brand.primary }]}>
+                  추천 운임 (거리 {distanceKm}km)
+                </Text>
+                <Text style={[s.aiPrice, { color: c.brand.primary }]}>
+                  {won(aiDisplayedFare)}
+                </Text>
               </View>
               <Button
                 title="적용하기"
                 onPress={applyAiFare}
-                style={{ height: 48, minWidth: 118, paddingHorizontal: 16, borderRadius: 18 } as any}
+                style={
+                  {
+                    height: 48,
+                    minWidth: 118,
+                    paddingHorizontal: 16,
+                    borderRadius: 18,
+                  } as any
+                }
               />
             </View>
           </View>
 
           <View style={{ marginTop: 16 }}>
-            <Text style={[s.fieldLabel, { color: c.text.primary }]}>희망 운임</Text>
+            <Text style={[s.fieldLabel, { color: c.text.primary }]}>
+              희망 운임
+            </Text>
             <View style={s.fareRow}>
-              <View style={[s.fareInputWrap, { backgroundColor: c.bg.surface, borderColor: c.border.default }]}>
+              <View
+                style={[
+                  s.fareInputWrap,
+                  {
+                    backgroundColor: c.bg.surface,
+                    borderColor: c.border.default,
+                  },
+                ]}
+              >
                 <TextInput
                   value={fareInput}
                   onChangeText={setFareInput}
@@ -810,7 +1074,9 @@ export function ShipperCreateOrderStep1Screen() {
                   keyboardType="numeric"
                   style={[s.input, { color: c.text.primary, flex: 1 }]}
                 />
-                <Text style={[s.wonSuffix, { color: c.text.secondary }]}>원</Text>
+                <Text style={[s.wonSuffix, { color: c.text.secondary }]}>
+                  원
+                </Text>
               </View>
 
               <Button
@@ -822,12 +1088,17 @@ export function ShipperCreateOrderStep1Screen() {
             </View>
 
             <Text style={[s.hint, { color: c.text.secondary }]}>
-              적용된 운임: <Text style={{ color: c.brand.primary, fontWeight: "900" }}>{won(appliedFare)}</Text>
+              적용된 운임:{" "}
+              <Text style={{ color: c.brand.primary, fontWeight: "900" }}>
+                {won(appliedFare)}
+              </Text>
               {tripType === "roundTrip" ? " (왕복 1.8배 적용)" : ""}
             </Text>
           </View>
 
-          <Text style={[s.fieldLabel, { color: c.text.primary, marginTop: 16 }]}>
+          <Text
+            style={[s.fieldLabel, { color: c.text.primary, marginTop: 16 }]}
+          >
             결제 방법 <Text style={{ color: c.status.danger }}>*</Text>
           </Text>
 
@@ -858,7 +1129,11 @@ export function ShipperCreateOrderStep1Screen() {
             }}
           >
             <Ionicons
-              name={pay === "card" ? "alert-circle-outline" : "checkmark-circle-outline"}
+              name={
+                pay === "card"
+                  ? "alert-circle-outline"
+                  : "checkmark-circle-outline"
+              }
               size={16}
               color={pay === "card" ? c.status.danger : c.brand.primary}
             />
@@ -878,17 +1153,29 @@ export function ShipperCreateOrderStep1Screen() {
 
           <Card padding={14} style={{ marginTop: 14 }}>
             <View style={s.feeRow}>
-              <Text style={[s.feeLabel, { color: c.text.secondary }]}>희망 운임</Text>
-              <Text style={[s.feeValue, { color: c.text.primary }]}>{won(appliedFare)}</Text>
+              <Text style={[s.feeLabel, { color: c.text.secondary }]}>
+                희망 운임
+              </Text>
+              <Text style={[s.feeValue, { color: c.text.primary }]}>
+                {won(appliedFare)}
+              </Text>
             </View>
             <View style={s.feeRow}>
-              <Text style={[s.feeLabel, { color: c.text.secondary }]}>수수료 (토스 10%)</Text>
-              <Text style={[s.feeValue, { color: c.text.primary }]}>+ {won(fee)}</Text>
+              <Text style={[s.feeLabel, { color: c.text.secondary }]}>
+                수수료 (토스 10%)
+              </Text>
+              <Text style={[s.feeValue, { color: c.text.primary }]}>
+                + {won(fee)}
+              </Text>
             </View>
             <View style={[s.hr, { backgroundColor: c.border.default }]} />
             <View style={s.feeRow}>
-              <Text style={[s.feeTotalLabel, { color: c.text.primary }]}>최종 결제 금액</Text>
-              <Text style={[s.feeTotalValue, { color: c.text.primary }]}>{won(totalPay)}</Text>
+              <Text style={[s.feeTotalLabel, { color: c.text.primary }]}>
+                최종 결제 금액
+              </Text>
+              <Text style={[s.feeTotalValue, { color: c.text.primary }]}>
+                {won(totalPay)}
+              </Text>
             </View>
           </Card>
         </Card>
@@ -921,17 +1208,32 @@ export function ShipperCreateOrderStep1Screen() {
       <View
         style={[
           s.bottomBar,
-          { backgroundColor: c.bg.canvas, borderTopColor: c.border.default, paddingBottom: 16 + insets.bottom },
+          {
+            backgroundColor: c.bg.canvas,
+            borderTopColor: c.border.default,
+            paddingBottom: 16 + insets.bottom,
+          },
         ]}
       >
-        <View style={[s.stickySummary, { backgroundColor: c.bg.surface, borderColor: c.border.default }]}>
+        <View
+          style={[
+            s.stickySummary,
+            { backgroundColor: c.bg.surface, borderColor: c.border.default },
+          ]}
+        >
           <View style={s.stickyRow}>
-            <Text style={[s.stickyLabel, { color: c.text.secondary }]}>최종 결제 금액</Text>
-            <Text style={[s.stickyTotal, { color: c.text.primary }]}>{won(totalPay)}</Text>
+            <Text style={[s.stickyLabel, { color: c.text.secondary }]}>
+              최종 결제 금액
+            </Text>
+            <Text style={[s.stickyTotal, { color: c.text.primary }]}>
+              {won(totalPay)}
+            </Text>
           </View>
 
           <View style={s.stickySubRow}>
-            <Text style={[s.stickySub, { color: c.text.secondary }]}>희망 운임 {won(appliedFare)}</Text>
+            <Text style={[s.stickySub, { color: c.text.secondary }]}>
+              희망 운임 {won(appliedFare)}
+            </Text>
             <Text style={[s.stickySub, { color: c.text.secondary }]}>
               {pay === "card" ? `수수료 +${won(fee)}` : "수수료 0원"}
             </Text>
@@ -943,4 +1245,3 @@ export function ShipperCreateOrderStep1Screen() {
     </View>
   );
 }
-
