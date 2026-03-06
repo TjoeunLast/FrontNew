@@ -14,6 +14,11 @@ export const useDrivingProcess = (onRefresh?: () => void) => {
       setIsLoading(true); // 통신 시작
       await OrderService.updateStatus(orderId, nextStatus);
 
+      // 이 블록을 추가해 주세요!
+      if (nextStatus === "LOADING") {
+        Alert.alert("운송 시작", "성공적으로 운송이 시작되었습니다.");
+      }
+
       if (nextStatus === "IN_TRANSIT") {
         Alert.alert(
           "알림",

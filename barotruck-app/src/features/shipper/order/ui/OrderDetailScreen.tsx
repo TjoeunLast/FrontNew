@@ -518,25 +518,31 @@ export default function OrderDetailScreen() {
     const directEndLat = toFiniteNumber((order as any)?.endLat);
     const directEndLng = toFiniteNumber((order as any)?.endLng);
 
-    const startAddress = [normalizeDisplayText(order.startAddr), normalizeDisplayText(order.startPlace)]
-      .filter(Boolean)
-      .join(" ");
-    const endAddress = [normalizeDisplayText(order.endAddr), normalizeDisplayText(order.endPlace)]
-      .filter(Boolean)
-      .join(" ");
+    // 수정할 코드
+  const startAddress = normalizeDisplayText(order.startAddr); // startPlace 제거
+  const endAddress = normalizeDisplayText(order.endAddr);     // endPlace 제거
+      // 수정할 코드
 
-    const [startGeo, endGeo] = await Promise.all([
-      directStartLat !== null && directStartLng !== null
-        ? Promise.resolve({ lat: directStartLat, lng: directStartLng })
-        : startAddress
-          ? KakaoLocalApi.geocodeAddress(startAddress).catch(() => null)
-          : Promise.resolve(null),
-      directEndLat !== null && directEndLng !== null
-        ? Promise.resolve({ lat: directEndLat, lng: directEndLng })
-        : endAddress
-          ? KakaoLocalApi.geocodeAddress(endAddress).catch(() => null)
-          : Promise.resolve(null),
-    ]);
+  const [startGeo, endGeo] = await Promise.all([
+    directStartLat !== null && directStartLng !== null
+      ? Promise.resolve({ lat: directStartLat, lng: directStartLng })
+      : startAddress
+        ? KakaoLocalApi.geocodeAddress(startAddress).catch((e) => {
+            console.error("🔴 출발지 좌표 변환 실패:", e); // 에러 로그 추가
+            return null;
+          })
+        : Promise.resolve(null),
+    directEndLat !== null && directEndLng !== null
+      ? Promise.resolve({ lat: directEndLat, lng: directEndLng })
+      : endAddress
+        ? KakaoLocalApi.geocodeAddress(endAddress).catch((e) => {
+            console.error("🔴 도착지 좌표 변환 실패:", e); // 에러 로그 추가
+            return null;
+          })
+        : Promise.resolve(null),
+  ]);
+  console.log("resolveRouteCoordinates - startGeo:", startGeo, "endGeo:", endGeo);
+
     if (!startGeo || !endGeo) return { data: null, usedFallbackLine: false, pathErrorMessage: "" };
 
     let drivingPath: RoutePathPoint[] | null = null;
@@ -604,6 +610,8 @@ export default function OrderDetailScreen() {
         : await buildRoutePreviewData();
       if (!result.data) {
         Alert.alert("안내", "출발지/도착지 좌표를 찾지 못했어요. 주소를 확인해주세요.");
+        console.warn("경로 지도 데이터 없음:", { routeLoading, result, routePreviewData });
+        console.warn("경로 지도 데이터 없음:", { orderId: order.orderId, result });
         return;
       }
       setRoutePreviewData(result.data);
