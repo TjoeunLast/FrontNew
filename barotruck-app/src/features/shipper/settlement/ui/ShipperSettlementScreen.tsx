@@ -31,7 +31,6 @@ import {
 } from "@/features/common/settlement/lib/settlementHelpers";
 import { OrderApi } from "@/shared/api/orderService";
 import { PaymentService } from "@/shared/api/paymentService";
-import { SettlementService } from "@/shared/api/settlementService";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import type { OrderResponse } from "@/shared/models/order";
 import ShipperScreenHeader from "@/shared/ui/layout/ShipperScreenHeader";
@@ -622,14 +621,10 @@ export default function ShipperSettlementScreen() {
 
     try {
       setSubmittingOrderId(item.orderId);
-      await SettlementService.initSettlement({
-        orderId: item.orderId,
-        couponDiscount: 0,
-        levelDiscount: 0,
+      await PaymentService.markPaid(item.orderId, {
+        method: "CASH",
+        paymentTiming: "POSTPAID",
       });
-      const pendingOrderIds = await loadPendingSettlementOrderIds();
-      pendingOrderIds.add(item.orderId);
-      await savePendingSettlementOrderIds(pendingOrderIds);
       const refreshed = await fetchItems().catch(() => null);
       if (refreshed) {
         setItems(refreshed);
@@ -639,8 +634,8 @@ export default function ShipperSettlementScreen() {
             row.id === item.id
               ? {
                   ...row,
-                  status: "PENDING",
-                  actionLabel: toActionLabel("PENDING"),
+                  status: "PAID",
+                  actionLabel: toActionLabel("PAID"),
                 }
               : row,
           ),
@@ -685,30 +680,11 @@ export default function ShipperSettlementScreen() {
       }
 
       if (isDuplicate) {
-        const pendingOrderIds = await loadPendingSettlementOrderIds();
-        pendingOrderIds.add(item.orderId);
-        await savePendingSettlementOrderIds(pendingOrderIds);
-        const refreshed = await fetchItems().catch(() => null);
-        if (refreshed) {
-          setItems(refreshed);
-        } else {
-          setItems((prev) =>
-            prev.map((row) =>
-              row.id === item.id
-                ? {
-                    ...row,
-                    status: "PENDING",
-                    actionLabel: toActionLabel("PENDING"),
-                  }
-                : row,
-            ),
-          );
-        }
-        Alert.alert("안내", "이미 결제 요청된 건입니다.");
+        Alert.alert("안내", "이미 결제 처리된 건입니다.");
         return;
       }
 
-      Alert.alert("오류", msg);
+      Alert.alert("오류", String(msg));
     } finally {
       setSubmittingOrderId((prev) => (prev === item.orderId ? null : prev));
     }

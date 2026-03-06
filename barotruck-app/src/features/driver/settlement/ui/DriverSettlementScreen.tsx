@@ -1,13 +1,14 @@
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import React, { useCallback, useMemo, useState } from "react";
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { OrderService } from "@/shared/api/orderService";
 import { PaymentService } from "@/shared/api/paymentService";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import type { OrderResponse } from "@/shared/models/order";
+import type { PaymentDisputeReason } from "@/shared/models/payment";
 import ShipperScreenHeader from "@/shared/ui/layout/ShipperScreenHeader";
 import {
   calcOrderAmount,
@@ -40,6 +41,38 @@ type SettlementItem = {
   isPrepaid: boolean;
   confirmByDriver: boolean;
 };
+
+const DISPUTE_REASON_OPTIONS: Array<{
+  value: PaymentDisputeReason;
+  label: string;
+  hint: string;
+}> = [
+  {
+    value: "RECEIVED_AMOUNT_MISMATCH",
+    label: "미수령/금액불일치",
+    hint: "화주가 결제완료 처리했지만 실제 입금이 확인되지 않았습니다.",
+  },
+  {
+    value: "PRICE_MISMATCH",
+    label: "청구 금액 불일치",
+    hint: "합의한 운임/추가금과 결제 금액이 다릅니다.",
+  },
+  {
+    value: "PROOF_MISSING",
+    label: "증빙 누락",
+    hint: "입금 증빙 또는 정산 자료가 부족합니다.",
+  },
+  {
+    value: "FRAUD_SUSPECTED",
+    label: "이상 거래 의심",
+    hint: "허위 처리나 비정상 결제 정황이 있습니다.",
+  },
+  {
+    value: "OTHER",
+    label: "기타",
+    hint: "기타 사유를 상세히 적어 주세요.",
+  },
+];
 
 function startOfMonth(d: Date) {
   return new Date(d.getFullYear(), d.getMonth(), 1);
@@ -129,6 +162,11 @@ export default function DriverSettlementScreen() {
   const [items, setItems] = useState<SettlementItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [submittingOrderId, setSubmittingOrderId] = useState<number | null>(null);
+  const [disputeTarget, setDisputeTarget] = useState<SettlementItem | null>(null);
+  const [disputeReason, setDisputeReason] =
+    useState<PaymentDisputeReason>("RECEIVED_AMOUNT_MISMATCH");
+  const [disputeDescription, setDisputeDescription] = useState("");
+  const [isSubmittingDispute, setIsSubmittingDispute] = useState(false);
 
   const fetchItems = useCallback(async () => {
     const rows = await OrderService.getMyDrivingOrders();
@@ -210,6 +248,54 @@ export default function DriverSettlementScreen() {
       setSubmittingOrderId((prev) => (prev === item.orderId ? null : prev));
     }
   };
+
+  const openDisputeModal = (item: SettlementItem) => {
+    if (isSubmittingDispute) return;
+    setDisputeTarget(item);
+    setDisputeReason("RECEIVED_AMOUNT_MISMATCH");
+    setDisputeDescription("");
+  };
+
+  const closeDisputeModal = () => {
+    if (isSubmittingDispute) return;
+    setDisputeTarget(null);
+    setDisputeReason("RECEIVED_AMOUNT_MISMATCH");
+    setDisputeDescription("");
+  };
+
+  const submitDispute = async () => {
+    if (!disputeTarget) return;
+    const description = disputeDescription.trim();
+    if (description.length < 5) {
+      Alert.alert("입력 필요", "이의 사유를 5자 이상 입력해 주세요.");
+      return;
+    }
+
+    try {
+      setIsSubmittingDispute(true);
+      await PaymentService.createDispute(disputeTarget.orderId, {
+        reasonCode: disputeReason,
+        description,
+      });
+      const refreshed = await fetchItems();
+      setItems(refreshed);
+      Alert.alert("접수 완료", `주문 #${disputeTarget.orderId} 이의제기가 접수되었습니다.`);
+      setDisputeTarget(null);
+      setDisputeReason("RECEIVED_AMOUNT_MISMATCH");
+      setDisputeDescription("");
+    } catch (error: any) {
+      const msg =
+        error?.response?.data?.message ||
+        error?.message ||
+        "이의제기 접수에 실패했습니다. 잠시 후 다시 시도해 주세요.";
+      Alert.alert("오류", String(msg));
+    } finally {
+      setIsSubmittingDispute(false);
+    }
+  };
+
+  const selectedDisputeReasonHint =
+    DISPUTE_REASON_OPTIONS.find((reason) => reason.value === disputeReason)?.hint ?? "";
 
   const s = StyleSheet.create({
     page: { flex: 1, backgroundColor: "#F5F6FA" },
@@ -293,6 +379,11 @@ export default function DriverSettlementScreen() {
       marginTop: 10,
       alignItems: "flex-end",
     },
+    actionGroup: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+    },
     actionBtn: {
       height: 34,
       paddingHorizontal: 12,
@@ -307,6 +398,136 @@ export default function DriverSettlementScreen() {
     },
     actionText: { fontSize: 12, fontWeight: "800", color: "#FFFFFF" },
     actionTextDisabled: { color: "#64748B" },
+    disputeBtn: {
+      height: 34,
+      paddingHorizontal: 12,
+      borderRadius: 10,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      borderWidth: 1,
+      borderColor: "#E11D48",
+      backgroundColor: "#FFFFFF",
+    },
+    disputeBtnDisabled: {
+      borderColor: "#CBD5E1",
+      backgroundColor: "#F8FAFC",
+    },
+    disputeText: { fontSize: 12, fontWeight: "800", color: "#E11D48" },
+    disputeTextDisabled: { color: "#94A3B8" },
+    disputeModalBackdrop: {
+      flex: 1,
+      backgroundColor: "rgba(15, 23, 42, 0.48)",
+      justifyContent: "center",
+      paddingHorizontal: 20,
+    },
+    disputeModalCard: {
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: "#E2E8F0",
+      backgroundColor: "#FFFFFF",
+      padding: 16,
+      gap: 10,
+    },
+    disputeModalTitle: {
+      fontSize: 16,
+      fontWeight: "900",
+      color: c.text.primary,
+    },
+    disputeModalSub: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: c.text.secondary,
+    },
+    disputeReasonWrap: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 8,
+      marginTop: 2,
+    },
+    disputeReasonChip: {
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: "#CBD5E1",
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      backgroundColor: "#FFFFFF",
+    },
+    disputeReasonChipActive: {
+      borderColor: "#0F172A",
+      backgroundColor: "#0F172A",
+    },
+    disputeReasonLabel: {
+      fontSize: 12,
+      fontWeight: "800",
+      color: "#475569",
+    },
+    disputeReasonLabelActive: {
+      color: "#FFFFFF",
+    },
+    disputeHint: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: "#64748B",
+      lineHeight: 18,
+    },
+    disputeInput: {
+      minHeight: 110,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: "#CBD5E1",
+      backgroundColor: "#FFFFFF",
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      fontSize: 14,
+      color: c.text.primary,
+      textAlignVertical: "top",
+    },
+    disputeCounter: {
+      alignItems: "flex-end",
+    },
+    disputeCounterText: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: "#94A3B8",
+    },
+    disputeActionRow: {
+      flexDirection: "row",
+      justifyContent: "flex-end",
+      gap: 8,
+      marginTop: 2,
+    },
+    disputeCancelBtn: {
+      height: 36,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: "#CBD5E1",
+      backgroundColor: "#FFFFFF",
+      paddingHorizontal: 14,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    disputeCancelText: {
+      fontSize: 12,
+      fontWeight: "800",
+      color: "#64748B",
+    },
+    disputeSubmitBtn: {
+      height: 36,
+      borderRadius: 10,
+      paddingHorizontal: 14,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: "#E11D48",
+    },
+    disputeSubmitBtnDisabled: {
+      backgroundColor: "#FDA4AF",
+    },
+    disputeSubmitText: {
+      fontSize: 12,
+      fontWeight: "800",
+      color: "#FFFFFF",
+    },
   });
 
   return (
@@ -401,20 +622,48 @@ export default function DriverSettlementScreen() {
 
                     <View style={s.actionRow}>
                       {item.confirmByDriver ? (
-                        <Pressable
-                          style={[s.actionBtn, (isPaid || isSubmitting) && s.actionBtnDisabled]}
-                          disabled={isPaid || isSubmitting}
-                          onPress={() => void onPressConfirm(item)}
-                        >
-                          <MaterialCommunityIcons
-                            name={isPaid ? "check-decagram-outline" : "clipboard-check-multiple-outline"}
-                            size={14}
-                            color={isPaid || isSubmitting ? "#64748B" : "#FFFFFF"}
-                          />
-                          <Text style={[s.actionText, (isPaid || isSubmitting) && s.actionTextDisabled]}>
-                            {isSubmitting ? "처리중..." : actionText}
-                          </Text>
-                        </Pressable>
+                        <View style={s.actionGroup}>
+                          <Pressable
+                            style={[s.actionBtn, (isPaid || isSubmitting || isSubmittingDispute) && s.actionBtnDisabled]}
+                            disabled={isPaid || isSubmitting || isSubmittingDispute}
+                            onPress={() => void onPressConfirm(item)}
+                          >
+                            <MaterialCommunityIcons
+                              name={isPaid ? "check-decagram-outline" : "clipboard-check-multiple-outline"}
+                              size={14}
+                              color={isPaid || isSubmitting || isSubmittingDispute ? "#64748B" : "#FFFFFF"}
+                            />
+                            <Text
+                              style={[
+                                s.actionText,
+                                (isPaid || isSubmitting || isSubmittingDispute) && s.actionTextDisabled,
+                              ]}
+                            >
+                              {isSubmitting ? "처리중..." : actionText}
+                            </Text>
+                          </Pressable>
+                          {!isPaid ? (
+                            <Pressable
+                              style={[s.disputeBtn, (isSubmitting || isSubmittingDispute) && s.disputeBtnDisabled]}
+                              disabled={isSubmitting || isSubmittingDispute}
+                              onPress={() => openDisputeModal(item)}
+                            >
+                              <MaterialCommunityIcons
+                                name="alert-circle-outline"
+                                size={14}
+                                color={isSubmitting || isSubmittingDispute ? "#94A3B8" : "#E11D48"}
+                              />
+                              <Text
+                                style={[
+                                  s.disputeText,
+                                  (isSubmitting || isSubmittingDispute) && s.disputeTextDisabled,
+                                ]}
+                              >
+                                이의제기
+                              </Text>
+                            </Pressable>
+                          ) : null}
+                        </View>
                       ) : null}
                     </View>
                   </View>
@@ -424,6 +673,83 @@ export default function DriverSettlementScreen() {
           )}
         </View>
       </ScrollView>
+
+      <Modal
+        visible={!!disputeTarget}
+        transparent
+        animationType="fade"
+        onRequestClose={closeDisputeModal}
+      >
+        <Pressable style={s.disputeModalBackdrop} onPress={closeDisputeModal}>
+          <Pressable style={s.disputeModalCard} onPress={(e) => e.stopPropagation()}>
+            <Text style={s.disputeModalTitle}>결제 이의제기</Text>
+            <Text style={s.disputeModalSub}>
+              {disputeTarget
+                ? `주문 #${disputeTarget.orderId} (${disputeTarget.payMethodLabel})`
+                : "-"}
+            </Text>
+
+            <View style={s.disputeReasonWrap}>
+              {DISPUTE_REASON_OPTIONS.map((reason) => {
+                const active = disputeReason === reason.value;
+                return (
+                  <Pressable
+                    key={reason.value}
+                    style={[s.disputeReasonChip, active && s.disputeReasonChipActive]}
+                    onPress={() => setDisputeReason(reason.value)}
+                    disabled={isSubmittingDispute}
+                  >
+                    <Text
+                      style={[s.disputeReasonLabel, active && s.disputeReasonLabelActive]}
+                    >
+                      {reason.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            <Text style={s.disputeHint}>{selectedDisputeReasonHint}</Text>
+
+            <TextInput
+              style={s.disputeInput}
+              value={disputeDescription}
+              onChangeText={setDisputeDescription}
+              placeholder="예: 실제 입금 내역이 확인되지 않습니다. 거래내역 캡처는 별도 제출하겠습니다."
+              placeholderTextColor="#94A3B8"
+              multiline
+              maxLength={300}
+              editable={!isSubmittingDispute}
+            />
+            <View style={s.disputeCounter}>
+              <Text style={s.disputeCounterText}>{disputeDescription.length}/300</Text>
+            </View>
+
+            <View style={s.disputeActionRow}>
+              <Pressable
+                style={s.disputeCancelBtn}
+                onPress={closeDisputeModal}
+                disabled={isSubmittingDispute}
+              >
+                <Text style={s.disputeCancelText}>취소</Text>
+              </Pressable>
+              <Pressable
+                style={[
+                  s.disputeSubmitBtn,
+                  (isSubmittingDispute || disputeDescription.trim().length < 5) &&
+                    s.disputeSubmitBtnDisabled,
+                ]}
+                onPress={() => void submitDispute()}
+                disabled={isSubmittingDispute || disputeDescription.trim().length < 5}
+              >
+                <Text style={s.disputeSubmitText}>
+                  {isSubmittingDispute ? "접수중..." : "이의제기 접수"}
+                </Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
