@@ -1,11 +1,14 @@
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import React from "react";
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 
-import type { OrderResponse } from "@/shared/models/order";
-import type { RoutePreviewData } from "@/features/shipper/order/ui/orderDetailRoute";
-import { Badge } from "@/shared/ui/feedback/Badge";
-import { RoutePreviewWebView } from "@/shared/ui/business/RoutePreviewModal";
 import { s } from "@/features/shipper/order/ui/OrderDetailScreen.styles";
 import {
   formatAddressBig,
@@ -14,6 +17,9 @@ import {
   formatSchedule,
   formatYmd,
 } from "@/features/shipper/order/ui/orderDetail.utils";
+import type { RoutePreviewData } from "@/features/shipper/order/ui/orderDetailRoute";
+import type { OrderResponse } from "@/shared/models/order";
+import { RoutePreviewWebView } from "@/shared/ui/business/RoutePreviewModal";
 
 import { OrderDetailStatusBadges } from "./OrderDetailStatusBadges";
 import { OrderDetailStatusBottomBar } from "./OrderDetailStatusBottomBar";
@@ -66,7 +72,15 @@ type BaseProps = {
   onReport: () => void;
 };
 
-function GridItem({ label, value, subValue }: { label: string; value: string; subValue?: string }) {
+function GridItem({
+  label,
+  value,
+  subValue,
+}: {
+  label: string;
+  value: string;
+  subValue?: string;
+}) {
   return (
     <View style={s.gridItem}>
       <Text style={s.gridLabel}>{label}</Text>
@@ -132,7 +146,9 @@ function BaseStatusDetailView({
                 isInstant={order.instant}
               />
             </View>
-            <Text style={[s.dateText, { color: colors.textSecondary }]}>{formatYmd(order.createdAt)}</Text>
+            <Text style={[s.dateText, { color: colors.textSecondary }]}>
+              {formatYmd(order.createdAt)}
+            </Text>
           </View>
 
           <View style={s.routeBigRow}>
@@ -153,28 +169,143 @@ function BaseStatusDetailView({
 
           <View style={s.infoBar}>
             <View style={s.infoItem}>
-              <MaterialCommunityIcons name="map-marker-distance" size={16} color="#64748B" />
-              <Text style={s.infoText}>{Math.round(order.distance || 0)}km</Text>
+              <MaterialCommunityIcons
+                name="map-marker-distance"
+                size={16}
+                color="#64748B"
+              />
+              <Text style={s.infoText}>
+                {Math.round(order.distance || 0)}km
+              </Text>
             </View>
             <View style={s.divider} />
             <View style={s.infoItem}>
-              <MaterialCommunityIcons name="clock-outline" size={16} color="#64748B" />
-              <Text style={s.infoText}>{formatEstimatedDuration(order.duration)}</Text>
+              <MaterialCommunityIcons
+                name="clock-outline"
+                size={16}
+                color="#64748B"
+              />
+              <Text style={s.infoText}>
+                {formatEstimatedDuration(order.duration)}
+              </Text>
             </View>
           </View>
 
           <View style={s.priceRow}>
             <Text style={s.priceLabel}>운송료</Text>
             <View style={s.priceRight}>
-              <Text style={[s.priceValue, { color: order.instant ? "#EF4444" : colors.brandPrimary }]}>
+              <Text
+                style={[
+                  s.priceValue,
+                  { color: order.instant ? "#EF4444" : colors.brandPrimary },
+                ]}
+              >
                 {totalPrice.toLocaleString()}
               </Text>
-              <Badge
-                label={order.payMethod || "결제방식 미정"}
-                tone={String(order.payMethod || "").includes("선착불") ? "payPrepaid" : "payDeferred"}
-                style={{ marginLeft: 6, marginTop: 3 }}
-              />
             </View>
+          </View>
+
+          {/* 상세 운송료 내역 */}
+          <View
+            style={[
+              localStyles.breakdownContainer,
+              { borderTopColor: colors.borderDefault },
+            ]}
+          >
+            <View style={localStyles.breakdownRow}>
+              <Text
+                style={[
+                  localStyles.breakdownLabel,
+                  { color: colors.textSecondary },
+                ]}
+              >
+                기본 운송료
+              </Text>
+              <Text
+                style={[
+                  localStyles.breakdownValue,
+                  { color: colors.textPrimary },
+                ]}
+              >
+                {(order.basePrice || 0).toLocaleString()}원
+              </Text>
+            </View>
+
+            <View style={localStyles.breakdownRow}>
+              <Text
+                style={[
+                  localStyles.breakdownLabel,
+                  { color: colors.textSecondary },
+                ]}
+              >
+                수작업비
+              </Text>
+              <Text
+                style={[
+                  localStyles.breakdownValue,
+                  { color: colors.textPrimary },
+                ]}
+              >
+                {(order.laborFee || 0).toLocaleString()}원
+              </Text>
+            </View>
+
+            <View style={localStyles.breakdownRow}>
+              <Text
+                style={[
+                  localStyles.breakdownLabel,
+                  { color: colors.textSecondary },
+                ]}
+              >
+                포장비
+              </Text>
+              <Text
+                style={[
+                  localStyles.breakdownValue,
+                  { color: colors.textPrimary },
+                ]}
+              >
+                {(order.packagingPrice || 0).toLocaleString()}원
+              </Text>
+            </View>
+          </View>
+
+          {/* 결제 방식 */}
+          <View
+            style={[
+              localStyles.payMethodRow,
+              { borderTopColor: colors.borderDefault },
+            ]}
+          >
+            <View style={localStyles.payMethodHeader}>
+              <Text
+                style={[
+                  localStyles.breakdownLabel,
+                  { color: colors.textSecondary },
+                ]}
+              >
+                결제 방법
+              </Text>
+              <Text
+                style={{
+                  fontSize: 16,
+                  color: colors.brandPrimary,
+                  fontWeight: "600",
+                }}
+              >
+                {order.payMethod || "-"}
+              </Text>
+            </View>
+            <Text
+              style={[
+                localStyles.payMethodText,
+                { color: colors.textSecondary },
+              ]}
+            >
+              {isSettled
+                ? "정산계좌로 입금이 완료되었습니다"
+                : "화주 확인 후 정산 일정에 따라 입금됩니다"}
+            </Text>
           </View>
         </View>
 
@@ -188,10 +319,17 @@ function BaseStatusDetailView({
                 <Text style={s.dotText}>출</Text>
               </View>
               <View style={s.timelineContent}>
-                <Text style={s.timeLabel}>{formatSchedule(order.startSchedule)}</Text>
+                <Text style={s.timeLabel}>
+                  {formatSchedule(order.startSchedule)}
+                </Text>
                 <Text style={s.placeTitle}>{order.startAddr || "-"}</Text>
                 <Text style={s.placeDetail}>{order.startPlace || "-"}</Text>
-                <Pressable style={s.copyBtn} onPress={() => onCopyAddress(order.startAddr, order.startPlace)}>
+                <Pressable
+                  style={s.copyBtn}
+                  onPress={() =>
+                    onCopyAddress(order.startAddr, order.startPlace)
+                  }
+                >
                   <Ionicons name="copy-outline" size={12} color="#475569" />
                   <Text style={s.copyText}>주소복사</Text>
                 </Pressable>
@@ -203,10 +341,15 @@ function BaseStatusDetailView({
                 <Text style={s.dotText}>도</Text>
               </View>
               <View style={s.timelineContent}>
-                <Text style={[s.timeLabel, { color: "#4F46E5" }]}>하차 예정</Text>
+                <Text style={[s.timeLabel, { color: "#4F46E5" }]}>
+                  하차 예정
+                </Text>
                 <Text style={s.placeTitle}>{order.endAddr || "-"}</Text>
                 <Text style={s.placeDetail}>{order.endPlace || "-"}</Text>
-                <Pressable style={s.copyBtn} onPress={() => onCopyAddress(order.endAddr, order.endPlace)}>
+                <Pressable
+                  style={s.copyBtn}
+                  onPress={() => onCopyAddress(order.endAddr, order.endPlace)}
+                >
                   <Ionicons name="copy-outline" size={12} color="#475569" />
                   <Text style={s.copyText}>주소복사</Text>
                 </Pressable>
@@ -215,16 +358,36 @@ function BaseStatusDetailView({
           </View>
         </View>
 
-        <View style={[s.routeMiniCard, { backgroundColor: colors.bgSurface, borderColor: colors.borderDefault }]}>
+        <View
+          style={[
+            s.routeMiniCard,
+            {
+              backgroundColor: colors.bgSurface,
+              borderColor: colors.borderDefault,
+            },
+          ]}
+        >
           <View style={s.routeMiniHeader}>
-            <Text style={[s.routeMiniTitle, { color: colors.textPrimary }]}>경로 지도</Text>
+            <Text style={[s.routeMiniTitle, { color: colors.textPrimary }]}>
+              경로 지도
+            </Text>
             <Pressable style={s.routeMiniExpandBtn} onPress={onOpenRouteMap}>
               <Text style={s.routeMiniExpandText}>확대</Text>
             </Pressable>
           </View>
           {!canRenderRouteMap ? (
-            <View style={[s.routeMiniEmpty, { borderColor: colors.borderDefault, backgroundColor: colors.bgCanvas }]}>
-              <Text style={[s.routeMiniEmptyText, { color: colors.textSecondary }]}>
+            <View
+              style={[
+                s.routeMiniEmpty,
+                {
+                  borderColor: colors.borderDefault,
+                  backgroundColor: colors.bgCanvas,
+                },
+              ]}
+            >
+              <Text
+                style={[s.routeMiniEmptyText, { color: colors.textSecondary }]}
+              >
                 지도 키 설정 후 경로 지도를 표시할 수 있습니다.
               </Text>
             </View>
@@ -237,9 +400,21 @@ function BaseStatusDetailView({
               />
             </View>
           ) : (
-            <View style={[s.routeMiniEmpty, { borderColor: colors.borderDefault, backgroundColor: colors.bgCanvas }]}>
+            <View
+              style={[
+                s.routeMiniEmpty,
+                {
+                  borderColor: colors.borderDefault,
+                  backgroundColor: colors.bgCanvas,
+                },
+              ]}
+            >
               <ActivityIndicator size="small" color="#64748B" />
-              <Text style={[s.routeMiniEmptyText, { color: colors.textSecondary }]}>경로를 불러오는 중입니다.</Text>
+              <Text
+                style={[s.routeMiniEmptyText, { color: colors.textSecondary }]}
+              >
+                경로를 불러오는 중입니다.
+              </Text>
             </View>
           )}
           {routeWebviewError ? (
@@ -252,32 +427,68 @@ function BaseStatusDetailView({
         <View style={s.sectionCard}>
           <Text style={s.sectionTitle}>화물 정보</Text>
           <View style={s.gridContainer}>
-            <GridItem label="화물종류" value={cargoName} subValue={`포장 여부 ${packagingOx}`} />
+            <GridItem
+              label="화물종류"
+              value={cargoName}
+              subValue={`포장 여부 ${packagingOx}`}
+            />
             <GridItem label="운송방식" value={order.driveMode || "독차"} />
             <GridItem label="상하차방법" value={order.loadMethod || "지게차"} />
             <GridItem label="요청차종" value={order.reqCarType || "카고"} />
-            <GridItem label="요청톤수" value={order.reqTonnage || `${Math.max(1, Number(order.tonnage || 1))}톤`} />
+            <GridItem
+              label="요청톤수"
+              value={
+                order.reqTonnage ||
+                `${Math.max(1, Number(order.tonnage || 1))}톤`
+              }
+            />
             <GridItem label="작업유형" value={order.workType || "일반"} />
           </View>
         </View>
 
         <View style={[s.sectionCard, { backgroundColor: colors.bgSurface }]}>
-          <Text style={[s.sectionTitle, { color: colors.textPrimary }]}>화주 정보</Text>
-          <View style={[s.managerBox, { backgroundColor: colors.bgCanvas, borderColor: colors.borderDefault }]}>
+          <Text style={[s.sectionTitle, { color: colors.textPrimary }]}>
+            화주 정보
+          </Text>
+          <View
+            style={[
+              s.managerBox,
+              {
+                backgroundColor: colors.bgCanvas,
+                borderColor: colors.borderDefault,
+              },
+            ]}
+          >
             <View style={s.managerRow}>
               <Ionicons
-                name={shipperInfo.label === "업체명" ? "business-outline" : "person-circle-outline"}
+                name={
+                  shipperInfo.label === "업체명"
+                    ? "business-outline"
+                    : "person-circle-outline"
+                }
                 size={18}
                 color={colors.textSecondary}
               />
-              <Text style={[s.managerLabel, { color: colors.textSecondary }]}>{shipperInfo.label}</Text>
-              <Text style={[s.managerValue, { color: colors.textPrimary }]}>{shipperInfo.name}</Text>
+              <Text style={[s.managerLabel, { color: colors.textSecondary }]}>
+                {shipperInfo.label}
+              </Text>
+              <Text style={[s.managerValue, { color: colors.textPrimary }]}>
+                {shipperInfo.name}
+              </Text>
             </View>
 
             <View style={[s.managerRow, { marginTop: 12 }]}>
-              <Ionicons name="call-outline" size={18} color={colors.textSecondary} />
-              <Text style={[s.managerLabel, { color: colors.textSecondary }]}>전화번호</Text>
-              <Text style={[s.managerValue, { color: colors.textPrimary }]}>{shipperInfo.phone}</Text>
+              <Ionicons
+                name="call-outline"
+                size={18}
+                color={colors.textSecondary}
+              />
+              <Text style={[s.managerLabel, { color: colors.textSecondary }]}>
+                전화번호
+              </Text>
+              <Text style={[s.managerValue, { color: colors.textPrimary }]}>
+                {shipperInfo.phone || "-"}
+              </Text>
             </View>
           </View>
         </View>
@@ -294,7 +505,9 @@ function BaseStatusDetailView({
             </View>
           ) : null}
           {requestSummary ? (
-            <View style={[s.remarkBox, requestTags.length > 0 && { marginTop: 10 }]}>
+            <View
+              style={[s.remarkBox, requestTags.length > 0 && { marginTop: 10 }]}
+            >
               <Text style={s.remarkText}>{requestSummary}</Text>
             </View>
           ) : requestTags.length === 0 ? (
@@ -321,24 +534,83 @@ function BaseStatusDetailView({
 }
 
 function WaitingOrderDetailView(props: BaseProps) {
-  return <BaseStatusDetailView {...props} statusGroup="WAITING" isCompleted={false} />;
+  return (
+    <BaseStatusDetailView
+      {...props}
+      statusGroup="WAITING"
+      isCompleted={false}
+    />
+  );
 }
 
 function ActiveOrderDetailView(props: BaseProps) {
-  return <BaseStatusDetailView {...props} statusGroup="ACTIVE" isCompleted={false} />;
+  return (
+    <BaseStatusDetailView {...props} statusGroup="ACTIVE" isCompleted={false} />
+  );
 }
 
 function CompletedOrderDetailView(props: BaseProps) {
-  return <BaseStatusDetailView {...props} statusGroup="COMPLETED" isCompleted={true} />;
+  return (
+    <BaseStatusDetailView
+      {...props}
+      statusGroup="COMPLETED"
+      isCompleted={true}
+    />
+  );
 }
 
 function CancelledOrderDetailView(props: BaseProps) {
-  return <BaseStatusDetailView {...props} statusGroup="CANCELLED" isCompleted={false} />;
+  return (
+    <BaseStatusDetailView
+      {...props}
+      statusGroup="CANCELLED"
+      isCompleted={false}
+    />
+  );
 }
 
 export function OrderDetailStatusContent(props: BaseProps) {
-  if (props.statusGroup === "WAITING") return <WaitingOrderDetailView {...props} />;
-  if (props.statusGroup === "COMPLETED") return <CompletedOrderDetailView {...props} />;
-  if (props.statusGroup === "CANCELLED") return <CancelledOrderDetailView {...props} />;
+  if (props.statusGroup === "WAITING")
+    return <WaitingOrderDetailView {...props} />;
+  if (props.statusGroup === "COMPLETED")
+    return <CompletedOrderDetailView {...props} />;
+  if (props.statusGroup === "CANCELLED")
+    return <CancelledOrderDetailView {...props} />;
   return <ActiveOrderDetailView {...props} />;
 }
+
+const localStyles = StyleSheet.create({
+  breakdownContainer: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    gap: 8,
+  },
+  breakdownRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  breakdownLabel: {
+    fontSize: 14,
+    fontWeight: "500",
+  },
+  breakdownValue: {
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  payMethodRow: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+  },
+  payMethodHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 4,
+  },
+  payMethodText: {
+    fontSize: 12,
+  },
+});
