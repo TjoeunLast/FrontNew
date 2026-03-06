@@ -78,6 +78,7 @@ interface KakaoMobilityDirectionsResponse {
   routes?: KakaoMobilityRoute[];
 }
 
+
 async function loadReviewedOrderIds() {
   try {
     const raw = await AsyncStorage.getItem(REVIEWED_ORDER_IDS_STORAGE_KEY);
@@ -581,7 +582,6 @@ export default function OrderDetailScreen() {
           ? KakaoLocalApi.geocodeAddress(endAddress).catch(() => null)
           : Promise.resolve(null),
     ]);
-
     if (!startGeo || !endGeo) {
       if (showAlert)
         Alert.alert(
