@@ -4,9 +4,8 @@ import { StyleSheet, Text, View } from "react-native";
 export default function CommonPaymentScreen() {
   return (
     <View style={s.page}>
-      {/* 공통 결제 정책 안내 화면: 역할별 화면에서 동일 정책 문구를 재사용 */}
-      <Text style={s.title}>Common Payment</Text>
-      <Text style={s.desc}>Enabled payment options are card (Toss) and cash-on-delivery only.</Text>
+      <Text style={s.title}>결제 방식</Text>
+      <Text style={s.desc}>현재 사용 중인 결제 방식은 토스 결제와 착불 결제입니다.</Text>
     </View>
   );
 }

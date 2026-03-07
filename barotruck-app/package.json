@@ -1,4 +1,4 @@
-{
+﻿{
   "name": "barotruck-app",
   "main": "expo-router/entry",
   "version": "1.0.0",
@@ -6,13 +6,15 @@
     "start": "expo start",
     "start:8081": "expo start --port 8081",
     "start:yang": "set EXPO_PUBLIC_API_BASE_URL=http://yangtheory.site:8080 && expo start --port 8081",
+    "start:emulator": "set EXPO_PUBLIC_API_BASE_URL=http://10.0.2.2:8080 && expo start --lan --port 8081",
     "start:tunnel": "expo start --tunnel --port 8081",
     "start:yang:tunnel": "set EXPO_PUBLIC_API_BASE_URL=http://yangtheory.site:8080 && expo start --tunnel --port 8081 -c",
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
     "web:8081": "expo start --web --port 8081",
-    "web:yang": "set EXPO_PUBLIC_API_BASE_URL=http://yangtheory.site:8080 && expo start --web --port 8081"
+    "web:yang": "set EXPO_PUBLIC_API_BASE_URL=http://yangtheory.site:8080 && expo start --web --port 8081",
+    "web:local": "set EXPO_PUBLIC_API_BASE_URL=http://localhost:8080 && expo start --web --port 8081"
   },
   "dependencies": {
     "@actbase/react-daum-postcode": "^1.0.4",
@@ -71,3 +73,4 @@
   },
   "private": true
 }
+

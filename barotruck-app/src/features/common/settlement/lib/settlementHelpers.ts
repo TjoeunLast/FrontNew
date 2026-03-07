@@ -1,4 +1,5 @@
-﻿import type { OrderResponse } from "@/shared/models/order";
+import type { OrderResponse } from "@/shared/models/order";
+import type { TransportPaymentStatus } from "@/shared/models/payment";
 
 export type SettlementUiStatus = "UNPAID" | "PENDING" | "PAID" | "TAX_INVOICE";
 
@@ -6,15 +7,44 @@ export function toWon(v: number) {
   return `${Number(v).toLocaleString("ko-KR")}원`;
 }
 
-export function toSettlementStatusFromRaw(raw?: string | null): SettlementUiStatus {
+export function toSettlementStatusFromRaw(
+  raw?: string | null,
+): SettlementUiStatus | undefined {
   // 백엔드 정산 상태값을 화면 공통 상태(UNPAID/PENDING/PAID)로 매핑.
   const v = String(raw ?? "").toUpperCase();
 
-  if (v === "COMPLETED" || v === "PAID" || v === "CONFIRMED") return "PAID";
-  if (v === "WAIT" || v === "DISPUTED") return "PENDING";
+  if (
+    v === "CONFIRMED" ||
+    v === "COMPLETED" ||
+    v === "ADMIN_FORCE_CONFIRMED"
+  ) {
+    return "PAID";
+  }
+  if (
+    v === "PAID" ||
+    v === "DISPUTED" ||
+    v === "ADMIN_HOLD" ||
+    v === "ADMIN_REJECTED"
+  ) {
+    return "PENDING";
+  }
+  if (v === "READY" || v === "UNPAID" || v === "INIT" || v === "CANCELLED") {
+    return "UNPAID";
+  }
+
+  return undefined;
+}
+
+export const toSettlementStatusFromPayment = toSettlementStatusFromRaw;
+
+export function toSettlementStatusFromSettlement(
+  raw?: OrderResponse["settlementStatus"] | null,
+): SettlementUiStatus {
+  const v = String(raw ?? "").toUpperCase();
+
+  if (v === "COMPLETED") return "PAID";
+  if (v === "WAIT" || v.includes("WAIT")) return "PENDING";
   if (v === "READY" || v === "UNPAID" || v === "INIT") return "UNPAID";
-  if (v.includes("WAIT")) return "PENDING";
-  if (v.includes("COMPLETE") || v.includes("DONE") || v.includes("SUCCESS")) return "PAID";
 
   return "UNPAID";
 }
@@ -27,7 +57,10 @@ export function toSettlementStatus(row: OrderResponse): SettlementUiStatus {
 
   if (isTaxInvoice) return "TAX_INVOICE";
 
-  return toSettlementStatusFromRaw(row.settlementStatus);
+  const paymentStatus = toSettlementStatusFromPayment(row.paymentSummary?.status);
+  if (paymentStatus) return paymentStatus;
+
+  return toSettlementStatusFromSettlement(row.settlementStatus);
 }
 
 export function statusText(status: SettlementUiStatus) {

@@ -1,4 +1,10 @@
 ﻿import { AssignedDriverInfoResponse, MyRevenueResponse, OrderRequest, OrderResponse, OrderStatus } from '../models/order';
+import type { OrderPaymentSummary } from '../models/payment';
+import {
+  findNestedTransportPaymentStatus,
+  mergeOrderPaymentSummary,
+  normalizeOrderPaymentSummary,
+} from './paymentService';
 import apiClient from './apiClient';
 
 const API_BASE = '/api/v1/orders';
@@ -8,6 +14,16 @@ function normalizeStatus(raw: any): OrderStatus {
   // 레거시 백엔드 상태값을 표준 주문 상태값으로 정규화
   if (v === 'COMPLETE') return 'COMPLETED';
   if (v === 'MOVING') return 'IN_TRANSIT';
+  if (
+    v === 'PAID' ||
+    v === 'CONFIRMED' ||
+    v === 'DISPUTED' ||
+    v === 'ADMIN_HOLD' ||
+    v === 'ADMIN_FORCE_CONFIRMED' ||
+    v === 'ADMIN_REJECTED'
+  ) {
+    return 'COMPLETED';
+  }
   if (
     v === 'REQUESTED' ||
     v === 'APPLIED' ||
@@ -28,9 +44,6 @@ function normalizeSettlementStatus(raw: any): OrderResponse['settlementStatus'] 
   const rawText = String(raw ?? '').trim();
   const v = rawText.toUpperCase();
   if (v === 'READY' || v === 'WAIT' || v === 'COMPLETED') return v as any;
-  // TransportPaymentStatus (backend): READY, PAID, CONFIRMED, DISPUTED, CANCELLED
-  if (v === 'PAID' || v === 'CONFIRMED') return 'COMPLETED';
-  if (v === 'DISPUTED') return 'WAIT' as any ;
   if (v === 'CANCELLED') return 'READY';
   if (v === '0') return 'READY';
   if (v === '1') return 'WAIT' as any;
@@ -38,10 +51,9 @@ function normalizeSettlementStatus(raw: any): OrderResponse['settlementStatus'] 
   if (v === 'UNPAID' || v === 'INIT') return 'READY';
   if (v === 'PENDING' || v === 'WAITING') return 'WAIT' as any;
   if (v === 'REQUESTED') return 'READY';
-  if (v === 'PAID' || v === 'DONE' || v === 'SUCCESS') return 'COMPLETED';
   if (rawText.includes('미결제') || rawText.includes('결제전')) return 'READY';
   if (rawText.includes('대기')) return 'WAIT' as any;
-  if (rawText.includes('완료') || rawText.includes('결제됨')) return 'COMPLETED';
+  if (rawText.includes('완료')) return 'COMPLETED';
   return undefined;
 }
 
@@ -51,15 +63,13 @@ function findNestedSettlementStatus(node: any, depth = 0): OrderResponse['settle
   // node.status/state는 운송 상태일 수 있어서 정산 상태 판별에 사용하지 않음
   const direct = normalizeSettlementStatus(
       (node as any).settlementStatus ??
-      (node as any).settlement_status ??
-      (node as any).paymentStatus ??
-      (node as any).payStatus
+      (node as any).settlement_status
   );
   if (direct) return direct;
 
   for (const [k, v] of Object.entries(node as Record<string, any>)) {
     const key = String(k).toLowerCase();
-    if (key.includes('settlement') || key.includes('payment') || key.includes('정산') || key.includes('결제')) {
+    if (key.includes('settlement') || key.includes('정산')) {
       const nested = Array.isArray(v) ? v[0] : v;
       const parsed =
         normalizeSettlementStatus(nested) ??
@@ -109,6 +119,12 @@ function normalizeOrderRow(node: any): OrderResponse | null {
     (node as any).settlementDtos ??
     (node as any).settlementInfos;
   const firstSettlement = Array.isArray(settlementsNode) ? settlementsNode[0] : settlementsNode;
+  const paymentSummary =
+    normalizeOrderPaymentSummary(node) ??
+    (() => {
+      const status = findNestedTransportPaymentStatus(node);
+      return status ? { status } : undefined;
+    })();
 
   const settlementStatus = normalizeSettlementStatus(
     (node as any).settlementStatus ??
@@ -116,8 +132,6 @@ function normalizeOrderRow(node: any): OrderResponse | null {
       (node as any).settlementState ??
       (node as any).settlement_state ??
       (node as any).settleStatus ??
-      (node as any).paymentStatus ??
-      (node as any).payment_state ??
       (typeof settlementNode === 'string' ? settlementNode : undefined) ??
       settlementNode?.status ??
       settlementNode?.settlementStatus ??
@@ -147,6 +161,7 @@ function normalizeOrderRow(node: any): OrderResponse | null {
     orderId: orderIdNum,
     status: normalizeStatus((node as any).status),
     settlementStatus,
+    paymentSummary,
     createdAt,
     updated: updated ? String(updated) : undefined,
     driverNo,
@@ -207,6 +222,10 @@ function mergeOrderRows(prev: OrderResponse, next: OrderResponse): OrderResponse
     ...next,
     applicantCount: Math.max(prev.applicantCount ?? 0, next.applicantCount ?? 0),
     settlementStatus: pickDefined(prev.settlementStatus, next.settlementStatus),
+    paymentSummary: mergeOrderPaymentSummary(
+      prev.paymentSummary as OrderPaymentSummary | undefined,
+      next.paymentSummary as OrderPaymentSummary | undefined,
+    ),
     tag: pickDefined(prev.tag, next.tag),
     payMethod: next.payMethod || prev.payMethod,
     updated: next.updated || prev.updated,
@@ -455,7 +474,7 @@ export const OrderService = {
 
   getMyDrivingOrders: async (): Promise<OrderResponse[]> => {
     const res = await apiClient.get(`${API_BASE}/my-driving`);
-    return res.data;
+    return toOrderList(res.data);
   },
 
   /**

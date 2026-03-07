@@ -31,7 +31,14 @@ export function normalizePaymentMethod(raw?: string | null): PaymentMethodCode |
     return "card";
   }
 
-  if (value.includes("prepaid") || value.includes("cash") || value.includes("착불") || value.includes("postpaid")) {
+  if (
+    value.includes("prepaid") ||
+    value.includes("cash") ||
+    value.includes("현금") ||
+    value.includes("선불") ||
+    value.includes("착불") ||
+    value.includes("postpaid")
+  ) {
     return "prepaid";
   }
 
@@ -62,6 +69,7 @@ export function isCashPayment(raw?: string | null) {
   return normalizePaymentMethod(raw) === "prepaid";
 }
 
+export const isDeferredPayment = isCashPayment;
 export function toPaymentMethodLabel(raw?: string | null) {
   // UI 표시는 정책 기준 라벨로 통일한다.
   const value = normalizePaymentMethod(raw);
