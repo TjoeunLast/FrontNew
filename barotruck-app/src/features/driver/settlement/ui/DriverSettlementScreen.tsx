@@ -342,8 +342,7 @@ export default function DriverSettlementScreen() {
   const submitDispute = async () => {
     if (!disputeTarget) return;
     const description = disputeDescription.trim();
-    if (description.length < 5) {
-      Alert.alert("입력 필요", "이의 사유를 5자 이상 입력해 주세요.");
+    if (description.length < 1) {
       return;
     }
 
@@ -816,11 +815,11 @@ export default function DriverSettlementScreen() {
               <Pressable
                 style={[
                   s.disputeSubmitBtn,
-                  (isSubmittingDispute || disputeDescription.trim().length < 5) &&
+                  (isSubmittingDispute || disputeDescription.trim().length < 1) &&
                     s.disputeSubmitBtnDisabled,
                 ]}
                 onPress={() => void submitDispute()}
-                disabled={isSubmittingDispute || disputeDescription.trim().length < 5}
+                disabled={isSubmittingDispute || disputeDescription.trim().length < 1}
               >
                 <Text style={s.disputeSubmitText}>
                   {isSubmittingDispute ? "접수중..." : "이의제기 접수"}
