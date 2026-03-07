@@ -264,6 +264,7 @@ function mapOrderToSettlement(
     order.status === "APPLIED"
   )
     return null;
+  if (order.status !== "COMPLETED") return null;
 
   const scheduledAt =
     parseDate(order.endSchedule) ||
@@ -334,6 +335,7 @@ export default function ShipperSettlementScreen() {
     const pendingOrderIds = await loadPendingSettlementOrderIds();
     const rows = await OrderApi.getMyShipperOrders();
     const mapped = rows
+      .filter((row) => row.status === "COMPLETED")
       .map((row) => mapOrderToSettlement(row, pendingOrderIds))
       .filter((x): x is SettlementItem => x !== null)
       .sort((a, b) => b.scheduledAt.getTime() - a.scheduledAt.getTime());
@@ -380,7 +382,10 @@ export default function ShipperSettlementScreen() {
   const viewMonthNumber = viewMonth.getMonth() + 1;
 
   const monthItems = useMemo(
-    () => items.filter((x) => isSameMonth(x.scheduledAt, viewMonth)),
+    () =>
+      items.filter(
+        (x) => x.isTransportCompleted && isSameMonth(x.scheduledAt, viewMonth),
+      ),
     [items, viewMonth],
   );
 
