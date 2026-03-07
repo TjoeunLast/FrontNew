@@ -248,7 +248,7 @@ function buildTossCheckoutHtml(input: {
 function toActionLabel(status: SettlementStatus, isTransportCompleted = true) {
   if (status === "UNPAID")
     return isTransportCompleted ? "결제하기" : "운송완료 후 결제";
-  if (status === "PENDING") return "결제대기";
+  if (status === "PENDING") return "차주 확인 대기";
   if (status === "PAID") return "영수증 확인";
   return "계산서 보기";
 }
@@ -275,27 +275,17 @@ function mapOrderToSettlement(
   if (!isShipperActivePaymentMethod(order.payMethod)) return null;
 
   const amount = calcOrderAmount(order);
-  const normalizedOrderStatus = String(order.status ?? "")
-    .trim()
-    .toUpperCase();
-  // 일부 레거시 응답은 settlementStatus가 READY여도 order.status에 결제완료 상태가 들어옴.
-  // 이 경우 결제완료 건이 다시 UNPAID로 보이지 않도록 보정.
-  const paidByOrderStatus =
-    normalizedOrderStatus === "PAID" ||
-    normalizedOrderStatus === "CONFIRMED" ||
-    normalizedOrderStatus === "ADMIN_FORCE_CONFIRMED";
   const rawBaseStatus = toSettlementStatus(order);
-  const baseStatus =
-    rawBaseStatus === "UNPAID" && paidByOrderStatus ? "PAID" : rawBaseStatus;
   const status =
-    baseStatus === "UNPAID" && pendingOrderIds?.has(Number(order.orderId))
+    rawBaseStatus === "UNPAID" && pendingOrderIds?.has(Number(order.orderId))
       ? "PENDING"
-      : baseStatus;
+      : rawBaseStatus;
   const isTransportCompleted = order.status === "COMPLETED";
   if (__DEV__) {
     console.log("[settlement-map]", {
       orderId: order.orderId,
       settlementStatus: order.settlementStatus,
+      paymentStatus: order.paymentSummary?.status,
       payMethod: order.payMethod,
       resolvedStatus: status,
     });
@@ -480,9 +470,9 @@ export default function ShipperSettlementScreen() {
               row.orderId === tossCheckout.orderId
                 ? {
                     ...row,
-                    status: "PAID",
+                    status: "PENDING",
                     actionLabel: toActionLabel(
-                      "PAID",
+                      "PENDING",
                       row.isTransportCompleted,
                     ),
                   }
@@ -493,7 +483,14 @@ export default function ShipperSettlementScreen() {
           setItems((prev) =>
             prev.map((row) =>
               row.orderId === tossCheckout.orderId
-                ? { ...row, status: "PAID", actionLabel: toActionLabel("PAID") }
+                ? {
+                    ...row,
+                    status: "PENDING",
+                    actionLabel: toActionLabel(
+                      "PENDING",
+                      row.isTransportCompleted,
+                    ),
+                  }
                 : row,
             ),
           );
@@ -501,7 +498,7 @@ export default function ShipperSettlementScreen() {
 
         handledTossResultUrlRef.current = null;
         setTossCheckout(null);
-        Alert.alert("결제 완료", "토스 결제가 완료되었습니다.");
+        Alert.alert("결제 완료", "토스 결제가 완료되었습니다. 차주 확인을 기다리고 있습니다.");
       } catch (error: any) {
         const msg =
           error?.response?.data?.message ||
@@ -621,6 +618,7 @@ export default function ShipperSettlementScreen() {
 
     try {
       setSubmittingOrderId(item.orderId);
+      // 서버 enum은 CASH를 쓰지만, 프론트 정책상 착불 결제로 표기한다.
       await PaymentService.markPaid(item.orderId, {
         method: "CASH",
         paymentTiming: "POSTPAID",
@@ -634,14 +632,17 @@ export default function ShipperSettlementScreen() {
             row.id === item.id
               ? {
                   ...row,
-                  status: "PAID",
-                  actionLabel: toActionLabel("PAID"),
+                  status: "PENDING",
+                  actionLabel: toActionLabel(
+                    "PENDING",
+                    row.isTransportCompleted,
+                  ),
                 }
               : row,
           ),
         );
       }
-      Alert.alert("결제 요청", "결제 요청이 생성되었습니다.");
+      Alert.alert("결제 요청", "결제 요청이 생성되었습니다. 차주 확인을 기다리고 있습니다.");
     } catch (error: any) {
       const msg =
         error?.response?.data?.message || "결제 요청 중 오류가 발생했습니다.";
@@ -670,7 +671,14 @@ export default function ShipperSettlementScreen() {
           setItems((prev) =>
             prev.map((row) =>
               row.id === item.id
-                ? { ...row, status: "PAID", actionLabel: toActionLabel("PAID") }
+                ? {
+                    ...row,
+                    status: "PENDING",
+                    actionLabel: toActionLabel(
+                      "PENDING",
+                      row.isTransportCompleted,
+                    ),
+                  }
                 : row,
             ),
           );

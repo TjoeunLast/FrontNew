@@ -16,7 +16,7 @@ export const TRIP_OPTIONS: { value: TripType; label: string }[] = [
 
 export const PAYMENT_OPTIONS: { value: PayType; title: string; desc: string }[] = [
   { value: "card", title: "토스 결제", desc: "수수료 10%" },
-  { value: "prepaid", title: "선/착불", desc: "상하차 시 지급" },
+  { value: "prepaid", title: "착불 결제", desc: "차주와 직접 정산 후 서버 확인" },
   { value: "receipt30", title: "인수증 (30일)", desc: "계산서 발행" },
   { value: "monthEnd", title: "익월말", desc: "회사 정기결제" },
 ];

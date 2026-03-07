@@ -5,20 +5,20 @@ import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View 
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { OrderService } from "@/shared/api/orderService";
-import { PaymentService } from "@/shared/api/paymentService";
+import { normalizeTransportPaymentStatus, PaymentService } from "@/shared/api/paymentService";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import type { OrderResponse } from "@/shared/models/order";
-import type { PaymentDisputeReason } from "@/shared/models/payment";
+import type { PaymentDisputeReason, TransportPaymentStatus } from "@/shared/models/payment";
 import ShipperScreenHeader from "@/shared/ui/layout/ShipperScreenHeader";
 import {
   calcOrderAmount,
   statusText,
-  toSettlementStatus,
+  toSettlementStatusFromSettlement,
   toWon,
 } from "@/features/common/settlement/lib/settlementHelpers";
 import {
   isShipperActivePaymentMethod,
-  isCashPayment,
+  isDeferredPayment,
   isTossPayment,
   toPaymentMethodLabel,
 } from "@/features/common/payment/lib/paymentMethods";
@@ -38,8 +38,10 @@ type SettlementItem = {
   amount: number;
   payMethodLabel: string;
   isToss: boolean;
-  isPrepaid: boolean;
-  confirmByDriver: boolean;
+  paymentStatus?: TransportPaymentStatus;
+  supportsDriverConfirm: boolean;
+  canConfirmByDriver: boolean;
+  canDispute: boolean;
 };
 
 const DISPUTE_REASON_OPTIONS: Array<{
@@ -115,14 +117,69 @@ function toDateLabel(d: Date) {
   return `${d.getMonth() + 1}.${d.getDate()} (${w})`;
 }
 
+function toDriverSettlementStatus(paymentStatus?: TransportPaymentStatus): SettlementStatus {
+  if (
+    paymentStatus === "PAID" ||
+    paymentStatus === "DISPUTED" ||
+    paymentStatus === "ADMIN_HOLD" ||
+    paymentStatus === "ADMIN_REJECTED"
+  ) {
+    return "PENDING";
+  }
+  if (paymentStatus === "CONFIRMED" || paymentStatus === "ADMIN_FORCE_CONFIRMED") {
+    return "PAID";
+  }
+  return "UNPAID";
+}
+
+function toDriverActionLabel(item: Pick<SettlementItem, "isToss" | "paymentStatus" | "canConfirmByDriver">) {
+  if (item.canConfirmByDriver) {
+    return item.isToss ? "토스 결제확인" : "착불 결제확인";
+  }
+  if (
+    item.paymentStatus === "DISPUTED" ||
+    item.paymentStatus === "ADMIN_HOLD" ||
+    item.paymentStatus === "ADMIN_REJECTED"
+  ) {
+    return "이의 처리중";
+  }
+  return "화주 결제 대기";
+}
+
+function resolveDriverPaymentStatus(order: OrderResponse): TransportPaymentStatus | undefined {
+  const direct = normalizeTransportPaymentStatus(order.paymentSummary?.status);
+  const fallback = toSettlementStatusFromSettlement(order.settlementStatus);
+  const fromSettlement =
+    fallback === "PENDING"
+      ? "PAID"
+      : fallback === "PAID"
+        ? "CONFIRMED"
+        : fallback === "UNPAID"
+          ? "READY"
+          : undefined;
+
+  if (
+    direct === "DISPUTED" ||
+    direct === "ADMIN_HOLD" ||
+    direct === "ADMIN_REJECTED"
+  ) {
+    return direct;
+  }
+  if (fromSettlement === "CONFIRMED") return fromSettlement;
+  if (fromSettlement === "PAID" && (!direct || direct === "READY")) {
+    return fromSettlement;
+  }
+  return direct ?? fromSettlement;
+}
+
 function mapOrderToSettlement(order: OrderResponse): SettlementItem | null {
   if (order.status === "CANCELLED" || order.status === "REQUESTED" || order.status === "PENDING") {
     return null;
   }
 
-  // 차주 결제확인 액션 노출 대상 결제수단 판별.
-  const confirmByDriver = isTossPayment(order.payMethod) || isCashPayment(order.payMethod);
-  if (!isShipperActivePaymentMethod(order.payMethod) || !confirmByDriver) {
+  const supportsDriverConfirm =
+    isTossPayment(order.payMethod) || isDeferredPayment(order.payMethod);
+  if (!isShipperActivePaymentMethod(order.payMethod) || !supportsDriverConfirm) {
     return null;
   }
 
@@ -134,7 +191,14 @@ function mapOrderToSettlement(order: OrderResponse): SettlementItem | null {
 
   if (!scheduledAt) return null;
 
-  const status = toSettlementStatus(order);
+  const paymentStatus = resolveDriverPaymentStatus(order);
+  const status = toDriverSettlementStatus(paymentStatus);
+  const canConfirmByDriver = paymentStatus === "PAID";
+  const canDispute =
+    paymentStatus === "PAID" ||
+    paymentStatus === "DISPUTED" ||
+    paymentStatus === "ADMIN_HOLD" ||
+    paymentStatus === "ADMIN_REJECTED";
 
   return {
     id: String(order.orderId),
@@ -147,8 +211,10 @@ function mapOrderToSettlement(order: OrderResponse): SettlementItem | null {
     amount: calcOrderAmount(order),
     payMethodLabel: toPaymentMethodLabel(order.payMethod),
     isToss: isTossPayment(order.payMethod),
-    isPrepaid: isCashPayment(order.payMethod),
-    confirmByDriver,
+    paymentStatus,
+    supportsDriverConfirm,
+    canConfirmByDriver,
+    canDispute,
   };
 }
 
@@ -222,12 +288,22 @@ export default function DriverSettlementScreen() {
 
   const onPressConfirm = async (item: SettlementItem) => {
     // 차주 결제확인 API 호출 후 목록을 다시 조회해 정산 상태를 즉시 동기화.
-    if (!item.confirmByDriver) {
+    if (!item.supportsDriverConfirm) {
       Alert.alert("확인 불가", "이 결제 방식은 차주 결제확인 대상이 아닙니다.");
       return;
     }
-    if (item.status === "PAID") {
+    if (item.paymentStatus === "CONFIRMED" || item.paymentStatus === "ADMIN_FORCE_CONFIRMED") {
       Alert.alert("안내", `주문 #${item.orderId}는 이미 정산 완료되었습니다.`);
+      return;
+    }
+    if (!item.canConfirmByDriver) {
+      const msg =
+        item.paymentStatus === "DISPUTED" ||
+        item.paymentStatus === "ADMIN_HOLD" ||
+        item.paymentStatus === "ADMIN_REJECTED"
+          ? "이의 처리 중인 결제는 차주 확인을 진행할 수 없습니다."
+          : "화주 결제 완료 후 확인 가능합니다.";
+      Alert.alert("확인 불가", msg);
       return;
     }
     if (submittingOrderId === item.orderId) return;
@@ -590,11 +666,15 @@ export default function DriverSettlementScreen() {
                 const isPaid = item.status === "PAID";
                 const isSubmitting = submittingOrderId === item.orderId;
                 const statusColor = isPaid ? "#E8F5E9" : item.status === "PENDING" ? "#FEF9C3" : "#FEE2E2";
-                const actionText = isPaid
-                  ? "결제완료"
-                  : item.isToss
-                    ? "토스 결제확인"
-                    : "착불 결제확인";
+                const actionText = isPaid ? "결제완료" : toDriverActionLabel(item);
+                const actionDisabled =
+                  isPaid || !item.canConfirmByDriver || isSubmitting || isSubmittingDispute;
+                const actionIconName = isPaid
+                  ? "check-decagram-outline"
+                  : item.canConfirmByDriver
+                    ? "clipboard-check-multiple-outline"
+                    : "lock-outline";
+                const showDispute = !isPaid && item.canDispute;
 
                 return (
                   <View key={item.id} style={s.itemCard}>
@@ -621,28 +701,28 @@ export default function DriverSettlementScreen() {
                     <Text style={s.payMethodText}>결제 방식: {item.payMethodLabel}</Text>
 
                     <View style={s.actionRow}>
-                      {item.confirmByDriver ? (
+                      {item.supportsDriverConfirm ? (
                         <View style={s.actionGroup}>
                           <Pressable
-                            style={[s.actionBtn, (isPaid || isSubmitting || isSubmittingDispute) && s.actionBtnDisabled]}
-                            disabled={isPaid || isSubmitting || isSubmittingDispute}
+                            style={[s.actionBtn, actionDisabled && s.actionBtnDisabled]}
+                            disabled={actionDisabled}
                             onPress={() => void onPressConfirm(item)}
                           >
                             <MaterialCommunityIcons
-                              name={isPaid ? "check-decagram-outline" : "clipboard-check-multiple-outline"}
+                              name={actionIconName}
                               size={14}
-                              color={isPaid || isSubmitting || isSubmittingDispute ? "#64748B" : "#FFFFFF"}
+                              color={actionDisabled ? "#64748B" : "#FFFFFF"}
                             />
                             <Text
                               style={[
                                 s.actionText,
-                                (isPaid || isSubmitting || isSubmittingDispute) && s.actionTextDisabled,
+                                actionDisabled && s.actionTextDisabled,
                               ]}
                             >
                               {isSubmitting ? "처리중..." : actionText}
                             </Text>
                           </Pressable>
-                          {!isPaid ? (
+                          {showDispute ? (
                             <Pressable
                               style={[s.disputeBtn, (isSubmitting || isSubmittingDispute) && s.disputeBtnDisabled]}
                               disabled={isSubmitting || isSubmittingDispute}
