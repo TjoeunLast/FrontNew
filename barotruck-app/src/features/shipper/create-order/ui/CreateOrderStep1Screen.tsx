@@ -21,10 +21,12 @@ import {
 } from "@/features/shipper/create-order/model/createOrderDraft";
 import { AddressApi } from "@/shared/api/addressService";
 import { RouteApi } from "@/shared/api/routeService";
+import { UserService } from "@/shared/api/userService";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import { Button } from "@/shared/ui/base/Button";
 import { Card } from "@/shared/ui/base/Card";
 import ShipperScreenHeader from "@/shared/ui/layout/ShipperScreenHeader";
+import { getCurrentUserSnapshot } from "@/shared/utils/currentUserStorage";
 
 // 기존 import들 사이에 추가!
 import AddressSearch from "@/shared/utils/AddressSearch";
@@ -60,6 +62,9 @@ import {
 } from "./createOrderStep1.types";
 import {
   addDays,
+  calcLevelFee,
+  calcTossFee,
+  getLevelFeeRate,
   isSameDay,
   parseWonInput,
   toKoreanDateText,
@@ -178,6 +183,7 @@ export function ShipperCreateOrderStep1Screen() {
   const [estimatedDurationMin, setEstimatedDurationMin] = useState<
     number | undefined
   >(initialDraft?.estimatedDurationMin);
+  const [userLevel, setUserLevel] = useState<number>(initialDraft?.userLevel ?? 0);
   const aiFare = useMemo(
     () => getRecommendedFareByDistance(distanceKm),
     [distanceKm],
@@ -197,12 +203,38 @@ export function ShipperCreateOrderStep1Screen() {
     [appliedBaseFare, tripType],
   );
 
-  const fee = useMemo(() => {
-    if (pay === "card") return Math.round(appliedFare * 0.1);
-    return 0;
-  }, [appliedFare, pay]);
+  React.useEffect(() => {
+    let active = true;
 
-  const totalPay = useMemo(() => appliedFare + fee, [appliedFare, fee]);
+    void (async () => {
+      try {
+        const snapshot = await getCurrentUserSnapshot();
+        const snapshotLevel = Number(snapshot?.level);
+        if (Number.isFinite(snapshotLevel)) {
+          if (active) setUserLevel(snapshotLevel);
+          return;
+        }
+
+        const me = (await UserService.getMyInfo()) as any;
+        const nextLevel = Number(me?.level ?? me?.user_level);
+        if (active && Number.isFinite(nextLevel)) {
+          setUserLevel(nextLevel);
+        }
+      } catch {
+        // ignore level fetch failure and keep default preview rate
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const tossFee = useMemo(() => calcTossFee(appliedFare, pay), [appliedFare, pay]);
+  const levelFee = useMemo(() => calcLevelFee(appliedFare, pay, userLevel), [appliedFare, pay, userLevel]);
+  const levelFeeRate = useMemo(() => getLevelFeeRate(userLevel), [userLevel]);
+  const totalFee = useMemo(() => tossFee + levelFee, [tossFee, levelFee]);
+  const totalPay = useMemo(() => appliedFare + totalFee, [appliedFare, totalFee]);
 
   const fetchAddressSuggestions = React.useCallback(
     async (
@@ -438,6 +470,7 @@ export function ShipperCreateOrderStep1Screen() {
       dispatch,
       tripType,
       pay,
+      userLevel,
       distanceKm,
       estimatedDurationMin,
       appliedFare,
@@ -1147,7 +1180,7 @@ export function ShipperCreateOrderStep1Screen() {
             >
               {pay === "card"
                 ? "토스 결제 선택 시 수수료 10%가 추가됩니다."
-                : "선택한 결제 방식은 별도 수수료가 없습니다."}
+                : `착불 결제 시 레벨 수수료 ${Math.round(levelFeeRate * 100)}%가 추가됩니다.`}
             </Text>
           </View>
 
@@ -1160,12 +1193,22 @@ export function ShipperCreateOrderStep1Screen() {
                 {won(appliedFare)}
               </Text>
             </View>
+            {pay === "card" ? (
+              <View style={s.feeRow}>
+                <Text style={[s.feeLabel, { color: c.text.secondary }]}>
+                  수수료 (토스 10%)
+                </Text>
+                <Text style={[s.feeValue, { color: c.text.primary }]}>
+                  + {won(tossFee)}
+                </Text>
+              </View>
+            ) : null}
             <View style={s.feeRow}>
               <Text style={[s.feeLabel, { color: c.text.secondary }]}>
-                수수료 (토스 10%)
+                레벨 수수료 ({Math.round(levelFeeRate * 100)}%)
               </Text>
               <Text style={[s.feeValue, { color: c.text.primary }]}>
-                + {won(fee)}
+                + {won(levelFee)}
               </Text>
             </View>
             <View style={[s.hr, { backgroundColor: c.border.default }]} />
@@ -1235,7 +1278,7 @@ export function ShipperCreateOrderStep1Screen() {
               희망 운임 {won(appliedFare)}
             </Text>
             <Text style={[s.stickySub, { color: c.text.secondary }]}>
-              {pay === "card" ? `수수료 +${won(fee)}` : "수수료 0원"}
+              수수료 +{won(totalFee)}
             </Text>
           </View>
         </View>
