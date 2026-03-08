@@ -63,17 +63,12 @@ export default function DriverHomeScreen() {
       let settled = 0;
 
       orders.forEach((o) => {
-        // 정산 페이지(SalesDashboard)와 완벽히 동일한 필터링 기준 적용
-        if (
-          o.status !== "CANCELLED" &&
-          o.status !== "REQUESTED" &&
-          o.status !== "PENDING"
-        ) {
+        if (o.status === "COMPLETED") {
           const amt = getAmount(o);
           total += amt;
 
-          // settlementStatus가 COMPLETED일 때만 입금 완료 처리
-          if (String(o.settlementStatus ?? "").toUpperCase() === "COMPLETED") {
+          const sStatus = String(o.paymentSummary?.status ?? "").toUpperCase();
+          if (sStatus === "CONFIRMED" || sStatus === "ADMIN_FORCE_CONFIRMED") {
             settled += amt;
           }
         }
@@ -392,11 +387,6 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1,
     alignItems: "center",
-    elevation: 2,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
   },
   iconCircle: {
     width: 40,
