@@ -13,11 +13,7 @@ export function toSettlementStatusFromRaw(
   // 백엔드 정산 상태값을 화면 공통 상태(UNPAID/PENDING/PAID)로 매핑.
   const v = String(raw ?? "").toUpperCase();
 
-  if (
-    v === "CONFIRMED" ||
-    v === "COMPLETED" ||
-    v === "ADMIN_FORCE_CONFIRMED"
-  ) {
+  if (v === "CONFIRMED" || v === "COMPLETED" || v === "ADMIN_FORCE_CONFIRMED") {
     return "PAID";
   }
   if (
@@ -52,21 +48,24 @@ export function toSettlementStatusFromSettlement(
 export function toSettlementStatus(row: OrderResponse): SettlementUiStatus {
   // 영수증/월말 방식은 결제 버튼 대신 세금계산서 흐름으로 분기.
   const isTaxInvoice =
-    String(row.payMethod ?? "").toLowerCase().includes("receipt") ||
-    String(row.payMethod ?? "").includes("영수증");
+    String(row.payMethod ?? "")
+      .toLowerCase()
+      .includes("receipt") || String(row.payMethod ?? "").includes("영수증");
 
   if (isTaxInvoice) return "TAX_INVOICE";
 
-  const paymentStatus = toSettlementStatusFromPayment(row.paymentSummary?.status);
+  const paymentStatus = toSettlementStatusFromPayment(
+    row.paymentSummary?.status,
+  );
   if (paymentStatus) return paymentStatus;
 
   return toSettlementStatusFromSettlement(row.settlementStatus);
 }
 
 export function statusText(status: SettlementUiStatus) {
-  if (status === "UNPAID") return "Unpaid";
-  if (status === "PENDING") return "Waiting";
-  if (status === "PAID") return "Paid";
+  if (status === "UNPAID") return "결제 대기";
+  if (status === "PENDING") return "차주 확인중";
+  if (status === "PAID") return "결제 완료";
   return "Tax Invoice";
 }
 
