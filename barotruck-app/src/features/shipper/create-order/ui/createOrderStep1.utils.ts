@@ -26,8 +26,8 @@ export function toKoreanDateText(d: Date) {
 }
 
 export function getLevelFeeRate(level?: number) {
-  if (level === 2) return 0.04;
-  if ((level ?? 0) >= 3) return 0.03;
+  if (level === 1) return 0.04;
+  if ((level ?? 0) >= 2) return 0.03;
   return 0.05;
 }
 
