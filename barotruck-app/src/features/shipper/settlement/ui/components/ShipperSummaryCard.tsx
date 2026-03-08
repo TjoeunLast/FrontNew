@@ -24,23 +24,23 @@ export function ShipperSummaryCard({
       <View style={s.bgCircle3} />
 
       <View style={s.content}>
-        <Text style={s.caption}>{monthNumber}월 총 지출 예정</Text>
+        <Text style={s.caption}>{monthNumber}월 총 지출 금액</Text>
         <Text style={s.amount}>{toWon(totalAmount)}</Text>
 
         <View style={s.divider} />
         <View style={s.bottomRow}>
           <View style={s.bottomRow}>
             <View style={s.col}>
-              <Text style={s.smallText}>미결제 금액</Text>
-              <Text style={s.whiteText}>{toWon(unpaidAmount)}</Text>
+              <Text style={s.smallText}>결제 완료</Text>
+              <Text style={s.greenText}>{toWon(paidAmount)}</Text>
             </View>
 
             <View style={s.colDivider} />
 
             <View style={s.col}>
-              <Text style={[s.smallText, s.rightAlign]}>결제 완료 금액</Text>
-              <Text style={[s.greenText, s.rightAlign]}>
-                {toWon(paidAmount)}
+              <Text style={[s.smallText, s.rightAlign]}>결제 예정</Text>
+              <Text style={[s.whiteText, s.rightAlign]}>
+                {toWon(unpaidAmount)}
               </Text>
             </View>
           </View>
