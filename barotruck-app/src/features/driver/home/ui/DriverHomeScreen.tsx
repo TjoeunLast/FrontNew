@@ -175,7 +175,7 @@ export default function DriverHomeScreen() {
             운송 현황
           </Text>
           <View style={styles.statsGrid}>
-            {/* 승인대기 */}
+            {/* 승인 대기 */}
             <Pressable
               onPress={() => handleStatusPress("READY")}
               style={[
@@ -195,7 +195,7 @@ export default function DriverHomeScreen() {
                 <Ionicons name="cube" size={20} color={c.status.warning} />
               </View>
               <Text style={[styles.statLabel, { color: c.status.warning }]}>
-                승인대기
+                승인 대기
               </Text>
               <Text style={[styles.statValue, { color: c.status.warning }]}>
                 {statusCounts.pending}

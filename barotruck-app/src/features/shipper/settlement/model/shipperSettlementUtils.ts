@@ -199,7 +199,7 @@ export function toActionLabel(
 ) {
   if (status === "UNPAID")
     return isTransportCompleted ? "결제하기" : "운송완료 후 결제";
-  if (status === "PENDING") return "차주 확인 대기";
+  if (status === "PENDING") return "차주 승인 대기";
   if (status === "PAID") return "영수증 확인";
   return "계산서 보기";
 }

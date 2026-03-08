@@ -248,7 +248,7 @@ function buildTossCheckoutHtml(input: {
 function toActionLabel(status: SettlementStatus, isTransportCompleted = true) {
   if (status === "UNPAID")
     return isTransportCompleted ? "결제하기" : "운송완료 후 결제";
-  if (status === "PENDING") return "차주 확인 대기";
+  if (status === "PENDING") return "차주 승인 대기";
   if (status === "PAID") return "영수증 확인";
   return "계산서 보기";
 }
@@ -503,7 +503,10 @@ export default function ShipperSettlementScreen() {
 
         handledTossResultUrlRef.current = null;
         setTossCheckout(null);
-        Alert.alert("결제 완료", "토스 결제가 완료되었습니다. 차주 확인을 기다리고 있습니다.");
+        Alert.alert(
+          "결제 완료",
+          "토스 결제가 완료되었습니다. 차주 확인을 기다리고 있습니다.",
+        );
       } catch (error: any) {
         const msg =
           error?.response?.data?.message ||
@@ -647,7 +650,10 @@ export default function ShipperSettlementScreen() {
           ),
         );
       }
-      Alert.alert("결제 요청", "결제 요청이 생성되었습니다. 차주 확인을 기다리고 있습니다.");
+      Alert.alert(
+        "결제 요청",
+        "결제 요청이 생성되었습니다. 차주 확인을 기다리고 있습니다.",
+      );
     } catch (error: any) {
       const msg =
         error?.response?.data?.message || "결제 요청 중 오류가 발생했습니다.";
