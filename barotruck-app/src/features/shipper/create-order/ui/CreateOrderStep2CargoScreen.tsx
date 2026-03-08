@@ -19,6 +19,7 @@ import ShipperScreenHeader from "@/shared/ui/layout/ShipperScreenHeader";
 
 import { Chip as RequestChip } from "./createOrderStep1.components";
 import { s as step1Styles } from "./createOrderStep1.styles";
+import { calcLevelFee, calcTossFee, getLevelFeeRate } from "./createOrderStep1.utils";
 
 const EXCLUSIVE_LOAD_SURCHARGE_RATE = 0.1;
 const MIXED_LOAD_DISCOUNT_RATE = 0.1;
@@ -100,8 +101,11 @@ export function ShipperCreateOrderStep2CargoScreen() {
   const unloadSurcharge = Math.max(0, Math.round(loadMethodAdjustedFare * unloadSurchargeRate));
   const packagingPrice = packaging === "포장" ? PACKAGING_FEE_WON : 0;
   const finalFare = loadMethodAdjustedFare + unloadSurcharge + packagingPrice;
-  const fee = draft.pay === "card" ? Math.round(finalFare * 0.1) : 0;
-  const totalPay = finalFare + fee;
+  const tossFee = calcTossFee(finalFare, draft.pay);
+  const levelFeeRate = getLevelFeeRate(draft.userLevel);
+  const levelFee = calcLevelFee(finalFare, draft.pay, draft.userLevel);
+  const totalFee = tossFee + levelFee;
+  const totalPay = finalFare + totalFee;
   const resolvedWorkType = workMode === "직접 하차" ? "직접 하차" : `기사님 하차(${workTool})`;
   const unloadHintText =
     workMode === "기사님 하차"
@@ -348,7 +352,15 @@ export function ShipperCreateOrderStep2CargoScreen() {
           <View style={{ marginTop: 4, flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
             <Text style={{ color: c.text.secondary, fontWeight: "800" }}>결제 수수료</Text>
             <Text style={{ color: c.text.secondary, fontWeight: "800" }}>
-              {draft.pay === "card" ? `+${won(fee)}` : "0원"}
+              {draft.pay === "card" ? `+${won(tossFee)}` : "0원"}
+            </Text>
+          </View>
+          <View style={{ marginTop: 4, flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+            <Text style={{ color: c.text.secondary, fontWeight: "800" }}>
+              레벨 수수료 ({Math.round(levelFeeRate * 100)}%)
+            </Text>
+            <Text style={{ color: c.text.secondary, fontWeight: "800" }}>
+              +{won(levelFee)}
             </Text>
           </View>
         </View>

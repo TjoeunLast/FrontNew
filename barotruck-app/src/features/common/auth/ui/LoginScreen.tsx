@@ -58,6 +58,9 @@ export default function LoginScreen() {
         email: me.email,
         nickname: me.nickname,
         role: me.role,
+        level: Number.isFinite(Number(me.level ?? me.user_level))
+          ? Number(me.level ?? me.user_level)
+          : undefined,
         gender: me.gender ?? me.sex,
         age: Number.isFinite(Number(me.age)) ? Number(me.age) : undefined,
         birthDate:

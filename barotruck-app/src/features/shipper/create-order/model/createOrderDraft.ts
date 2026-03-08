@@ -31,6 +31,7 @@ export type CreateOrderDraft = {
   dispatch: "instant" | "direct";
   tripType: "oneWay" | "roundTrip";
   pay: EnabledShipperPaymentMethod;
+  userLevel?: number;
 
   distanceKm: number;
   estimatedDurationMin?: number;
