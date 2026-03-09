@@ -1,9 +1,20 @@
 import apiClient from './apiClient';
 import { 
   ReviewRequest, ReviewResponse, 
-  ReportRequest, ReportResponse 
+  ReportRequest, ReportResponse,
+  toReportStatusLabel,
+  toReportTypeLabel,
+  toReportTypeRequestValue,
 } from '../models/review';
 import { USE_MOCK } from "@/shared/config/mock";
+
+function normalizeReportResponse(row: ReportResponse): ReportResponse {
+  return {
+    ...row,
+    reportTypeLabel: toReportTypeLabel(row.reportType),
+    statusLabel: toReportStatusLabel(row.status),
+  };
+}
 
 /**
  * 리뷰 서비스
@@ -79,7 +90,11 @@ export const ReportService = {
   // 1. 신고 접수
   createReport: async (data: ReportRequest): Promise<boolean> => {
     if (USE_MOCK) return true;
-    const res = await apiClient.post('/api/reports', data);
+    const payload = {
+      ...data,
+      reportType: toReportTypeRequestValue(data.reportType),
+    };
+    const res = await apiClient.post('/api/reports', payload);
     return res.data;
   },
 
@@ -87,21 +102,21 @@ export const ReportService = {
   getReportsByStatus: async (status: string): Promise<ReportResponse[]> => {
     if (USE_MOCK) return [];
     const res = await apiClient.get('/api/reports/status', { params: { status } });
-    return res.data;
+    return Array.isArray(res.data) ? res.data.map(normalizeReportResponse) : [];
   },
 
   // [관리자] 전체 신고 목록 조회
   getAllReportsAdmin: async (): Promise<ReportResponse[]> => {
     if (USE_MOCK) return [];
     const res = await apiClient.get('/api/reports/admin/all');
-    return res.data;
+    return Array.isArray(res.data) ? res.data.map(normalizeReportResponse) : [];
   },
 
   // 내가 신고한 목록 조회
   getMyReports: async (): Promise<ReportResponse[]> => {
     if (USE_MOCK) return [];
     const res = await apiClient.get('/api/reports/my');
-    return res.data;
+    return Array.isArray(res.data) ? res.data.map(normalizeReportResponse) : [];
   },
 
   // [관리자] 신고 상태 업데이트

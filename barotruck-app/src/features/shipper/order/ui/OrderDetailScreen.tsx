@@ -35,11 +35,11 @@ import { OrderApi } from "@/shared/api/orderService";
 import { ProofService } from "@/shared/api/proofService";
 import { ReportService, ReviewService } from "@/shared/api/reviewService";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
+import { type ReportTypeCode } from "@/shared/models/review";
 import type { AssignedDriverInfoResponse, OrderResponse } from "@/shared/models/order";
 import type { ProofResponse } from "@/shared/models/proof";
 import { hasKakaoMapJsKey } from "@/shared/ui/business/RoutePreviewModal";
 
-type ReportType = "ACCIDENT" | "NO_SHOW" | "RUDE" | "ETC";
 type RoutePreviewBuildResult = {
   data: RoutePreviewData | null;
   usedFallbackLine: boolean;
@@ -99,7 +99,7 @@ export default function OrderDetailScreen() {
   const [routePreviewData, setRoutePreviewData] = useState<RoutePreviewData | null>(null);
   const [routeWebviewError, setRouteWebviewError] = useState<string>("");
   const [reportOpen, setReportOpen] = useState(false);
-  const [reportType, setReportType] = useState<ReportType>("ETC");
+  const [reportType, setReportType] = useState<ReportTypeCode>("ETC");
   const [reportDescription, setReportDescription] = useState("");
   const [reportLoading, setReportLoading] = useState(false);
   const [proof, setProof] = useState<ProofResponse | null>(null);

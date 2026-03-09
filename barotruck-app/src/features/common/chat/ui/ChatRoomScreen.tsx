@@ -32,6 +32,10 @@ import { useChatManager } from "../../../../shared/api/chatApi";
 import { ReportService } from "../../../../shared/api/reviewService";
 import { ChatMessageResponse } from "../../../../shared/models/chat";
 import {
+  REPORT_TYPE_OPTIONS,
+  type ReportTypeCode,
+} from "../../../../shared/models/review";
+import {
   loadStoredChatOrderSummary,
   loadStoredChatRoomTitle,
   markChatRoomVisited,
@@ -84,8 +88,6 @@ function resolveOutgoingReadState(
   return hasLaterOtherMessage ? "READ" : "UNREAD";
 }
 
-type ReportType = "ACCIDENT" | "NO_SHOW" | "RUDE" | "ETC";
-
 const ChatRoomScreen = () => {
   const { roomId, orderId, routeText, cargoText, priceText } =
     useLocalSearchParams<{
@@ -99,7 +101,7 @@ const ChatRoomScreen = () => {
   const router = useRouter();
   const [text, setText] = useState("");
   const [reportOpen, setReportOpen] = useState(false);
-  const [reportType, setReportType] = useState<ReportType>("ETC");
+  const [reportType, setReportType] = useState<ReportTypeCode>("ETC");
   const [reportDescription, setReportDescription] = useState("");
   const [reportLoading, setReportLoading] = useState(false);
   const [cachedOrderSummary, setCachedOrderSummary] =
@@ -253,6 +255,7 @@ const ChatRoomScreen = () => {
         <TouchableOpacity
           onPress={handleOpenReport}
           activeOpacity={0.72}
+          disabled={!resolvedReportOrderId}
           style={[
             styles.headerReportBtn,
             !resolvedReportOrderId && styles.headerReportBtnDisabled,
@@ -573,17 +576,12 @@ const ChatRoomScreen = () => {
 
             <Text style={styles.reportLabel}>신고 유형</Text>
             <View style={styles.reportTypeWrap}>
-              {[
-                { key: "ACCIDENT" as ReportType, label: "사고" },
-                { key: "NO_SHOW" as ReportType, label: "노쇼" },
-                { key: "RUDE" as ReportType, label: "불친절" },
-                { key: "ETC" as ReportType, label: "기타" },
-              ].map((item) => {
-                const active = reportType === item.key;
+              {REPORT_TYPE_OPTIONS.map((item) => {
+                const active = reportType === item.value;
                 return (
                   <Pressable
-                    key={item.key}
-                    onPress={() => setReportType(item.key)}
+                    key={item.value}
+                    onPress={() => setReportType(item.value)}
                     style={[
                       styles.reportTypeChip,
                       active && styles.reportTypeChipActive,

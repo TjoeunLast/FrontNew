@@ -33,6 +33,10 @@ import {
 } from "@/features/shipper/order/ui/orderDetailRoute";
 import { isOrderSettlementPaid } from "@/features/common/settlement/lib/settlementHelpers";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
+import {
+  REPORT_TYPE_OPTIONS,
+  type ReportTypeCode,
+} from "@/shared/models/review";
 import type { ProofResponse } from "@/shared/models/proof";
 import { Badge } from "@/shared/ui/feedback/Badge";
 import { useOrderDetail } from "../model/useOrderDetail";
@@ -40,7 +44,6 @@ import OrderDetailPageFrame from "./OrderDetailPageFrame";
 import { styles } from "./OrderDetailScreen.styles";
 
 const { width } = Dimensions.get("window");
-type ReportType = "ACCIDENT" | "NO_SHOW" | "RUDE" | "ETC";
 const REVIEWED_ORDER_IDS_STORAGE_KEY = "baro_driver_reviewed_order_ids_v1";
 type RoutePreviewBuildResult = {
   data: RoutePreviewData | null;
@@ -180,7 +183,7 @@ export default function OrderDetailScreen() {
     useState<RoutePreviewData | null>(null);
   const [routeWebviewError, setRouteWebviewError] = useState("");
   const [reportOpen, setReportOpen] = useState(false);
-  const [reportType, setReportType] = useState<ReportType>("ETC");
+  const [reportType, setReportType] = useState<ReportTypeCode>("ETC");
   const [reportDescription, setReportDescription] = useState("");
   const [reportLoading, setReportLoading] = useState(false);
   const [proof, setProof] = useState<ProofResponse | null>(null);
@@ -1337,17 +1340,12 @@ export default function OrderDetailScreen() {
                 신고 유형
               </Text>
               <View style={styles.reportTypeWrap}>
-                {[
-                  { key: "ACCIDENT" as ReportType, label: "사고" },
-                  { key: "NO_SHOW" as ReportType, label: "노쇼" },
-                  { key: "RUDE" as ReportType, label: "불친절" },
-                  { key: "ETC" as ReportType, label: "기타" },
-                ].map((item) => {
-                  const active = reportType === item.key;
+                {REPORT_TYPE_OPTIONS.map((item) => {
+                  const active = reportType === item.value;
                   return (
                     <Pressable
-                      key={item.key}
-                      onPress={() => setReportType(item.key)}
+                      key={item.value}
+                      onPress={() => setReportType(item.value)}
                       style={[
                         styles.reportTypeChip,
                         {
@@ -1365,10 +1363,10 @@ export default function OrderDetailScreen() {
                           fontSize: 13,
                         }}
                       >
-                        {item.label}
-                      </Text>
-                    </Pressable>
-                  );
+                          {item.label}
+                        </Text>
+                      </Pressable>
+                    );
                 })}
               </View>
 
