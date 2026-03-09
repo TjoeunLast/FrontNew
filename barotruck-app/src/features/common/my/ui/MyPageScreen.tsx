@@ -10,6 +10,7 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   View,
   type ImageStyle,
@@ -387,27 +388,7 @@ export default function MyPageScreen() {
       settingLabelWrap: { flex: 1 } as ViewStyle,
       settingLabel: { fontSize: 15, fontWeight: "900", color: c.text.primary } as TextStyle,
       settingSub: { marginTop: 4, fontSize: 12, fontWeight: "700", color: c.text.secondary } as TextStyle,
-      settingActionButton: {
-        minWidth: 88,
-        height: 40,
-        borderRadius: 999,
-        alignItems: "center",
-        justifyContent: "center",
-        paddingHorizontal: 16,
-        borderWidth: 1.5,
-        backgroundColor: c.bg.surface,
-      } as ViewStyle,
-      settingActionButtonOn: {
-        borderColor: c.brand.primary,
-        backgroundColor: withAlpha(c.brand.primary, 0.1),
-      } as ViewStyle,
-      settingActionButtonOff: {
-        borderColor: c.border.default,
-        backgroundColor: c.bg.surface,
-      } as ViewStyle,
-      settingActionText: { fontSize: 14, fontWeight: "900" } as TextStyle,
-      settingActionTextOn: { color: c.brand.primary } as TextStyle,
-      settingActionTextOff: { color: c.text.secondary } as TextStyle,
+      settingActionWrap: { marginLeft: 12 } as ViewStyle,
       divider: { height: 1, backgroundColor: withAlpha(c.border.default, 0.9), marginLeft: 54 } as ViewStyle,
       logoutRow: { marginTop: 22, paddingVertical: 8 } as ViewStyle,
       logoutText: {
@@ -507,23 +488,15 @@ export default function MyPageScreen() {
               <Text style={s.settingLabel}>배차 알림</Text>
               <Text style={s.settingSub}>새 배차 요청 알림 수신</Text>
             </View>
-            <Pressable
-              onPress={() => setReceiveDispatchAlert((prev) => !prev)}
-              style={[
-                s.settingActionButton,
-                receiveDispatchAlert ? s.settingActionButtonOn : s.settingActionButtonOff,
-              ]}
-              hitSlop={8}
-            >
-              <Text
-                style={[
-                  s.settingActionText,
-                  receiveDispatchAlert ? s.settingActionTextOn : s.settingActionTextOff,
-                ]}
-              >
-                {receiveDispatchAlert ? "ON" : "OFF"}
-              </Text>
-            </Pressable>
+            <View style={s.settingActionWrap}>
+              <Switch
+                value={receiveDispatchAlert}
+                onValueChange={setReceiveDispatchAlert}
+                trackColor={{ false: "#D7DEE8", true: "#C7D2FE" }}
+                thumbColor={receiveDispatchAlert ? "#4E46E5" : "#FFFFFF"}
+                ios_backgroundColor="#D7DEE8"
+              />
+            </View>
           </View>
         </View>
 

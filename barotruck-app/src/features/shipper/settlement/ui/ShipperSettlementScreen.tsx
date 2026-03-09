@@ -258,13 +258,7 @@ function mapOrderToSettlement(
   order: OrderResponse,
   pendingOrderIds?: Set<number>,
 ): SettlementItem | null {
-  if (
-    order.status === "CANCELLED" ||
-    order.status === "REQUESTED" ||
-    order.status === "PENDING" ||
-    order.status === "APPLIED"
-  )
-    return null;
+  if (order.status !== "COMPLETED") return null;
 
   const scheduledAt =
     parseDate(order.endSchedule) ||
@@ -292,7 +286,7 @@ function mapOrderToSettlement(
     baseStatus === "UNPAID" && pendingOrderIds?.has(Number(order.orderId))
       ? "PENDING"
       : baseStatus;
-  const isTransportCompleted = order.status === "COMPLETED";
+  const isTransportCompleted = true;
   if (__DEV__) {
     console.log("[settlement-map]", {
       orderId: order.orderId,

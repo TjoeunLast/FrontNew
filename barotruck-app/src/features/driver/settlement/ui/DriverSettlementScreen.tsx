@@ -6,12 +6,12 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
   isCashPayment,
-  isShipperActivePaymentMethod,
   isTossPayment,
   toPaymentMethodLabel,
 } from "@/features/common/payment/lib/paymentMethods";
 import {
   calcOrderAmount,
+  isDriverSettlementEligibleOrder,
   statusText,
   toSettlementStatus,
   toWon,
@@ -83,15 +83,12 @@ function toDateLabel(d: Date) {
 }
 
 function mapOrderToSettlement(order: OrderResponse): SettlementItem | null {
-  if (order.status === "CANCELLED" || order.status === "REQUESTED" || order.status === "PENDING") {
+  if (!isDriverSettlementEligibleOrder(order)) {
     return null;
   }
 
-  // 차주 결제확인 액션 노출 대상 결제수단 판별.
+  // 목록에는 완료 주문을 모두 노출하고, 차주 확인이 필요한 결제수단만 액션을 노출한다.
   const confirmByDriver = isTossPayment(order.payMethod) || isCashPayment(order.payMethod);
-  if (!isShipperActivePaymentMethod(order.payMethod) || !confirmByDriver) {
-    return null;
-  }
 
   const scheduledAt =
     parseDate(order.endSchedule) ||
@@ -119,7 +116,7 @@ function mapOrderToSettlement(order: OrderResponse): SettlementItem | null {
   };
 }
 
-type PaymentMethodFilter = "ALL" | "TOSS" | "DEFERRED";
+type PaymentMethodFilter = "ALL" | "TOSS" | "OTHER";
 
 export default function DriverSettlementScreen() {
   const { colors: c } = useAppTheme();
@@ -381,11 +378,11 @@ export default function DriverSettlementScreen() {
           </View>
 
           <View style={s.paymentFilterRow}>
-            {[
-              ["ALL", "결제 전체"],
-              ["TOSS", "토스"],
-              ["DEFERRED", "착불"],
-            ].map(([key, label]) => {
+              {[
+                ["ALL", "결제 전체"],
+                ["TOSS", "토스"],
+                ["OTHER", "기타"],
+              ].map(([key, label]) => {
               const active = paymentFilter === key;
               return (
                 <Pressable
