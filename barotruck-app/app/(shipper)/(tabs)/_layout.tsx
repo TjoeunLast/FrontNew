@@ -1,35 +1,33 @@
 ﻿import React from "react";
 import { Tabs } from "expo-router";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 
 export default function ShipperTabsLayout() {
-  const { colors: c } = useAppTheme();
+  const t = useAppTheme();
+  const c = t.colors;
+  const insets = useSafeAreaInsets();
 
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: "#4E46E5",
-        tabBarInactiveTintColor: "#94A3B8",
         headerShown: false,
-
+        tabBarActiveTintColor: c.brand.primary,
+        tabBarInactiveTintColor: c.text.secondary,
         tabBarStyle: {
-          height: 100,
-          paddingBottom: 20,
-          paddingTop: 10,
-          backgroundColor: "#FFFFFF",
-          borderTopWidth: 0,
-          elevation: 10, // 안드로이드 입체감
-          shadowColor: "#000", // iOS 그림자
-          shadowOffset: { width: 0, height: -4 },
-          shadowOpacity: 0.06,
-          shadowRadius: 4,
+          backgroundColor: c.bg.surface,
+          borderTopColor: c.border.default,
+          borderTopWidth: 1,
+          height: 58 + insets.bottom,
+          paddingTop: 6,
+          paddingBottom: 6 + insets.bottom,
         },
-
         tabBarLabelStyle: {
-          fontSize: 10,
-          fontWeight: "500",
-          marginTop: 4,
+          fontSize: 11,
+          fontWeight: "700",
+          marginTop: 2,
         },
       }}
     >
@@ -37,12 +35,8 @@ export default function ShipperTabsLayout() {
         name="index"
         options={{
           title: "홈",
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons
-              name={focused ? "home" : "home-outline"}
-              color={color}
-              size={24}
-            />
+          tabBarIcon: ({ color, size, focused }) => (
+            <Ionicons name={focused ? "home" : "home-outline"} color={color} size={size} />
           ),
         }}
       />
@@ -51,12 +45,8 @@ export default function ShipperTabsLayout() {
         name="orders"
         options={{
           title: "배차관리",
-          tabBarIcon: ({ color, focused }) => (
-            <MaterialCommunityIcons
-              name={focused ? "truck-check" : "truck-check-outline"}
-              color={color}
-              size={26}
-            />
+          tabBarIcon: ({ color, size }) => (
+            <MaterialCommunityIcons name="truck-outline" color={color} size={size} />
           ),
         }}
       />
@@ -65,12 +55,8 @@ export default function ShipperTabsLayout() {
         name="settlement"
         options={{
           title: "정산내역",
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons
-              name={focused ? "receipt" : "receipt-outline"}
-              color={color}
-              size={24}
-            />
+          tabBarIcon: ({ color, size, focused }) => (
+            <Ionicons name={focused ? "receipt" : "receipt-outline"} color={color} size={size} />
           ),
         }}
       />
@@ -78,17 +64,12 @@ export default function ShipperTabsLayout() {
       <Tabs.Screen
         name="my"
         options={{
-          title: "내정보",
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons
-              name={focused ? "person" : "person-outline"}
-              color={color}
-              size={24}
-            />
+          title: "내 정보",
+          tabBarIcon: ({ color, size, focused }) => (
+            <Ionicons name={focused ? "person" : "person-outline"} color={color} size={size} />
           ),
         }}
       />
-
       <Tabs.Screen
         name="notifications"
         options={{

@@ -5,10 +5,6 @@ import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import { OrderResponse } from "@/shared/models/order";
 import { Badge } from "@/shared/ui/feedback/Badge";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import {
-  isDeferredPayment,
-  toPaymentMethodLabel,
-} from "@/features/common/payment/lib/paymentMethods";
 
 // 거리 계산 함수(하버사인 공식)
 function getDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
@@ -240,8 +236,10 @@ export const DrOrderCard = ({
           </Text>
           {!isApplied && (
             <Badge
-              label={toPaymentMethodLabel(payMethod)}
-              tone={isDeferredPayment(payMethod) ? "payPrepaid" : "payDeferred"}
+              label={payMethod}
+              tone={
+                payMethod?.includes("선착불") ? "payPrepaid" : "payDeferred"
+              }
               style={{ marginTop: 4, alignSelf: "flex-end" }}
             />
           )}

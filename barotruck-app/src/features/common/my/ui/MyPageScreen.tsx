@@ -377,27 +377,36 @@ export default function MyPageScreen() {
       rowLabel: { flex: 1, fontSize: 14, fontWeight: "800", color: c.text.primary } as TextStyle,
       rowValue: { marginRight: 8, fontSize: 13, fontWeight: "700", color: c.text.secondary } as TextStyle,
       rowValueActive: { color: c.brand.primary } as TextStyle,
-      headerAlertBtn: {
-        width: 52,
-        height: 30,
-        borderRadius: 15,
+      settingRow: {
+        minHeight: 72,
+        paddingHorizontal: 16,
+        flexDirection: "row",
+        alignItems: "center",
+      } as ViewStyle,
+      settingLabelWrap: { flex: 1 } as ViewStyle,
+      settingLabel: { fontSize: 15, fontWeight: "900", color: c.text.primary } as TextStyle,
+      settingSub: { marginTop: 4, fontSize: 12, fontWeight: "700", color: c.text.secondary } as TextStyle,
+      settingActionButton: {
+        minWidth: 88,
+        height: 40,
+        borderRadius: 999,
         alignItems: "center",
         justifyContent: "center",
-        flexDirection: "row",
-        gap: 3,
-        borderWidth: 1,
+        paddingHorizontal: 16,
+        borderWidth: 1.5,
+        backgroundColor: c.bg.surface,
       } as ViewStyle,
-      headerAlertBtnOn: {
-        borderColor: withAlpha(c.brand.primary, 0.36),
-        backgroundColor: withAlpha(c.brand.primary, 0.14),
+      settingActionButtonOn: {
+        borderColor: c.brand.primary,
+        backgroundColor: withAlpha(c.brand.primary, 0.1),
       } as ViewStyle,
-      headerAlertBtnOff: {
+      settingActionButtonOff: {
         borderColor: c.border.default,
         backgroundColor: c.bg.surface,
       } as ViewStyle,
-      headerAlertText: { fontSize: 10, fontWeight: "900" } as TextStyle,
-      headerAlertTextOn: { color: c.brand.primary } as TextStyle,
-      headerAlertTextOff: { color: c.text.secondary } as TextStyle,
+      settingActionText: { fontSize: 14, fontWeight: "900" } as TextStyle,
+      settingActionTextOn: { color: c.brand.primary } as TextStyle,
+      settingActionTextOff: { color: c.text.secondary } as TextStyle,
       divider: { height: 1, backgroundColor: withAlpha(c.border.default, 0.9), marginLeft: 54 } as ViewStyle,
       logoutRow: { marginTop: 22, paddingVertical: 8 } as ViewStyle,
       logoutText: {
@@ -447,29 +456,7 @@ export default function MyPageScreen() {
 
   return (
     <View style={s.page}>
-      <ShipperScreenHeader
-        title="내 정보"
-        hideBackButton
-        right={
-          <Pressable
-            onPress={() => setReceiveDispatchAlert((prev) => !prev)}
-            style={[
-              s.headerAlertBtn,
-              receiveDispatchAlert ? s.headerAlertBtnOn : s.headerAlertBtnOff,
-            ]}
-            hitSlop={8}
-          >
-            <Ionicons
-              name={receiveDispatchAlert ? "notifications" : "notifications-off-outline"}
-              size={12}
-              color={receiveDispatchAlert ? c.brand.primary : c.text.secondary}
-            />
-            <Text style={[s.headerAlertText, receiveDispatchAlert ? s.headerAlertTextOn : s.headerAlertTextOff]}>
-              {receiveDispatchAlert ? "ON" : "OFF"}
-            </Text>
-          </Pressable>
-        }
-      />
+      <ShipperScreenHeader title="내 정보" hideBackButton />
       <ScrollView contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
         <Pressable style={s.profileCard} onPress={() => router.push("/(common)/settings/profile" as any)}>
           <View style={s.profileIcon}>
@@ -504,6 +491,40 @@ export default function MyPageScreen() {
             <Ionicons name="chevron-forward" size={20} color={c.text.secondary} />
           </View>
         </Pressable>
+
+        <Text style={s.sectionTitle}>배차 설정</Text>
+        <View style={s.sectionCard}>
+          <View style={s.settingRow}>
+            <View style={[s.rowIconWrap, { backgroundColor: withAlpha(c.brand.primary, 0.12) }]}>
+              <Ionicons
+                name={receiveDispatchAlert ? "notifications" : "notifications-off-outline"}
+                size={18}
+                color={c.brand.primary}
+              />
+            </View>
+            <View style={s.settingLabelWrap}>
+              <Text style={s.settingLabel}>배차 알림</Text>
+              <Text style={s.settingSub}>새 배차 요청 알림 수신</Text>
+            </View>
+            <Pressable
+              onPress={() => setReceiveDispatchAlert((prev) => !prev)}
+              style={[
+                s.settingActionButton,
+                receiveDispatchAlert ? s.settingActionButtonOn : s.settingActionButtonOff,
+              ]}
+              hitSlop={8}
+            >
+              <Text
+                style={[
+                  s.settingActionText,
+                  receiveDispatchAlert ? s.settingActionTextOn : s.settingActionTextOff,
+                ]}
+              >
+                {receiveDispatchAlert ? "ON" : "OFF"}
+              </Text>
+            </Pressable>
+          </View>
+        </View>
 
         <Text style={s.sectionTitle}>{managementSectionTitle}</Text>
         <View style={s.sectionCard}>

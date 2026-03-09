@@ -9,12 +9,13 @@ export default function DriverPaymentScreen() {
 
   return (
     <View style={s.page}>
-      <ShipperScreenHeader title="결제 방식" hideBackButton />
+      {/* 차주 입장에서 현재 결제 정책(토스/착불)만 노출 */}
+      <ShipperScreenHeader title="Payment" hideBackButton />
       <View style={s.content}>
-        <Text style={[s.title, { color: c.text.primary }]}>현재 사용 중인 결제 방식</Text>
-        <Text style={[s.desc, { color: c.text.secondary }]}>오더 생성에서 사용하는 방식:</Text>
-        <Text style={[s.item, { color: c.text.primary }]}>- 토스 결제</Text>
-        <Text style={[s.item, { color: c.text.primary }]}>- 착불 결제</Text>
+        <Text style={[s.title, { color: c.text.primary }]}>Payment methods in use</Text>
+        <Text style={[s.desc, { color: c.text.secondary }]}>Enabled for create-order:</Text>
+        <Text style={[s.item, { color: c.text.primary }]}>- Card Payment (Toss)</Text>
+        <Text style={[s.item, { color: c.text.primary }]}>- Cash Payment (after delivery)</Text>
       </View>
     </View>
   );

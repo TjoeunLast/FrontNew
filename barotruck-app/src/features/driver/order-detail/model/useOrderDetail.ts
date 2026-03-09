@@ -94,6 +94,8 @@ export const useOrderDetail = () => {
     handleStartTransport,
     modalOpen,
     setModalOpen,
+    receiptOrderId,
+    closeReceiptModal,
     handleAcceptOrder,
   } = useDrivingProcess(fetchDetail);
 
@@ -177,6 +179,8 @@ export const useOrderDetail = () => {
     loading,
     modalOpen,
     setModalOpen,
+    receiptOrderId,
+    closeReceiptModal,
     myLocation,
 
     // 계산된 데이터

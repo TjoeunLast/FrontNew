@@ -20,7 +20,7 @@ function CancelledBottomBar({ insetsBottom }: { insetsBottom: number }) {
   return (
     <View style={[s.bottomBar, { height: 84 + insetsBottom, paddingBottom: insetsBottom || 10 }]}>
       <View style={s.cancelNoticeWrap}>
-        <Text style={s.cancelNoticeText}>기간 만료 자동 취소</Text>
+        <Text style={s.cancelNoticeText}>취소된 오더입니다</Text>
       </View>
     </View>
   );

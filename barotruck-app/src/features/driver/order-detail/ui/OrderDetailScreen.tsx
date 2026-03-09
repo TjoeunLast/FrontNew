@@ -1,11 +1,13 @@
 import apiClient from "@/shared/api/apiClient";
 import { KakaoLocalApi } from "@/shared/api/kakaoLocalService";
+import { ProofService } from "@/shared/api/proofService";
 import { ReportService, ReviewService } from "@/shared/api/reviewService";
 import {
   hasKakaoMapJsKey,
   RoutePreviewModal,
   RoutePreviewWebView,
 } from "@/shared/ui/business/RoutePreviewModal";
+import { ReceiptProofSection } from "@/shared/ui/business/ReceiptProofSection";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
@@ -24,7 +26,13 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ReceiptModal } from "@/features/driver/driving/ui/ReceiptModal";
+import {
+  type RoutePathPoint,
+  type RoutePreviewData,
+  requestDrivingRoutePath,
+} from "@/features/shipper/order/ui/orderDetailRoute";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
+import type { ProofResponse } from "@/shared/models/proof";
 import { Badge } from "@/shared/ui/feedback/Badge";
 import { useOrderDetail } from "../model/useOrderDetail";
 import OrderDetailPageFrame from "./OrderDetailPageFrame";
@@ -33,50 +41,11 @@ import { styles } from "./OrderDetailScreen.styles";
 const { width } = Dimensions.get("window");
 type ReportType = "ACCIDENT" | "NO_SHOW" | "RUDE" | "ETC";
 const REVIEWED_ORDER_IDS_STORAGE_KEY = "baro_driver_reviewed_order_ids_v1";
-type RoutePathPoint = {
-  lat: number;
-  lng: number;
-};
-type RoutePreviewData = {
-  startLat: number;
-  startLng: number;
-  endLat: number;
-  endLng: number;
-  startLabel: string;
-  endLabel: string;
-  path: RoutePathPoint[];
-};
 type RoutePreviewBuildResult = {
   data: RoutePreviewData | null;
   usedFallbackLine: boolean;
   pathErrorMessage: string;
 };
-
-const KAKAO_MAP_JS_KEY = String(
-  process.env.EXPO_PUBLIC_KAKAO_JAVASCRIPT_KEY ?? "",
-).trim();
-const KAKAO_MAP_WEBVIEW_BASE_URL = String(
-  process.env.EXPO_PUBLIC_KAKAO_WEBVIEW_BASE_URL ?? "https://localhost",
-).trim();
-const KAKAO_REST_API_KEY = String(
-  process.env.EXPO_PUBLIC_KAKAO_REST_API_KEY ?? "",
-).trim();
-
-interface KakaoMobilityRoad {
-  vertexes?: unknown;
-}
-
-interface KakaoMobilitySection {
-  roads?: KakaoMobilityRoad[];
-}
-
-interface KakaoMobilityRoute {
-  sections?: KakaoMobilitySection[];
-}
-
-interface KakaoMobilityDirectionsResponse {
-  routes?: KakaoMobilityRoute[];
-}
 
 
 async function loadReviewedOrderIds() {
@@ -195,66 +164,6 @@ function toFiniteNumber(value: unknown): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function parseKakaoDrivingPath(
-  payload: KakaoMobilityDirectionsResponse,
-): RoutePathPoint[] {
-  const points: RoutePathPoint[] = [];
-  const roads =
-    payload.routes?.[0]?.sections?.flatMap((section) => section.roads ?? []) ??
-    [];
-  for (const road of roads) {
-    const vertexes = Array.isArray(road.vertexes) ? road.vertexes : [];
-    for (let i = 0; i < vertexes.length - 1; i += 2) {
-      const lng = toFiniteNumber(vertexes[i]);
-      const lat = toFiniteNumber(vertexes[i + 1]);
-      if (lat === null || lng === null) continue;
-      const prev = points[points.length - 1];
-      if (prev && prev.lat === lat && prev.lng === lng) continue;
-      points.push({ lat, lng });
-    }
-  }
-  return points;
-}
-
-async function requestDrivingRoutePath(params: {
-  startLat: number;
-  startLng: number;
-  endLat: number;
-  endLng: number;
-}): Promise<RoutePathPoint[] | null> {
-  if (!KAKAO_REST_API_KEY) return null;
-
-  const query = new URLSearchParams({
-    origin: `${params.startLng},${params.startLat}`,
-    destination: `${params.endLng},${params.endLat}`,
-    priority: "RECOMMEND",
-    alternatives: "false",
-    road_details: "false",
-  });
-
-  const response = await fetch(
-    `https://apis-navi.kakaomobility.com/v1/directions?${query.toString()}`,
-    {
-      method: "GET",
-      headers: {
-        Authorization: `KakaoAK ${KAKAO_REST_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-    },
-  );
-  if (!response.ok) {
-    const err = await response.text();
-    throw new Error(
-      `kakao_mobility_directions_failed:${response.status}:${err}`,
-    );
-  }
-
-  const payload = (await response.json()) as KakaoMobilityDirectionsResponse;
-  const path = parseKakaoDrivingPath(payload);
-  if (path.length < 2) return null;
-  return path;
-}
-
 export default function OrderDetailScreen() {
   const { colors: c } = useAppTheme();
   const router = useRouter();
@@ -273,6 +182,8 @@ export default function OrderDetailScreen() {
   const [reportType, setReportType] = useState<ReportType>("ETC");
   const [reportDescription, setReportDescription] = useState("");
   const [reportLoading, setReportLoading] = useState(false);
+  const [proof, setProof] = useState<ProofResponse | null>(null);
+  const [proofLoading, setProofLoading] = useState(false);
 
   // 데이터 밒 기능 로드
   const {
@@ -283,7 +194,8 @@ export default function OrderDetailScreen() {
     actions,
     buttonConfig,
     modalOpen,
-    setModalOpen,
+    receiptOrderId,
+    closeReceiptModal,
     myLocation,
     startType,
     endType,
@@ -346,6 +258,37 @@ export default function OrderDetailScreen() {
         if (active) setReviewSubmitted(false);
       }
     })();
+
+    return () => {
+      active = false;
+    };
+  }, [order?.orderId, order?.status]);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadProof = async () => {
+      const idNum = Number(order?.orderId);
+      if (!Number.isFinite(idNum) || order?.status !== "COMPLETED") {
+        if (active) {
+          setProof(null);
+          setProofLoading(false);
+        }
+        return;
+      }
+
+      setProofLoading(true);
+      try {
+        const response = await ProofService.getProof(idNum);
+        if (active) setProof(response);
+      } catch {
+        if (active) setProof(null);
+      } finally {
+        if (active) setProofLoading(false);
+      }
+    };
+
+    void loadProof();
 
     return () => {
       active = false;
@@ -1070,12 +1013,26 @@ export default function OrderDetailScreen() {
               </View>
             )}
 
-            {routeWebviewError ? (
-              <Text style={styles.routeMiniErrorText} numberOfLines={2}>
-                {routeWebviewError}
-              </Text>
-            ) : null}
-          </View>
+          {routeWebviewError ? (
+            <Text style={styles.routeMiniErrorText} numberOfLines={2}>
+              {routeWebviewError}
+            </Text>
+          ) : null}
+        </View>
+
+          {isCompleted ? (
+            <ReceiptProofSection
+              proof={proof}
+              loading={proofLoading}
+              colors={{
+                bgSurface: c.bg.surface,
+                bgCanvas: c.bg.canvas,
+                borderDefault: c.border.default,
+                textPrimary: c.text.primary,
+                textSecondary: c.text.secondary,
+              }}
+            />
+          ) : null}
 
           {/* 화물 정보 */}
           <View
@@ -1512,7 +1469,11 @@ export default function OrderDetailScreen() {
             </View>
           </View>
         </Modal>
-        <ReceiptModal visible={modalOpen} onClose={() => setModalOpen(false)} />
+        <ReceiptModal
+          visible={modalOpen}
+          orderId={receiptOrderId}
+          onClose={closeReceiptModal}
+        />
       </OrderDetailPageFrame>
     </View>
   );

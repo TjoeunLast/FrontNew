@@ -1,10 +1,4 @@
 ﻿import { AssignedDriverInfoResponse, MyRevenueResponse, OrderRequest, OrderResponse, OrderStatus } from '../models/order';
-import type { OrderPaymentSummary } from '../models/payment';
-import {
-  findNestedTransportPaymentStatus,
-  mergeOrderPaymentSummary,
-  normalizeOrderPaymentSummary,
-} from './paymentService';
 import apiClient from './apiClient';
 
 const API_BASE = '/api/v1/orders';
@@ -14,16 +8,8 @@ function normalizeStatus(raw: any): OrderStatus {
   // 레거시 백엔드 상태값을 표준 주문 상태값으로 정규화
   if (v === 'COMPLETE') return 'COMPLETED';
   if (v === 'MOVING') return 'IN_TRANSIT';
-  if (
-    v === 'PAID' ||
-    v === 'CONFIRMED' ||
-    v === 'DISPUTED' ||
-    v === 'ADMIN_HOLD' ||
-    v === 'ADMIN_FORCE_CONFIRMED' ||
-    v === 'ADMIN_REJECTED'
-  ) {
-    return 'COMPLETED';
-  }
+  if (v === 'CANCELED' || v === 'CANCEL') return 'CANCELLED';
+  if (v.includes('CANCEL')) return 'CANCELLED';
   if (
     v === 'REQUESTED' ||
     v === 'APPLIED' ||
@@ -40,10 +26,61 @@ function normalizeStatus(raw: any): OrderStatus {
   return 'REQUESTED';
 }
 
+function isRetriableCancelError(error: any) {
+  const status = Number(error?.response?.status ?? 0);
+  if (status === 404 || status === 405 || status === 415) return true;
+  if (status !== 400) return false;
+  const rawMessage =
+    error?.response?.data?.message ??
+    error?.response?.data?.error ??
+    error?.message ??
+    '';
+  const message = String(rawMessage).toLowerCase();
+  return (
+    message.includes('required') ||
+    message.includes('missing') ||
+    message.includes('parameter') ||
+    message.includes('request body') ||
+    message.includes('cannot deserialize') ||
+    message.includes('newstatus') ||
+    message.includes('reason')
+  );
+}
+
+async function requestOrderCancel(orderId: number, reason: string): Promise<void> {
+  const candidates: Array<() => Promise<any>> = [
+    () => apiClient.patch(`${API_BASE}/${orderId}/cancel`, null, { params: { reason } }),
+    () => apiClient.patch(`${API_BASE}/${orderId}/cancel`, { reason }),
+    () => apiClient.patch(`${API_BASE}/${orderId}/cancel`, { cancelReason: reason }),
+    () => apiClient.post(`${API_BASE}/${orderId}/cancel`, null, { params: { reason } }),
+    () => apiClient.post(`${API_BASE}/${orderId}/cancel`, { reason }),
+    () => apiClient.patch(`${API_BASE}/cancel/${orderId}`, null, { params: { reason } }),
+    () => apiClient.patch(`${API_BASE}/${orderId}/status`, null, { params: { newStatus: 'CANCELLED' } }),
+    () => apiClient.patch(`${API_BASE}/${orderId}/status`, { newStatus: 'CANCELLED' }),
+    () => apiClient.post(`${API_BASE}/${orderId}/status`, { newStatus: 'CANCELLED' }),
+  ];
+
+  let lastError: any = null;
+  for (const run of candidates) {
+    try {
+      await run();
+      return;
+    } catch (error: any) {
+      lastError = error;
+      if (!isRetriableCancelError(error)) break;
+    }
+  }
+
+  throw lastError ?? new Error('order_cancel_endpoint_not_found');
+}
+
 function normalizeSettlementStatus(raw: any): OrderResponse['settlementStatus'] {
   const rawText = String(raw ?? '').trim();
   const v = rawText.toUpperCase();
   if (v === 'READY' || v === 'WAIT' || v === 'COMPLETED') return v as any;
+  // TransportPaymentStatus (backend): READY, PAID, CONFIRMED, DISPUTED, CANCELLED
+  if (v === 'PAID' || v === 'CONFIRMED') return 'COMPLETED';
+  if (v === 'DISPUTED') return 'WAIT' as any ;
   if (v === 'CANCELLED') return 'READY';
   if (v === '0') return 'READY';
   if (v === '1') return 'WAIT' as any;
@@ -51,9 +88,10 @@ function normalizeSettlementStatus(raw: any): OrderResponse['settlementStatus'] 
   if (v === 'UNPAID' || v === 'INIT') return 'READY';
   if (v === 'PENDING' || v === 'WAITING') return 'WAIT' as any;
   if (v === 'REQUESTED') return 'READY';
+  if (v === 'PAID' || v === 'DONE' || v === 'SUCCESS') return 'COMPLETED';
   if (rawText.includes('미결제') || rawText.includes('결제전')) return 'READY';
   if (rawText.includes('대기')) return 'WAIT' as any;
-  if (rawText.includes('완료')) return 'COMPLETED';
+  if (rawText.includes('완료') || rawText.includes('결제됨')) return 'COMPLETED';
   return undefined;
 }
 
@@ -63,13 +101,15 @@ function findNestedSettlementStatus(node: any, depth = 0): OrderResponse['settle
   // node.status/state는 운송 상태일 수 있어서 정산 상태 판별에 사용하지 않음
   const direct = normalizeSettlementStatus(
       (node as any).settlementStatus ??
-      (node as any).settlement_status
+      (node as any).settlement_status ??
+      (node as any).paymentStatus ??
+      (node as any).payStatus
   );
   if (direct) return direct;
 
   for (const [k, v] of Object.entries(node as Record<string, any>)) {
     const key = String(k).toLowerCase();
-    if (key.includes('settlement') || key.includes('정산')) {
+    if (key.includes('settlement') || key.includes('payment') || key.includes('정산') || key.includes('결제')) {
       const nested = Array.isArray(v) ? v[0] : v;
       const parsed =
         normalizeSettlementStatus(nested) ??
@@ -100,7 +140,12 @@ function normalizeTagList(raw: any): string[] | undefined {
 
 function normalizeOrderRow(node: any): OrderResponse | null {
   if (!node || typeof node !== 'object') return null;
-  const orderIdRaw = (node as any).orderId ?? (node as any).id ?? (node as any).orderNo;
+  const orderIdRaw =
+    (node as any).orderId ??
+    (node as any).id ??
+    (node as any).orderNo ??
+    (node as any).ORDER_ID ??
+    (node as any).order_id;
   if (orderIdRaw === undefined || orderIdRaw === null) return null;
   const orderIdNum = Number(orderIdRaw);
   if (!Number.isFinite(orderIdNum)) return null;
@@ -119,12 +164,6 @@ function normalizeOrderRow(node: any): OrderResponse | null {
     (node as any).settlementDtos ??
     (node as any).settlementInfos;
   const firstSettlement = Array.isArray(settlementsNode) ? settlementsNode[0] : settlementsNode;
-  const paymentSummary =
-    normalizeOrderPaymentSummary(node) ??
-    (() => {
-      const status = findNestedTransportPaymentStatus(node);
-      return status ? { status } : undefined;
-    })();
 
   const settlementStatus = normalizeSettlementStatus(
     (node as any).settlementStatus ??
@@ -132,6 +171,8 @@ function normalizeOrderRow(node: any): OrderResponse | null {
       (node as any).settlementState ??
       (node as any).settlement_state ??
       (node as any).settleStatus ??
+      (node as any).paymentStatus ??
+      (node as any).payment_state ??
       (typeof settlementNode === 'string' ? settlementNode : undefined) ??
       settlementNode?.status ??
       settlementNode?.settlementStatus ??
@@ -157,11 +198,30 @@ function normalizeOrderRow(node: any): OrderResponse | null {
     (node as any).requestTag
   );
 
+  const cancellation =
+    (node as any).cancellation ??
+    (((node as any).cancelReason ??
+      (node as any).cancelledAt ??
+      (node as any).cancelledBy ??
+      (node as any).CANCEL_REASON ??
+      (node as any).CANCELLED_AT ??
+      (node as any).CANCELLED_BY) !== undefined
+      ? {
+          cancelReason: (node as any).cancelReason ?? (node as any).CANCEL_REASON,
+          cancelledAt: (node as any).cancelledAt ?? (node as any).CANCELLED_AT,
+          cancelledBy: (node as any).cancelledBy ?? (node as any).CANCELLED_BY,
+        }
+      : undefined);
+
   return {
     orderId: orderIdNum,
-    status: normalizeStatus((node as any).status),
+    status: normalizeStatus(
+      (node as any).status ??
+      (node as any).STATUS ??
+      (node as any).orderStatus ??
+      (node as any).order_status
+    ),
     settlementStatus,
-    paymentSummary,
     createdAt,
     updated: updated ? String(updated) : undefined,
     driverNo,
@@ -198,7 +258,7 @@ function normalizeOrderRow(node: any): OrderResponse | null {
     distance: Number((node as any).distance ?? 0),
     duration: Number((node as any).duration ?? 0),
     user: (node as any).user,
-    cancellation: (node as any).cancellation,
+    cancellation,
     applicantCount: Math.max(
       0,
       Math.floor(
@@ -222,10 +282,6 @@ function mergeOrderRows(prev: OrderResponse, next: OrderResponse): OrderResponse
     ...next,
     applicantCount: Math.max(prev.applicantCount ?? 0, next.applicantCount ?? 0),
     settlementStatus: pickDefined(prev.settlementStatus, next.settlementStatus),
-    paymentSummary: mergeOrderPaymentSummary(
-      prev.paymentSummary as OrderPaymentSummary | undefined,
-      next.paymentSummary as OrderPaymentSummary | undefined,
-    ),
     tag: pickDefined(prev.tag, next.tag),
     payMethod: next.payMethod || prev.payMethod,
     updated: next.updated || prev.updated,
@@ -418,9 +474,7 @@ export const OrderApi = {
   },
 
   cancelOrder: async (orderId: number, reason: string): Promise<void> => {
-    await apiClient.patch(`${API_BASE}/${orderId}/cancel`, null, {
-      params: { reason },
-    });
+    await requestOrderCancel(orderId, reason);
   },
 
   updateStatus: async (orderId: number, newStatus: OrderStatus): Promise<OrderResponse> => {
@@ -467,14 +521,12 @@ export const OrderService = {
   },
 
   cancelOrder: async (orderId: number, reason: string): Promise<void> => {
-    await apiClient.patch(`${API_BASE}/${orderId}/cancel`, null, {
-      params: { reason },
-    });
+    await requestOrderCancel(orderId, reason);
   },
 
   getMyDrivingOrders: async (): Promise<OrderResponse[]> => {
     const res = await apiClient.get(`${API_BASE}/my-driving`);
-    return toOrderList(res.data);
+    return res.data;
   },
 
   /**

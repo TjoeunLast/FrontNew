@@ -19,6 +19,8 @@ import {
 } from "@/features/shipper/order/ui/orderDetail.utils";
 import type { RoutePreviewData } from "@/features/shipper/order/ui/orderDetailRoute";
 import type { OrderResponse } from "@/shared/models/order";
+import type { ProofResponse } from "@/shared/models/proof";
+import { ReceiptProofSection } from "@/shared/ui/business/ReceiptProofSection";
 import { RoutePreviewWebView } from "@/shared/ui/business/RoutePreviewModal";
 
 import { OrderDetailStatusBadges } from "./OrderDetailStatusBadges";
@@ -57,6 +59,8 @@ type BaseProps = {
   shipperInfo: ShipperInfo;
   requestTags: string[];
   requestSummary: string;
+  proof: ProofResponse | null;
+  proofLoading: boolean;
   actionLoading: boolean;
   buttonConfig: ActionButtonConfig | null;
   colors: StatusViewColors;
@@ -103,6 +107,8 @@ function BaseStatusDetailView({
   shipperInfo,
   requestTags,
   requestSummary,
+  proof,
+  proofLoading,
   actionLoading,
   buttonConfig,
   colors,
@@ -423,6 +429,20 @@ function BaseStatusDetailView({
             </Text>
           ) : null}
         </View>
+
+        {isCompleted ? (
+          <ReceiptProofSection
+            proof={proof}
+            loading={proofLoading}
+            colors={{
+              bgSurface: colors.bgSurface,
+              bgCanvas: colors.bgCanvas,
+              borderDefault: colors.borderDefault,
+              textPrimary: colors.textPrimary,
+              textSecondary: colors.textSecondary,
+            }}
+          />
+        ) : null}
 
         <View style={s.sectionCard}>
           <Text style={s.sectionTitle}>화물 정보</Text>

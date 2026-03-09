@@ -24,22 +24,3 @@ export function toKoreanDateText(d: Date) {
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}.${m}.${day}`;
 }
-
-export function getLevelFeeRate(level?: number) {
-  if (level === 1) return 0.04;
-  if ((level ?? 0) >= 2) return 0.03;
-  return 0.05;
-}
-
-export function calcLevelFee(amount: number, pay: string, level?: number) {
-  const normalizedPay = String(pay ?? "").trim().toLowerCase();
-  const shouldApply = normalizedPay === "card" || normalizedPay === "prepaid";
-  if (!shouldApply || amount <= 0) return 0;
-  return Math.max(2000, Math.round(amount * getLevelFeeRate(level)));
-}
-
-export function calcTossFee(amount: number, pay: string) {
-  const normalizedPay = String(pay ?? "").trim().toLowerCase();
-  if (normalizedPay !== "card" || amount <= 0) return 0;
-  return Math.round(amount * 0.1);
-}

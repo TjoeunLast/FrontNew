@@ -9,7 +9,6 @@ export type CurrentUserSnapshot = {
   nickname: string;
   name?: string;
   role: CurrentUserRole;
-  level?: number;
   shipperType?: "Y" | "N";
   gender?: "M" | "F";
   age?: number;
@@ -22,6 +21,7 @@ export type CurrentUserSnapshot = {
   driverType?: string;
   driverTonnage?: number;
   driverCareer?: number;
+  instantDispatchEnabled?: boolean;
 };
 
 const CURRENT_USER_KEY = "baro_current_user_snapshot";

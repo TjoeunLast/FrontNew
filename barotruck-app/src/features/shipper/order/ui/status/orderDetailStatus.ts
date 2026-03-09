@@ -2,12 +2,7 @@ import type { OrderResponse, OrderStatus } from "@/shared/models/order";
 
 export type ActionButtonConfig = {
   text: string;
-  icon:
-    | "time-outline"
-    | "people-outline"
-    | "checkmark-done-circle-outline"
-    | "star-outline"
-    | "navigate-circle-outline";
+  icon: "time-outline" | "people-outline" | "checkmark-done-circle-outline" | "star-outline" | "navigate-circle-outline";
   color: string;
   disabled?: boolean;
 };
@@ -17,16 +12,12 @@ export type OrderStatusInfo = {
   tone: "warning" | "info" | "neutral";
 };
 
-export type OrderDetailStatusGroup =
-  | "WAITING"
-  | "ACTIVE"
-  | "COMPLETED"
-  | "CANCELLED";
+export type OrderDetailStatusGroup = "WAITING" | "ACTIVE" | "COMPLETED" | "CANCELLED";
 
 export function getOrderStatusInfo(status?: string): OrderStatusInfo {
   switch (String(status ?? "").toUpperCase()) {
     case "APPLIED":
-      return { label: "승인 대기", tone: "warning" };
+      return { label: "확인 대기", tone: "warning" };
     case "ACCEPTED":
       return { label: "배차 확정", tone: "info" };
     case "LOADING":
@@ -38,15 +29,15 @@ export function getOrderStatusInfo(status?: string): OrderStatusInfo {
     case "COMPLETED":
       return { label: "운송 완료", tone: "neutral" };
     case "CANCELLED":
+    case "CANCELED":
+    case "CANCEL":
       return { label: "취소", tone: "neutral" };
     default:
       return { label: "배차 대기", tone: "warning" };
   }
 }
 
-export function getOrderDetailStatusGroup(
-  status?: OrderStatus | string,
-): OrderDetailStatusGroup {
+export function getOrderDetailStatusGroup(status?: OrderStatus | string): OrderDetailStatusGroup {
   if (isCancelledStatus(status)) return "CANCELLED";
   if (isCompletedStatus(status)) return "COMPLETED";
   if (isWaitingStatus(status)) return "WAITING";
@@ -62,7 +53,8 @@ export function isCompletedStatus(status?: OrderStatus | string) {
 }
 
 export function isCancelledStatus(status?: OrderStatus | string) {
-  return status === "CANCELLED";
+  const v = String(status ?? "").toUpperCase();
+  return v === "CANCELLED" || v === "CANCELED" || v === "CANCEL";
 }
 
 export function getMainActionButtonConfig(params: {

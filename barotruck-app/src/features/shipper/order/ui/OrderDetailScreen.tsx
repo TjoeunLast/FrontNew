@@ -32,9 +32,11 @@ import {
 import apiClient from "@/shared/api/apiClient";
 import { KakaoLocalApi } from "@/shared/api/kakaoLocalService";
 import { OrderApi } from "@/shared/api/orderService";
+import { ProofService } from "@/shared/api/proofService";
 import { ReportService, ReviewService } from "@/shared/api/reviewService";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import type { AssignedDriverInfoResponse, OrderResponse } from "@/shared/models/order";
+import type { ProofResponse } from "@/shared/models/proof";
 import { hasKakaoMapJsKey } from "@/shared/ui/business/RoutePreviewModal";
 
 type ReportType = "ACCIDENT" | "NO_SHOW" | "RUDE" | "ETC";
@@ -100,6 +102,8 @@ export default function OrderDetailScreen() {
   const [reportType, setReportType] = useState<ReportType>("ETC");
   const [reportDescription, setReportDescription] = useState("");
   const [reportLoading, setReportLoading] = useState(false);
+  const [proof, setProof] = useState<ProofResponse | null>(null);
+  const [proofLoading, setProofLoading] = useState(false);
 
   const applicantsFromParam = useMemo(() => {
     const raw = Array.isArray(applicants) ? applicants[0] : applicants;
@@ -191,6 +195,37 @@ export default function OrderDetailScreen() {
     };
   }, [order?.orderId, order?.status, resolvedOrderId]);
 
+  useEffect(() => {
+    let active = true;
+
+    const loadProof = async () => {
+      const idNum = Number(order?.orderId ?? resolvedOrderId);
+      if (!Number.isFinite(idNum) || !isCompletedStatus(order?.status)) {
+        if (active) {
+          setProof(null);
+          setProofLoading(false);
+        }
+        return;
+      }
+
+      setProofLoading(true);
+      try {
+        const response = await ProofService.getProof(idNum);
+        if (active) setProof(response);
+      } catch {
+        if (active) setProof(null);
+      } finally {
+        if (active) setProofLoading(false);
+      }
+    };
+
+    void loadProof();
+
+    return () => {
+      active = false;
+    };
+  }, [order?.orderId, order?.status, resolvedOrderId]);
+
   const isWaiting = isWaitingStatus(order?.status);
   const hasApplicants = useMemo(() => {
     if (!isWaiting) return false;
@@ -238,13 +273,24 @@ export default function OrderDetailScreen() {
     const isBusiness = businessName.length > 0;
     const label = isBusiness ? "업체명" : "화주명";
     const name = isBusiness ? businessName : String(order?.user?.nickname ?? "").trim() || "닉네임 없음";
-    const phone = parsedCargo.pickupContact || "-";
+    const phone = String(order?.user?.phone ?? "").trim() || parsedCargo.pickupContact || "-";
     return { label, name, phone };
   }, [order?.user, parsedCargo.pickupContact]);
+  const hasCancellationMeta = useMemo(() => {
+    return Boolean(
+      order?.cancellation?.cancelledAt ||
+        order?.cancellation?.cancelReason ||
+        order?.cancellation?.cancelledBy ||
+        (order as any)?.cancelledAt ||
+        (order as any)?.cancelReason ||
+        (order as any)?.cancelledBy
+    );
+  }, [order]);
   const isCompleted = isCompletedStatus(order?.status);
-  const statusGroup = getOrderDetailStatusGroup(order?.status);
+  const canCancelOrder = isWaitingStatus(order?.status) && !hasCancellationMeta;
+  const statusGroup = hasCancellationMeta ? "CANCELLED" : getOrderDetailStatusGroup(order?.status);
   const isSettled = order?.settlementStatus === "COMPLETED";
-  const statusInfo = getOrderStatusInfo(order?.status);
+  const statusInfo = getOrderStatusInfo(hasCancellationMeta ? "CANCELLED" : order?.status);
 
   const buttonConfig = useMemo<ActionButtonConfig | null>(() => {
     return getMainActionButtonConfig({
@@ -343,6 +389,47 @@ export default function OrderDetailScreen() {
     } finally {
       setActionLoading(false);
     }
+  };
+
+  const runCancelOrder = async () => {
+    if (!order) return;
+    setActionLoading(true);
+    try {
+      await OrderApi.cancelOrder(order.orderId, "화주 직접 취소");
+      setApplicantsOpen(false);
+      setOrder((prev) =>
+        prev
+          ? {
+              ...prev,
+              status: "CANCELLED",
+              cancellation: {
+                ...prev.cancellation,
+                cancelReason: "화주 직접 취소",
+                cancelledAt: new Date().toISOString(),
+                cancelledBy: "SHIPPER",
+              },
+            }
+          : prev
+      );
+      router.replace("/(shipper)/(tabs)/orders?tab=CANCEL" as any);
+    } catch (error: any) {
+      const message = error?.response?.data?.message ?? "취소 처리에 실패했습니다. 잠시 후 다시 시도해주세요.";
+      Alert.alert("취소 실패", message);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleCancelOrder = () => {
+    if (!order || !canCancelOrder || actionLoading) return;
+    Alert.alert("화물 취소", "등록한 화물을 취소하시겠습니까?", [
+      { text: "아니오", style: "cancel" },
+      {
+        text: "취소하기",
+        style: "destructive",
+        onPress: () => void runCancelOrder(),
+      },
+    ]);
   };
 
   const handleSubmitReview = async () => {
@@ -649,6 +736,10 @@ export default function OrderDetailScreen() {
           }
           router.replace("/(shipper)/(tabs)/orders" as any);
         }}
+        rightActionLabel={canCancelOrder ? "취소" : undefined}
+        onPressRightAction={canCancelOrder ? () => void handleCancelOrder() : undefined}
+        rightActionDisabled={actionLoading}
+        rightActionColor={c.status.danger}
         isCompleted={isCompleted}
         isSettled={isSettled}
         surfaceColor={c.bg.surface}
@@ -683,6 +774,8 @@ export default function OrderDetailScreen() {
               shipperInfo={shipperInfo}
               requestTags={requestTags}
               requestSummary={requestSummary}
+              proof={proof}
+              proofLoading={proofLoading}
               routePreviewData={routePreviewData}
               routeWebviewError={routeWebviewError}
               onChangeRouteWebviewError={setRouteWebviewError}

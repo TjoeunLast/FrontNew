@@ -3,10 +3,6 @@ import { View, Text, StyleSheet, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Badge } from "@/shared/ui/feedback/Badge";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
-import {
-  isDeferredPayment,
-  toPaymentMethodLabel,
-} from "@/features/common/payment/lib/paymentMethods";
 
 export const DoneOrderCard = ({ order, onDetail }: any) => {
   const { colors: c } = useAppTheme();
@@ -121,8 +117,8 @@ export const DoneOrderCard = ({ order, onDetail }: any) => {
             {totalPrice.toLocaleString()}원
           </Text>
           <Badge
-            label={toPaymentMethodLabel(payMethod)}
-            tone={isDeferredPayment(payMethod) ? "payPrepaid" : "payDeferred"}
+            label={payMethod}
+            tone={payMethod?.includes("선착불") ? "payPrepaid" : "payDeferred"}
             style={{ marginTop: 6, alignSelf: "flex-end" }}
           />
         </View>
