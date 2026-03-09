@@ -18,13 +18,15 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AuthService } from "@/shared/api/authService";
+import { ReportService } from "@/shared/api/reviewService";
 import { UserService } from "@/shared/api/userService";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import ShipperScreenHeader from "@/shared/ui/layout/ShipperScreenHeader";
 import { withAlpha } from "@/shared/utils/color";
-import { clearCurrentUserSnapshot } from "@/shared/utils/currentUserStorage";
+import { clearCurrentUserSnapshot, getCurrentUserSnapshot } from "@/shared/utils/currentUserStorage";
 
 const INQUIRY_TYPE_ITEMS = ["서비스 이용", "결제/정산", "계정/인증", "기타"] as const;
+const PROFILE_IMAGE_STORAGE_KEY_PREFIX = "baro_profile_image_url_v2:";
 const ACCOUNT_SCOPED_STORAGE_KEYS = [
   "baro_profile_image_url_v1",
   "baro_shipper_payment_methods_v1",
@@ -46,6 +48,7 @@ export default function AccountInquiryScreen() {
   const [title, setTitle] = React.useState("");
   const [content, setContent] = React.useState("");
   const [email, setEmail] = React.useState("");
+  const [submitting, setSubmitting] = React.useState(false);
   const [withdrawing, setWithdrawing] = React.useState(false);
 
   const canSubmit = title.trim().length >= 2 && content.trim().length >= 10;
@@ -58,22 +61,82 @@ export default function AccountInquiryScreen() {
     router.replace("/(shipper)/(tabs)/my" as any);
   }, [router]);
 
-  const onSubmit = React.useCallback(() => {
+  React.useEffect(() => {
+    let mounted = true;
+
+    void (async () => {
+      const snapshot = await getCurrentUserSnapshot().catch(() => null);
+      if (!mounted || !snapshot?.email) return;
+      setEmail((prev) => prev.trim() || snapshot.email);
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const onSubmit = React.useCallback(async () => {
+    if (submitting) return;
     if (!canSubmit) {
       Alert.alert("입력 확인", "문의 제목 2자 이상, 내용 10자 이상 입력해 주세요.");
       return;
     }
-    Alert.alert("접수 완료", "문의가 접수되었습니다. 영업일 기준 1~2일 내 답변드릴게요.", [
-      {
-        text: "확인",
-        onPress: goBack,
-      },
-    ]);
-  }, [canSubmit, goBack]);
+
+    const resolvedEmail = email.trim();
+    const resolvedTitle = title.trim();
+    const resolvedContent = content.trim();
+
+    if (!resolvedEmail) {
+      Alert.alert("입력 확인", "답변 받을 이메일을 입력해 주세요.");
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      console.log("[AccountInquiryScreen.onSubmit] inquiry form:", {
+        type: "DISCUSS",
+        inquiryType: type,
+        title: resolvedTitle,
+        description: resolvedContent,
+        email: resolvedEmail,
+        orderId: null,
+        reportType: "ETC",
+      });
+      await ReportService.createReport({
+        type: "DISCUSS",
+        orderId: null,
+        reportType: "ETC",
+        title: `[${type}] ${resolvedTitle}`,
+        description: resolvedContent,
+        email: resolvedEmail,
+      });
+
+      Alert.alert("접수 완료", "문의가 접수되었습니다. 영업일 기준 1~2일 내 답변드릴게요.", [
+        {
+          text: "확인",
+          onPress: goBack,
+        },
+      ]);
+    } catch (err) {
+      const serverMessage =
+        typeof (err as any)?.response?.data?.message === "string"
+          ? (err as any).response.data.message
+          : typeof (err as any)?.response?.data === "string"
+            ? (err as any).response.data
+            : "";
+      console.error("1:1 문의 접수 실패:", (err as any)?.response?.data ?? err);
+      Alert.alert("오류", serverMessage || "문의 접수에 실패했습니다. 다시 시도해 주세요.");
+    } finally {
+      setSubmitting(false);
+    }
+  }, [canSubmit, content, email, goBack, submitting, title, type]);
 
   const clearLocalAccountData = React.useCallback(async () => {
+    const allKeys = await AsyncStorage.getAllKeys().catch(() => []);
+    const profileImageKeys = allKeys.filter((key) => key.startsWith(PROFILE_IMAGE_STORAGE_KEY_PREFIX));
     await Promise.allSettled([
       ...ACCOUNT_SCOPED_STORAGE_KEYS.map((key) => AsyncStorage.removeItem(key)),
+      ...profileImageKeys.map((key) => AsyncStorage.removeItem(key)),
       clearCurrentUserSnapshot(),
       AuthService.logout(),
     ]);
@@ -351,8 +414,8 @@ export default function AccountInquiryScreen() {
       </KeyboardAvoidingView>
 
       <View style={[s.bottomActionBar, { paddingBottom: Math.max(10, insets.bottom + 6) }]}>
-        <Pressable style={s.submitBtn} onPress={onSubmit}>
-          <Text style={s.submitBtnText}>문의 접수하기</Text>
+        <Pressable style={s.submitBtn} onPress={() => void onSubmit()} disabled={!canSubmit || submitting}>
+          <Text style={s.submitBtnText}>{submitting ? "문의 접수 중..." : "문의 접수하기"}</Text>
         </Pressable>
       </View>
     </View>

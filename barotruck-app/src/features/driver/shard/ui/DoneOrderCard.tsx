@@ -1,3 +1,4 @@
+import { isSettlementPaid } from "@/features/common/settlement/lib/settlementHelpers";
 import React from "react";
 import { View, Text, StyleSheet, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -25,7 +26,7 @@ export const DoneOrderCard = ({ order, onDetail }: any) => {
   } = order;
 
   // 정산 상태 확인
-  const isSettled = settlementStatus === "COMPLETED";
+  const isSettled = isSettlementPaid(settlementStatus);
 
   // 총 금액 계산 (모든 비용 합산)
   const totalPrice = (basePrice || 0) + (laborFee || 0) + (packagingPrice || 0);

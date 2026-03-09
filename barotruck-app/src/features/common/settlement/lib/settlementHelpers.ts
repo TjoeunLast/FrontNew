@@ -30,6 +30,19 @@ export function toSettlementStatus(row: OrderResponse): SettlementUiStatus {
   return toSettlementStatusFromRaw(row.settlementStatus);
 }
 
+export function isSettlementPaid(raw?: string | null) {
+  return toSettlementStatusFromRaw(raw) === "PAID";
+}
+
+export function isOrderSettlementPaid(row: OrderResponse) {
+  return isSettlementPaid(row.settlementStatus);
+}
+
+export function isDriverSettlementEligibleOrder(row: OrderResponse) {
+  // 차주 정산 화면은 차주가 배송 완료 처리한 주문만 노출한다.
+  return row.status === "COMPLETED";
+}
+
 export function statusText(status: SettlementUiStatus) {
   if (status === "UNPAID") return "Unpaid";
   if (status === "PENDING") return "Waiting";

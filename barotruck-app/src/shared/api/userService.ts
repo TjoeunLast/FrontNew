@@ -14,6 +14,14 @@ function toFiniteNumber(value: unknown): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
+function pickFirstText(...values: unknown[]): string | undefined {
+  for (const value of values) {
+    const text = String(value ?? "").trim();
+    if (text) return text;
+  }
+  return undefined;
+}
+
 export function buildDriverProfilePayload(data: DriverInfo): DriverInfo & Record<string, unknown> {
   const address = String(data.address ?? "").trim() || undefined;
   const lat = toFiniteNumber(data.lat);
@@ -71,6 +79,20 @@ export const UserService = {
         String(
           snapshot?.name ?? snapshot?.nickname ?? baseProfile.name,
         ).trim() || baseProfile.name,
+      phone:
+        pickFirstText(
+          baseProfile.phone,
+          baseProfile.phoneNumber,
+          baseProfile.phone_number,
+          baseProfile.mobile,
+          baseProfile.tel,
+          baseProfile.contact,
+          baseProfile.user?.phone,
+          baseProfile.user?.phoneNumber,
+          baseProfile.user?.phone_number,
+          baseProfile.user?.mobile,
+          snapshot?.phone
+        ) || "",
 
       DriverInfo: baseProfile.driverInfo || baseProfile.DriverInfo,
       ShipperInfo: baseProfile.shipperInfo || baseProfile.ShipperInfo,
