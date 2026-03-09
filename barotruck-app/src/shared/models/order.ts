@@ -143,6 +143,7 @@ export interface OrderResponse {
   user?: UserSummary;
   cancellation?: CancellationSummary;
   applicantCount?: number;
+  profileImage?: ImageInfo;
 }
 
 export interface UserSummary {
