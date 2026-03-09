@@ -12,6 +12,7 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
 import { DrOrderCard } from "@/features/driver/shard/ui/DrOrderCard";
+import { isOrderSettlementPaid } from "@/features/common/settlement/lib/settlementHelpers";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import { useDriverHome } from "@/features/driver/home/model/useDriverHome";
 import { fetchMyUnreadChatCount } from "@/shared/api/chatApi";
@@ -72,8 +73,7 @@ export default function DriverHomeScreen() {
           const amt = getAmount(o);
           total += amt;
 
-          // settlementStatus가 COMPLETED일 때만 입금 완료 처리
-          if (String(o.settlementStatus ?? "").toUpperCase() === "COMPLETED") {
+          if (isOrderSettlementPaid(o)) {
             settled += amt;
           }
         }

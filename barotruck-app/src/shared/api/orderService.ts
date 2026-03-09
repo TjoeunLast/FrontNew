@@ -526,7 +526,7 @@ export const OrderService = {
 
   getMyDrivingOrders: async (): Promise<OrderResponse[]> => {
     const res = await apiClient.get(`${API_BASE}/my-driving`);
-    return res.data;
+    return toOrderList(res.data);
   },
 
   /**

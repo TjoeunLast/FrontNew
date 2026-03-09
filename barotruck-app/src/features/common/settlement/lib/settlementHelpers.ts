@@ -30,6 +30,14 @@ export function toSettlementStatus(row: OrderResponse): SettlementUiStatus {
   return toSettlementStatusFromRaw(row.settlementStatus);
 }
 
+export function isSettlementPaid(raw?: string | null) {
+  return toSettlementStatusFromRaw(raw) === "PAID";
+}
+
+export function isOrderSettlementPaid(row: OrderResponse) {
+  return isSettlementPaid(row.settlementStatus);
+}
+
 export function statusText(status: SettlementUiStatus) {
   if (status === "UNPAID") return "Unpaid";
   if (status === "PENDING") return "Waiting";

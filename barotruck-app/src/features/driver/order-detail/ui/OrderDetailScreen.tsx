@@ -31,6 +31,7 @@ import {
   type RoutePreviewData,
   requestDrivingRoutePath,
 } from "@/features/shipper/order/ui/orderDetailRoute";
+import { isOrderSettlementPaid } from "@/features/common/settlement/lib/settlementHelpers";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import type { ProofResponse } from "@/shared/models/proof";
 import { Badge } from "@/shared/ui/feedback/Badge";
@@ -353,7 +354,7 @@ export default function OrderDetailScreen() {
 
   // 전산 관련 상태 판단 변수
   const isCompleted = order.status === "COMPLETED";
-  const isSettled = order.settlementStatus === "COMPLETED"; // 백엔드 수정 후 다시 수정
+  const isSettled = isOrderSettlementPaid(order);
 
   const getStatusInfo = (status: string) => {
     switch (status) {

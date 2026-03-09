@@ -413,7 +413,7 @@ export default function DriverMyPageScreen() {
             </View>
             <View style={s.settingLabelWrap}>
               <Text style={s.settingLabel}>직접 배차</Text>
-              <Text style={s.settingSub}>관리자 우선 배정 사용</Text>
+              <Text style={s.settingSub}>관리자 강제 배정 사용</Text>
             </View>
             <View style={[s.settingActionWrap, updatingInstantDispatch && s.settingActionDisabled]}>
               <Switch
