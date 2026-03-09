@@ -91,6 +91,10 @@ export const UserService = {
     await apiClient.post("/api/user/fcm-token", { fcmToken: token });
   },
 
+  updateAdminForceAllocateBlocked: async (blocked: boolean): Promise<void> => {
+    await apiClient.post("/api/user/admin-force-allocate-blocked", { blocked });
+  },
+
   /** * 5. 비밀번호 변경 (POST /api/user/change-password) */
   changePassword: async (data: ChangePasswordRequest): Promise<string> => {
     const res = await apiClient.post("/api/user/change-password", data);
