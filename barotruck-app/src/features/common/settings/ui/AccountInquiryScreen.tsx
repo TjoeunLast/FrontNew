@@ -25,6 +25,7 @@ import { withAlpha } from "@/shared/utils/color";
 import { clearCurrentUserSnapshot } from "@/shared/utils/currentUserStorage";
 
 const INQUIRY_TYPE_ITEMS = ["서비스 이용", "결제/정산", "계정/인증", "기타"] as const;
+const PROFILE_IMAGE_STORAGE_KEY_PREFIX = "baro_profile_image_url_v2:";
 const ACCOUNT_SCOPED_STORAGE_KEYS = [
   "baro_profile_image_url_v1",
   "baro_shipper_payment_methods_v1",
@@ -72,8 +73,11 @@ export default function AccountInquiryScreen() {
   }, [canSubmit, goBack]);
 
   const clearLocalAccountData = React.useCallback(async () => {
+    const allKeys = await AsyncStorage.getAllKeys().catch(() => []);
+    const profileImageKeys = allKeys.filter((key) => key.startsWith(PROFILE_IMAGE_STORAGE_KEY_PREFIX));
     await Promise.allSettled([
       ...ACCOUNT_SCOPED_STORAGE_KEYS.map((key) => AsyncStorage.removeItem(key)),
+      ...profileImageKeys.map((key) => AsyncStorage.removeItem(key)),
       clearCurrentUserSnapshot(),
       AuthService.logout(),
     ]);

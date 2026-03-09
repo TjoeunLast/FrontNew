@@ -295,6 +295,29 @@ export default function OrderDetailScreen() {
     };
   }, [order?.orderId, order?.status]);
 
+  useEffect(() => {
+    let active = true;
+    setRoutePreviewData(null);
+    setRouteWebviewError("");
+
+    if (!order) return () => void 0;
+
+    setRouteLoading(true);
+    void (async () => {
+      try {
+        const result = await buildRoutePreviewData();
+        if (!active) return;
+        if (result.data) setRoutePreviewData(result.data);
+      } finally {
+        if (active) setRouteLoading(false);
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [order?.orderId]);
+
   // 방어 코드: 데이터 로딩 중 처리
   if (!order || !buttonConfig) {
     return (
@@ -503,45 +526,45 @@ export default function OrderDetailScreen() {
     }
   };
 
-  const resolveRouteCoordinates = async (showAlert = true) => {
-    if (!order) return null;
+  const buildRoutePreviewData = async (): Promise<RoutePreviewBuildResult> => {
+    if (!order)
+      return { data: null, usedFallbackLine: false, pathErrorMessage: "" };
+
     const directStartLat = toFiniteNumber((order as any)?.startLat);
     const directStartLng = toFiniteNumber((order as any)?.startLng);
     const directEndLat = toFiniteNumber((order as any)?.endLat);
     const directEndLng = toFiniteNumber((order as any)?.endLng);
 
-    const startAddress = normalizeDisplayText(order.startAddr); // startPlace 제거
-    const endAddress = normalizeDisplayText(order.endAddr); // endPlace 제거
+    const startAddress = normalizeDisplayText(order.startAddr);
+    const endAddress = normalizeDisplayText(order.endAddr);
 
     const [startGeo, endGeo] = await Promise.all([
       directStartLat !== null && directStartLng !== null
         ? Promise.resolve({ lat: directStartLat, lng: directStartLng })
         : startAddress
-          ? KakaoLocalApi.geocodeAddress(startAddress).catch(() => null)
+          ? KakaoLocalApi.geocodeAddress(startAddress).catch((e) => {
+              console.error("🔴 출발지 좌표 변환 실패:", e);
+              return null;
+            })
           : Promise.resolve(null),
       directEndLat !== null && directEndLng !== null
         ? Promise.resolve({ lat: directEndLat, lng: directEndLng })
         : endAddress
-          ? KakaoLocalApi.geocodeAddress(endAddress).catch(() => null)
+          ? KakaoLocalApi.geocodeAddress(endAddress).catch((e) => {
+              console.error("🔴 도착지 좌표 변환 실패:", e);
+              return null;
+            })
           : Promise.resolve(null),
     ]);
-    if (!startGeo || !endGeo) {
-      if (showAlert)
-        Alert.alert(
-          "안내",
-          "출발지/도착지 좌표를 찾지 못했어요. 주소를 확인해주세요.",
-        );
-      return null;
-    }
+    console.log(
+      "resolveRouteCoordinates - startGeo:",
+      startGeo,
+      "endGeo:",
+      endGeo,
+    );
 
-    return { startGeo, endGeo };
-  };
-
-  const buildRoutePreviewData = async (): Promise<RoutePreviewBuildResult> => {
-    const coords = await resolveRouteCoordinates(false);
-    if (!coords || !order)
+    if (!startGeo || !endGeo)
       return { data: null, usedFallbackLine: false, pathErrorMessage: "" };
-    const { startGeo, endGeo } = coords;
 
     let drivingPath: RoutePathPoint[] | null = null;
     let pathErrorMessage = "";
@@ -583,14 +606,13 @@ export default function OrderDetailScreen() {
     setRouteLoading(true);
     try {
       const result = routePreviewData
-        ? {
-            data: routePreviewData,
-            usedFallbackLine: false,
-            pathErrorMessage: "",
-          }
+        ? { data: routePreviewData, usedFallbackLine: false, pathErrorMessage: "" }
         : await buildRoutePreviewData();
       if (!result.data) {
-        await resolveRouteCoordinates(true);
+        Alert.alert(
+          "안내",
+          "출발지/도착지 좌표를 찾지 못했어요. 주소를 확인해주세요.",
+        );
         return;
       }
       setRoutePreviewData(result.data);
@@ -604,9 +626,7 @@ export default function OrderDetailScreen() {
 
       setRouteWebviewError("");
       if (result.usedFallbackLine) {
-        const suffix = result.pathErrorMessage
-          ? `\n(${result.pathErrorMessage})`
-          : "";
+        const suffix = result.pathErrorMessage ? `\n(${result.pathErrorMessage})` : "";
         Alert.alert(
           "안내",
           `자동차 도로 경로를 불러오지 못해 직선으로 표시됩니다. REST 키/모빌리티 권한을 확인해주세요.${suffix}`,
@@ -615,10 +635,7 @@ export default function OrderDetailScreen() {
       setRoutePreviewOpen(true);
     } catch (error) {
       console.error("경로 지도 열기 실패:", error);
-      Alert.alert(
-        "오류",
-        "경로 지도를 열지 못했습니다. 잠시 후 다시 시도해주세요.",
-      );
+      Alert.alert("오류", "경로 지도를 열지 못했습니다. 잠시 후 다시 시도해주세요.");
     } finally {
       setRouteLoading(false);
     }

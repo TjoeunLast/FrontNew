@@ -11,7 +11,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
   type ImageStyle,
   type TextStyle,
@@ -24,18 +23,18 @@ import { ReviewService } from "@/shared/api/reviewService";
 import { UserService } from "@/shared/api/userService";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import ShipperScreenHeader from "@/shared/ui/layout/ShipperScreenHeader";
-import AddressSearch from "@/shared/utils/AddressSearch";
-import { getCurrentUserSnapshot, upsertCurrentUserSnapshot } from "@/shared/utils/currentUserStorage";
-
-const PROFILE_IMAGE_STORAGE_KEY = "baro_profile_image_url_v1";
+import { getCurrentUserSnapshot } from "@/shared/utils/currentUserStorage";
+import { buildProfileImageFileStem, buildProfileImageStorageKey } from "@/shared/utils/profileImageStorage";
 
 type ProfileState = {
+  name: string;
   nickname: string;
   gender: string;
   ageLabel: string;
   shipperType: string;
   role: string;
   email: string;
+  phone: string;
   imageUrl: string;
   ratingAvg: number;
   ratingCount: number;
@@ -50,6 +49,10 @@ type ProfileState = {
   driverBankName?: string;
   driverAccountNum?: string;
   driverNbhId?: number;
+  shipperCompanyName?: string;
+  shipperBizRegNum?: string;
+  shipperRepresentative?: string;
+  shipperIsCorporate?: "Y" | "N";
 };
 
 function toShipperTypeLabel(raw?: string) {
@@ -243,6 +246,47 @@ function normalizeEmail(input?: string) {
   return v;
 }
 
+function normalizePhone(input?: string) {
+  const raw = String(input ?? "").trim();
+  if (!raw) return "-";
+  const digits = raw.replace(/\D/g, "");
+  if (!digits) return raw;
+  if (digits.length === 11) {
+    return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
+  }
+  if (digits.length === 10) {
+    if (digits.startsWith("02")) {
+      return `${digits.slice(0, 2)}-${digits.slice(2, 6)}-${digits.slice(6)}`;
+    }
+    return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
+  }
+  if (digits.length === 9 && digits.startsWith("02")) {
+    return `${digits.slice(0, 2)}-${digits.slice(2, 5)}-${digits.slice(5)}`;
+  }
+  return raw;
+}
+
+function resolveShipperCorporateValue(me: any, detail: any, cached?: { shipperType?: "Y" | "N" }): "Y" | "N" | undefined {
+  const raw = String(
+    me?.isCorporate ??
+      detail?.isCorporate ??
+      me?.is_corporate ??
+      detail?.is_corporate ??
+      me?.shipper?.isCorporate ??
+      detail?.shipper?.isCorporate ??
+      me?.shipperInfo?.isCorporate ??
+      detail?.shipperInfo?.isCorporate ??
+      cached?.shipperType ??
+      ""
+  )
+    .trim()
+    .toUpperCase();
+
+  if (["Y", "TRUE", "T", "1", "CORPORATE", "BUSINESS", "BIZ", "사업자"].includes(raw)) return "Y";
+  if (["N", "FALSE", "F", "0", "PERSONAL", "INDIVIDUAL", "개인"].includes(raw)) return "N";
+  return undefined;
+}
+
 function normalizeNickname(input?: string) {
   const v = String(input ?? "").trim();
   if (!v) return "-";
@@ -265,28 +309,47 @@ function pickPositiveNumber(...values: unknown[]) {
   return undefined;
 }
 
-function toEditableNickname(input?: string) {
-  const normalized = normalizeNickname(input);
-  return normalized === "-" ? "" : normalized;
-}
-
 function normalizeRating(input: unknown): number {
   const n = Number(input);
   if (!Number.isFinite(n)) return 0;
   return Math.max(0, Math.min(5, n));
 }
 
-async function persistProfileImage(uri: string): Promise<string> {
+async function persistProfileImage(uri: string, identity?: string): Promise<string> {
   const docDir = FileSystem.documentDirectory;
   if (!docDir) return uri;
 
   const cleanUri = uri.split("?")[0] || uri;
   const ext = cleanUri.includes(".") ? cleanUri.substring(cleanUri.lastIndexOf(".")) : ".jpg";
   const safeExt = ext.length >= 2 && ext.length <= 5 ? ext : ".jpg";
-  const targetUri = `${docDir}profile-image${safeExt}`;
+  const targetUri = `${docDir}${buildProfileImageFileStem(identity)}${safeExt}`;
+
+  const targetInfo = await FileSystem.getInfoAsync(targetUri);
+  if (targetInfo.exists) {
+    await FileSystem.deleteAsync(targetUri, { idempotent: true });
+  }
 
   await FileSystem.copyAsync({ from: uri, to: targetUri });
   return targetUri;
+}
+
+function toUploadFile(uri: string) {
+  const normalized = uri.split("?")[0] || uri;
+  const ext = normalized.includes(".") ? normalized.substring(normalized.lastIndexOf(".") + 1).toLowerCase() : "jpg";
+  const type =
+    ext === "png"
+      ? "image/png"
+      : ext === "heic"
+        ? "image/heic"
+        : ext === "webp"
+          ? "image/webp"
+          : "image/jpeg";
+
+  return {
+    uri,
+    name: `profile.${ext || "jpg"}`,
+    type,
+  } as any;
 }
 
 export default function ProfileSettingsScreen() {
@@ -296,12 +359,14 @@ export default function ProfileSettingsScreen() {
   const insets = useSafeAreaInsets();
 
   const [profile, setProfile] = React.useState<ProfileState>({
+    name: "-",
     nickname: "-",
     gender: "-",
     ageLabel: "-",
     shipperType: "-",
     role: "",
     email: "-",
+    phone: "-",
     imageUrl: "",
     ratingAvg: 0,
     ratingCount: 0,
@@ -309,11 +374,6 @@ export default function ProfileSettingsScreen() {
   });
   const [draftImageUri, setDraftImageUri] = React.useState("");
   const [loadingImage, setLoadingImage] = React.useState(false);
-  const [draftNickname, setDraftNickname] = React.useState("");
-  const [draftActivityAddress, setDraftActivityAddress] = React.useState("");
-  const [draftActivityLat, setDraftActivityLat] = React.useState<number | undefined>(undefined);
-  const [draftActivityLng, setDraftActivityLng] = React.useState<number | undefined>(undefined);
-  const [isAddressSearchOpen, setIsAddressSearchOpen] = React.useState(false);
   const [savingProfile, setSavingProfile] = React.useState(false);
 
   useFocusEffect(
@@ -321,7 +381,7 @@ export default function ProfileSettingsScreen() {
       let active = true;
 
       void (async () => {
-        const localImageUrl = (await AsyncStorage.getItem(PROFILE_IMAGE_STORAGE_KEY)) ?? "";
+        const cached = await getCurrentUserSnapshot();
 
         try {
           const me = (await UserService.getMyInfo()) as any;
@@ -329,7 +389,7 @@ export default function ProfileSettingsScreen() {
             fetchRoleDetail(me?.role),
             me?.userId ? ReviewService.getReviewsByTarget(Number(me.userId)).catch(() => []) : Promise.resolve([]),
           ]);
-          const cached = await getCurrentUserSnapshot();
+          const localImageUrl = (await AsyncStorage.getItem(buildProfileImageStorageKey(me?.email ?? cached?.email))) ?? "";
           const validRatings = (Array.isArray(receivedReviews) ? receivedReviews : [])
             .map((row: any) => Number(row?.rating))
             .filter((value: number) => Number.isFinite(value));
@@ -339,6 +399,7 @@ export default function ProfileSettingsScreen() {
               : null;
           const ratingAvg = normalizeRating(reviewBasedAvg ?? me?.ratingAvg ?? detail?.ratingAvg ?? 0);
           const next: ProfileState = {
+            name: normalizeNickname(me.name ?? cached?.name),
             nickname: normalizeNickname(me.nickname ?? cached?.nickname),
             gender: normalizeGenderFromAny(pickGender(me, detail, cached ?? undefined)),
             ageLabel: normalizeAgeFromAny(
@@ -348,11 +409,21 @@ export default function ProfileSettingsScreen() {
             shipperType: resolveShipperType(me, detail, cached ?? undefined),
             role: String(me?.role ?? cached?.role ?? "").trim().toUpperCase(),
             email: normalizeEmail(me.email ?? cached?.email),
+            phone: normalizePhone(
+              pickFirstText(me?.phone, me?.user?.phone, detail?.phone, detail?.user?.phone, detail?.driver?.phone, cached?.phone)
+            ),
             imageUrl: localImageUrl || me.profileImageUrl || "",
             ratingAvg,
             ratingCount: validRatings.length,
             activityAddress: normalizeNickname(
-              pickFirstText(detail?.address, detail?.driver?.address, cached?.activityAddress)
+              pickFirstText(
+                detail?.address,
+                detail?.driver?.address,
+                detail?.bizAddress,
+                detail?.shipper?.bizAddress,
+                detail?.shipperInfo?.bizAddress,
+                cached?.activityAddress
+              )
             ),
             activityLat: detail?.lat ?? detail?.driver?.lat ?? cached?.activityLat,
             activityLng: detail?.lng ?? detail?.driver?.lng ?? cached?.activityLng,
@@ -364,25 +435,48 @@ export default function ProfileSettingsScreen() {
             driverBankName: pickFirstText(detail?.bankName, detail?.driver?.bankName),
             driverAccountNum: pickFirstText(detail?.accountNum, detail?.driver?.accountNum),
             driverNbhId: detail?.nbhId ?? detail?.driver?.nbhId,
+            shipperCompanyName: pickFirstText(
+              detail?.companyName,
+              detail?.company_name,
+              detail?.shipper?.companyName,
+              detail?.shipper?.company_name,
+              detail?.shipperInfo?.companyName,
+              detail?.shipperInfo?.company_name
+            ),
+            shipperBizRegNum: pickFirstText(
+              detail?.bizRegNum,
+              detail?.biz_reg_num,
+              detail?.shipper?.bizRegNum,
+              detail?.shipper?.biz_reg_num,
+              detail?.shipperInfo?.bizRegNum,
+              detail?.shipperInfo?.biz_reg_num
+            ),
+            shipperRepresentative: pickFirstText(
+              detail?.representative,
+              detail?.representative_name,
+              detail?.shipper?.representative,
+              detail?.shipper?.representative_name,
+              detail?.shipperInfo?.representative,
+              detail?.shipperInfo?.representative_name
+            ),
+            shipperIsCorporate: resolveShipperCorporateValue(me, detail, cached ?? undefined),
           };
           if (!active) return;
           setProfile(next);
           setDraftImageUri(next.imageUrl);
-          setDraftNickname(toEditableNickname(next.nickname));
-          setDraftActivityAddress(next.activityAddress === "-" ? "" : next.activityAddress);
-          setDraftActivityLat(next.activityLat);
-          setDraftActivityLng(next.activityLng);
           return;
         } catch {
-          const cached = await getCurrentUserSnapshot();
           if (!active) return;
+          const localImageUrl = (await AsyncStorage.getItem(buildProfileImageStorageKey(cached?.email))) ?? "";
           const next: ProfileState = {
+            name: normalizeNickname(cached?.name),
             nickname: normalizeNickname(cached?.nickname),
             gender: normalizeGenderFromAny(cached?.gender),
             ageLabel: normalizeAgeFromAny(cached?.age, cached?.birthDate),
             shipperType: resolveShipperType(cached, undefined, cached ?? undefined),
             role: String(cached?.role ?? "").trim().toUpperCase(),
             email: normalizeEmail(cached?.email),
+            phone: normalizePhone(cached?.phone),
             imageUrl: localImageUrl,
             ratingAvg: 0,
             ratingCount: 0,
@@ -397,10 +491,6 @@ export default function ProfileSettingsScreen() {
           };
           setProfile(next);
           setDraftImageUri(next.imageUrl);
-          setDraftNickname(toEditableNickname(next.nickname));
-          setDraftActivityAddress(next.activityAddress === "-" ? "" : next.activityAddress);
-          setDraftActivityLat(next.activityLat);
-          setDraftActivityLng(next.activityLng);
         }
       })();
 
@@ -481,184 +571,48 @@ export default function ProfileSettingsScreen() {
     ]);
   };
 
-  const profileNickname = toEditableNickname(profile.nickname);
-  const trimmedDraftNickname = draftNickname.trim();
-  const trimmedDraftActivityAddress = draftActivityAddress.trim();
-  const profileActivityAddress = profile.activityAddress === "-" ? "" : profile.activityAddress;
-  const hasNicknameChange = trimmedDraftNickname !== profileNickname;
-  const hasActivityChange =
-    profile.role === "DRIVER" &&
-    (trimmedDraftActivityAddress !== profileActivityAddress ||
-      draftActivityLat !== profile.activityLat ||
-      draftActivityLng !== profile.activityLng);
   const hasImageChange = draftImageUri !== profile.imageUrl;
-  const hasPendingChanges = hasImageChange || hasNicknameChange || hasActivityChange;
+  const hasPendingChanges = hasImageChange;
   const isBusy = loadingImage || savingProfile;
-  const nicknameError = hasNicknameChange && trimmedDraftNickname.length < 2 ? "닉네임은 2글자 이상 입력해 주세요." : "";
-  const activityAddressError =
-    hasActivityChange && (!trimmedDraftActivityAddress || draftActivityLat == null || draftActivityLng == null)
-      ? "활동 지역은 주소 검색으로 다시 선택해 주세요."
-      : "";
-
-  const saveNicknameChange = async () => {
-    if (!hasNicknameChange) return false;
-    if (trimmedDraftNickname.length < 2) {
-      Alert.alert("닉네임 확인", "닉네임은 2글자 이상 입력해 주세요.");
-      return false;
-    }
-
-    try {
-      const isDuplicated = await UserService.checkNickname(trimmedDraftNickname);
-      if (isDuplicated) {
-        Alert.alert("중복된 닉네임", "이미 사용 중인 닉네임입니다. 다른 닉네임을 입력해 주세요.");
-        return false;
-      }
-    } catch {}
-
-    const cached = await getCurrentUserSnapshot();
-    const email = normalizeEmail(profile.email) === "-" ? String(cached?.email ?? "").trim() : profile.email.trim();
-    if (!email) {
-      throw new Error("email is required to update nickname");
-    }
-
-    const role = String(profile.role || cached?.role || "SHIPPER").trim().toUpperCase() as "ADMIN" | "DRIVER" | "SHIPPER" | "USER";
-
-    await upsertCurrentUserSnapshot({
-      email,
-      nickname: trimmedDraftNickname,
-      name: String(cached?.name ?? trimmedDraftNickname).trim() || trimmedDraftNickname,
-      role,
-      gender: cached?.gender,
-      birthDate: cached?.birthDate,
-      activityAddress: cached?.activityAddress,
-      activityLat: cached?.activityLat,
-      activityLng: cached?.activityLng,
-    });
-
-    setProfile((prev) => ({ ...prev, nickname: trimmedDraftNickname }));
-    setDraftNickname(trimmedDraftNickname);
-    return true;
-  };
 
   const saveImageChange = async () => {
     if (!hasImageChange) return "unchanged" as const;
+    const storageKey = buildProfileImageStorageKey(profile.email);
     if (!draftImageUri) {
-      await AsyncStorage.removeItem(PROFILE_IMAGE_STORAGE_KEY);
+      await UserService.deleteProfileImage();
+      await AsyncStorage.removeItem(storageKey);
       setProfile((prev) => ({ ...prev, imageUrl: "" }));
       setDraftImageUri("");
       return "reset" as const;
     }
 
-    const persistedUri = await persistProfileImage(draftImageUri);
-    await AsyncStorage.setItem(PROFILE_IMAGE_STORAGE_KEY, persistedUri);
+    const persistedUri = await persistProfileImage(draftImageUri, profile.email);
+    await UserService.uploadProfileImage(toUploadFile(persistedUri));
+    await AsyncStorage.setItem(storageKey, persistedUri);
     setProfile((prev) => ({ ...prev, imageUrl: persistedUri }));
     setDraftImageUri(persistedUri);
     return "saved" as const;
-  };
-
-  const saveActivityAddressChange = async () => {
-    if (!hasActivityChange || profile.role !== "DRIVER") return false;
-    if (!trimmedDraftActivityAddress || draftActivityLat == null || draftActivityLng == null) {
-      Alert.alert("활동 지역 확인", "활동 지역은 주소 검색으로 다시 선택해 주세요.");
-      return false;
-    }
-
-    const cached = await getCurrentUserSnapshot();
-    const email = normalizeEmail(profile.email) === "-" ? String(cached?.email ?? "").trim() : profile.email.trim();
-    const nickname = trimmedDraftNickname || profileNickname || String(cached?.nickname ?? "").trim();
-    const role = String(profile.role || cached?.role || "DRIVER").trim().toUpperCase() as "ADMIN" | "DRIVER" | "SHIPPER" | "USER";
-
-    await UserService.saveDriverProfile({
-      carNum: String(profile.driverCarNum ?? cached?.driverCarNum ?? "").trim(),
-      carType: String(profile.driverCarType ?? cached?.driverCarType ?? "CARGO").trim() || "CARGO",
-      tonnage: Number(profile.driverTonnage ?? cached?.driverTonnage ?? 1) || 1,
-      type: String(profile.driverType ?? cached?.driverType ?? "NORMAL").trim() || "NORMAL",
-      career: Number(profile.driverCareer ?? cached?.driverCareer ?? 0) || 0,
-      bankName: String(profile.driverBankName ?? "").trim(),
-      accountNum: String(profile.driverAccountNum ?? "").trim(),
-      address: trimmedDraftActivityAddress,
-      lat: draftActivityLat,
-      lng: draftActivityLng,
-      nbhId: profile.driverNbhId,
-    });
-
-    await upsertCurrentUserSnapshot({
-      email,
-      nickname,
-      role,
-      name: String(cached?.name ?? nickname).trim() || nickname,
-      gender: cached?.gender,
-      birthDate: cached?.birthDate,
-      activityAddress: trimmedDraftActivityAddress,
-      activityLat: draftActivityLat,
-      activityLng: draftActivityLng,
-      driverCarNum: String(profile.driverCarNum ?? cached?.driverCarNum ?? "").trim() || undefined,
-      driverCarType: String(profile.driverCarType ?? cached?.driverCarType ?? "").trim() || undefined,
-      driverType: String(profile.driverType ?? cached?.driverType ?? "").trim() || undefined,
-      driverTonnage: Number(profile.driverTonnage ?? cached?.driverTonnage ?? 0) || undefined,
-      driverCareer: Number(profile.driverCareer ?? cached?.driverCareer ?? 0) || undefined,
-    });
-
-    setProfile((prev) => ({
-      ...prev,
-      activityAddress: trimmedDraftActivityAddress,
-      activityLat: draftActivityLat,
-      activityLng: draftActivityLng,
-    }));
-    return true;
   };
 
   const onSaveProfile = async () => {
     if (!hasPendingChanges || isBusy) return;
     setSavingProfile(true);
     try {
-      const nicknameSaved = await saveNicknameChange();
-      if (hasNicknameChange && !nicknameSaved) return;
-      const activitySaved = await saveActivityAddressChange();
-      if (hasActivityChange && !activitySaved) return;
       const imageResult = await saveImageChange();
 
-      if (nicknameSaved && activitySaved && imageResult === "saved") {
-        Alert.alert("수정 완료", "닉네임, 활동 지역, 프로필 사진이 저장되었습니다.");
-        return;
-      }
-      if (nicknameSaved && activitySaved) {
-        Alert.alert("수정 완료", "닉네임과 활동 지역이 저장되었습니다.");
-        return;
-      }
-      if (activitySaved && imageResult === "saved") {
-        Alert.alert("수정 완료", "활동 지역과 프로필 사진이 저장되었습니다.");
-        return;
-      }
-      if (activitySaved && imageResult === "reset") {
-        Alert.alert("수정 완료", "활동 지역이 저장되고 프로필 사진이 기본 이미지로 변경되었습니다.");
-        return;
-      }
-      if (activitySaved) {
-        Alert.alert("수정 완료", "활동 지역이 저장되었습니다.");
-        return;
-      }
-      if (nicknameSaved && imageResult === "saved") {
-        Alert.alert("수정 완료", "닉네임과 프로필 사진이 저장되었습니다.");
-        return;
-      }
-      if (nicknameSaved && imageResult === "reset") {
-        Alert.alert("수정 완료", "닉네임이 저장되고 프로필 사진이 기본 이미지로 변경되었습니다.");
-        return;
-      }
-      if (nicknameSaved) {
-        Alert.alert("수정 완료", "닉네임이 저장되었습니다.");
+      if (imageResult === "reset") {
+        Alert.alert("수정 완료", "프로필 사진이 기본 이미지로 변경되었습니다.");
         return;
       }
       if (imageResult === "saved") {
         Alert.alert("수정 완료", "프로필 사진이 저장되었습니다.");
-        return;
       }
-      if (imageResult === "reset") {
-        Alert.alert("수정 완료", "프로필 사진이 기본 이미지로 변경되었습니다.");
-      }
-    } catch {
-      Alert.alert("수정 실패", "프로필 저장 중 문제가 발생했습니다. 다시 시도해 주세요.");
+    } catch (error: any) {
+      const message =
+        error?.response?.data?.message ||
+        error?.response?.data?.error ||
+        "프로필 저장 중 문제가 발생했습니다. 다시 시도해 주세요.";
+      Alert.alert("수정 실패", message);
     } finally {
       setSavingProfile(false);
     }
@@ -751,73 +705,16 @@ export default function ProfileSettingsScreen() {
           justifyContent: "space-between",
           backgroundColor: c.bg.surface,
         } as ViewStyle,
-        rowEditable: {
-          alignItems: "flex-start",
-          paddingVertical: 12,
-        } as ViewStyle,
         rowDivider: { height: 1, backgroundColor: c.border.default } as ViewStyle,
         label: { color: c.text.secondary, fontSize: 13, fontWeight: "700" } as TextStyle,
         value: { color: c.text.primary, fontSize: 14, fontWeight: "800" } as TextStyle,
         valueRating: { color: "#B45309" } as TextStyle,
-        fieldBlock: {
-          flex: 1,
-          alignItems: "flex-end",
-          gap: 6,
-          marginLeft: 16,
-        } as ViewStyle,
-        nicknameInput: {
-          width: "100%",
-          minHeight: 40,
-          borderWidth: 1,
-          borderColor: c.border.default,
-          borderRadius: 10,
-          paddingHorizontal: 12,
-          color: c.text.primary,
-          backgroundColor: c.bg.canvas,
-          fontSize: 14,
-          fontWeight: "700",
-          textAlign: "right",
-        } as TextStyle,
-        addressSearchButton: {
-          alignSelf: "flex-end",
-          minHeight: 32,
-          paddingHorizontal: 12,
-          borderRadius: 10,
-          borderWidth: 1,
-          borderColor: c.border.default,
-          backgroundColor: c.bg.surface,
-          justifyContent: "center",
-        } as ViewStyle,
-        addressSearchButtonText: {
-          color: c.text.primary,
-          fontSize: 12,
-          fontWeight: "800",
-        } as TextStyle,
-        helperText: {
-          color: c.text.secondary,
-          fontSize: 11,
-          fontWeight: "700",
-        } as TextStyle,
-        helperError: {
-          color: c.status.danger,
-          fontSize: 11,
-          fontWeight: "700",
-        } as TextStyle,
       }),
     [c, hasPendingChanges, isBusy]
   );
 
   return (
     <View style={s.page}>
-      <AddressSearch
-        visible={isAddressSearchOpen}
-        onClose={() => setIsAddressSearchOpen(false)}
-        onComplete={({ address, lat, lng }) => {
-          setDraftActivityAddress(address);
-          setDraftActivityLat(lat);
-          setDraftActivityLng(lng);
-        }}
-      />
       <ShipperScreenHeader
         title="프로필 설정"
         onPressBack={() => {
@@ -853,22 +750,9 @@ export default function ProfileSettingsScreen() {
 
           <Text style={s.infoTitle}>기본 정보</Text>
           <View style={s.infoTable}>
-            <View style={[s.row, s.rowEditable]}>
+            <View style={s.row}>
               <Text style={s.label}>닉네임</Text>
-              <View style={s.fieldBlock}>
-                <TextInput
-                  value={draftNickname}
-                  onChangeText={setDraftNickname}
-                  style={s.nicknameInput}
-                  placeholder="닉네임을 입력하세요"
-                  placeholderTextColor={c.text.secondary}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  maxLength={20}
-                  returnKeyType="done"
-                />
-                {nicknameError ? <Text style={s.helperError}>{nicknameError}</Text> : null}
-              </View>
+              <Text style={s.value}>{profile.nickname}</Text>
             </View>
             <View style={s.rowDivider} />
             <View style={s.row}>
@@ -882,27 +766,11 @@ export default function ProfileSettingsScreen() {
               <Text style={s.label}>성별</Text>
               <Text style={s.value}>{profile.gender}</Text>
             </View>
-            {profile.role === "DRIVER" ? (
-              <>
-                <View style={s.rowDivider} />
-                <View style={[s.row, s.rowEditable]}>
-                  <Text style={s.label}>활동 지역</Text>
-                  <View style={s.fieldBlock}>
-                    <TextInput
-                      value={draftActivityAddress}
-                      editable={false}
-                      style={s.nicknameInput}
-                      placeholder="활동 지역을 검색하세요"
-                      placeholderTextColor={c.text.secondary}
-                    />
-                    <Pressable style={s.addressSearchButton} onPress={() => setIsAddressSearchOpen(true)}>
-                      <Text style={s.addressSearchButtonText}>주소 검색</Text>
-                    </Pressable>
-                    {activityAddressError ? <Text style={s.helperError}>{activityAddressError}</Text> : null}
-                  </View>
-                </View>
-              </>
-            ) : null}
+            <View style={s.rowDivider} />
+            <View style={s.row}>
+              <Text style={s.label}>활동 지역</Text>
+              <Text style={s.value}>{profile.activityAddress}</Text>
+            </View>
             {profile.role !== "DRIVER" ? (
               <>
                 <View style={s.rowDivider} />
@@ -916,6 +784,11 @@ export default function ProfileSettingsScreen() {
             <View style={s.row}>
               <Text style={s.label}>이메일</Text>
               <Text style={s.value}>{profile.email}</Text>
+            </View>
+            <View style={s.rowDivider} />
+            <View style={s.row}>
+              <Text style={s.label}>전화번호</Text>
+              <Text style={s.value}>{profile.phone}</Text>
             </View>
             <View style={s.rowDivider} />
             <View style={s.row}>

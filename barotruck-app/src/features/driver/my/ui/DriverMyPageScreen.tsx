@@ -27,8 +27,7 @@ import {
   getCurrentUserSnapshot,
   upsertCurrentUserSnapshot,
 } from "@/shared/utils/currentUserStorage";
-
-const PROFILE_IMAGE_STORAGE_KEY = "baro_profile_image_url_v1";
+import { buildProfileImageStorageKey } from "@/shared/utils/profileImageStorage";
 
 type DriverProfileView = {
   nickname: string;
@@ -142,10 +141,10 @@ export default function DriverMyPageScreen() {
       let active = true;
 
       void (async () => {
-        const localImageUrl = await AsyncStorage.getItem(PROFILE_IMAGE_STORAGE_KEY);
         try {
           const me = (await UserService.getMyInfo()) as any;
           const cached = await getCurrentUserSnapshot();
+          const localImageUrl = await AsyncStorage.getItem(buildProfileImageStorageKey(me?.email ?? cached?.email));
           let detail: any = null;
           try {
             const res = await apiClient.get("/api/v1/drivers/me");
@@ -168,8 +167,9 @@ export default function DriverMyPageScreen() {
           });
         } catch {
           if (!active) return;
-          setProfileImageUrl(localImageUrl ?? "");
           const cached = await getCurrentUserSnapshot();
+          const localImageUrl = await AsyncStorage.getItem(buildProfileImageStorageKey(cached?.email));
+          setProfileImageUrl(localImageUrl ?? "");
           setAdminForceAllocateBlocked(false);
           setInstantDispatchEnabled(Boolean(cached?.instantDispatchEnabled));
           setProfile({

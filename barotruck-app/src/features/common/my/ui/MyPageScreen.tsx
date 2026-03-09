@@ -29,8 +29,8 @@ import {
   getCurrentUserSnapshot,
   saveCurrentUserSnapshot,
 } from "@/shared/utils/currentUserStorage";
+import { buildProfileImageStorageKey } from "@/shared/utils/profileImageStorage";
 
-const PROFILE_IMAGE_STORAGE_KEY = "baro_profile_image_url_v1";
 const SHIPPER_PAYMENT_METHODS_KEY = "baro_shipper_payment_methods_v1";
 
 type ProfileView = {
@@ -193,16 +193,14 @@ export default function MyPageScreen() {
       let active = true;
 
       void (async () => {
-        const [localImageUrl, paymentStoreRaw] = await Promise.all([
-          AsyncStorage.getItem(PROFILE_IMAGE_STORAGE_KEY),
-          AsyncStorage.getItem(SHIPPER_PAYMENT_METHODS_KEY),
-        ]);
+        const paymentStoreRaw = await AsyncStorage.getItem(SHIPPER_PAYMENT_METHODS_KEY);
         if (!active) return;
         setPaymentMethodLabel(readDefaultCardCompany(paymentStoreRaw));
 
         try {
           const me = (await UserService.getMyInfo()) as any;
           const cached = await getCurrentUserSnapshot();
+          const localImageUrl = await AsyncStorage.getItem(buildProfileImageStorageKey(me.email ?? cached?.email));
           const shipperDetail = await fetchShipperDetailFromServer(me);
           const shipperType = resolveShipperType(
             me,
@@ -256,6 +254,8 @@ export default function MyPageScreen() {
               email: me.email,
               nickname: me.nickname,
               name: me.name || cached?.name,
+              phone:
+                String(me.phone ?? shipperDetail?.phone ?? shipperDetail?.user?.phone ?? cached?.phone ?? "").trim() || undefined,
               role: me.role,
               shipperType: shipperDetail?.isCorporate ?? cached?.shipperType,
               gender: me.gender ?? me.sex ?? shipperDetail?.user?.gender ?? cached?.gender,
@@ -281,6 +281,7 @@ export default function MyPageScreen() {
         } catch {
           const cached = await getCurrentUserSnapshot();
           if (!active) return;
+          const localImageUrl = await AsyncStorage.getItem(buildProfileImageStorageKey(cached?.email));
           setProfileImageUrl(localImageUrl ?? "");
           if (!cached) return;
           setProfile({
