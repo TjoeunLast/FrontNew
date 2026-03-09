@@ -1,12 +1,12 @@
-import apiClient from './apiClient';
-import { 
-  ReviewRequest, ReviewResponse, 
+import { USE_MOCK } from "@/shared/config/mock";
+import {
   ReportRequest, ReportResponse,
+  ReviewRequest, ReviewResponse,
   toReportStatusLabel,
   toReportTypeLabel,
   toReportTypeRequestValue,
 } from '../models/review';
-import { USE_MOCK } from "@/shared/config/mock";
+import apiClient from './apiClient';
 
 function normalizeReportResponse(row: ReportResponse): ReportResponse {
   return {
@@ -99,7 +99,7 @@ export const ReportService = {
   },
 
   // 2. 내 신고 목록 조회 (상태별)
-  getReportsByStatus: async (status: string): Promise<ReportResponse[]> => {
+  getReportsByStatus: async (type: string): Promise<ReportResponse[]> => {
     if (USE_MOCK) return [];
     const res = await apiClient.get('/api/reports/status', { params: { status } });
     return Array.isArray(res.data) ? res.data.map(normalizeReportResponse) : [];

@@ -5,6 +5,8 @@ export interface ReviewRequest {
   orderId: number;   // 대상 오더 ID
   rating: number;    // 1~5점
   content: string;   // 리뷰 내용
+
+  
 }
 
 export interface ReviewResponse {
@@ -34,6 +36,7 @@ export const REPORT_STATUS_LABELS = {
 export type ReportTypeCode = keyof typeof REPORT_TYPE_LABELS;
 export type ReportTypeLabel = (typeof REPORT_TYPE_LABELS)[ReportTypeCode];
 export type ReportStatusCode = keyof typeof REPORT_STATUS_LABELS;
+export type ReportSubmissionType = "REPORT" | "DISCUSS";
 
 export const REPORT_TYPE_OPTIONS: ReadonlyArray<{
   value: ReportTypeCode;
@@ -84,21 +87,36 @@ export function toReportStatusLabel(raw: unknown): string {
   return value;
 }
 
-export interface ReportRequest {
-  orderId: number;      // 관련 오더 ID
-  reportType: ReportTypeCode | ReportTypeLabel; // 신고 유형
-  description: string;  // 상세 내용
-}
+export type ReportRequest =
+  | {
+      type: "REPORT"; // 신고
+      orderId: number; // 관련 오더 ID
+      reportType: ReportTypeCode | ReportTypeLabel; // 신고 유형
+      description: string; // 상세 내용
+      email?: string; // 문의 회신용 이메일
+      title?: string; // 문의 제목
+    }
+  | {
+      type: "DISCUSS"; // 1:1 문의
+      description: string; // 문의 내용
+      email: string; // 회신용 이메일
+      title: string; // 문의 제목
+      orderId?: number | null; // 관련 오더 ID
+      reportType?: ReportTypeCode | ReportTypeLabel; // 신고 유형
+    };
 
 export interface ReportResponse {
   reportId: number;
-  orderId: number;
+  orderId?: number;
   reporterNickname: string;
   targetNickname: string;
-  reportType: string;
+  reportType?: string;
   description: string;
   status: ReportStatusCode | string; // 처리 상태
   reportTypeLabel?: string;
   statusLabel?: string;
   createdAt: string;
+  type: ReportSubmissionType | string; // DISCUSS 1:1 문의 / REPORT 신고
+  email?: string; // 이메일
+  title?: string; // 제목
 }
