@@ -3,14 +3,12 @@ import type { EnabledShipperPaymentMethod } from "@/features/common/payment/lib/
 export type CreateOrderDraft = {
   startSelected: string;
   startAddrDetail: string;
-  startContact: string;
   loadDay: "당상" | "익상" | "직접 지정";
   loadDateISO: string;
   startTimeHHmm: string;
 
   endAddr: string;
   endAddrDetail: string;
-  endContact: string;
   endTimeHHmm: string;
   arriveType: "당착" | "익착" | "내착";
 

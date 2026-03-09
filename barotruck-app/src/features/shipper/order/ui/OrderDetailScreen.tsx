@@ -238,7 +238,7 @@ export default function OrderDetailScreen() {
     const isBusiness = businessName.length > 0;
     const label = isBusiness ? "업체명" : "화주명";
     const name = isBusiness ? businessName : String(order?.user?.nickname ?? "").trim() || "닉네임 없음";
-    const phone = parsedCargo.pickupContact || "-";
+    const phone = String(order?.user?.phone ?? "").trim() || parsedCargo.pickupContact || "-";
     return { label, name, phone };
   }, [order?.user, parsedCargo.pickupContact]);
   const hasCancellationMeta = useMemo(() => {

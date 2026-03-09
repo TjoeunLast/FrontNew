@@ -129,6 +129,7 @@ export const s = StyleSheet.create({
   twoCol: { flexDirection: "row" },
   inputWrap: { borderWidth: 1, borderRadius: 14, paddingHorizontal: 14, height: 48, justifyContent: "center" },
   input: { fontSize: 14, fontWeight: "700" },
+  errorText: { marginTop: 6, fontSize: 12, fontWeight: "700", lineHeight: 16 },
   inputWrapMulti: { borderWidth: 1, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, minHeight: 110 },
   inputMulti: { fontSize: 14, fontWeight: "700", height: 110, textAlignVertical: "top" },
 
