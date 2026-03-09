@@ -28,18 +28,6 @@ export type TransportPaymentStatus =
   | 'ADMIN_REJECTED' // 관리자 반려
   | 'CANCELLED'; // 결제 취소
 
-/** 오더 응답에 포함되는 결제 요약 모델 */
-export interface OrderPaymentSummary {
-  paymentId?: number;
-  chargedAmount?: number;
-  receivedAmount?: number;
-  feeAmount?: number;
-  method?: PaymentMethod;
-  status?: TransportPaymentStatus;
-  paidAt?: string;
-  confirmedAt?: string;
-}
-
 /** 결제 이의 사유 */
 export type PaymentDisputeReason =
   | 'PRICE_MISMATCH'

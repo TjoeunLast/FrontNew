@@ -10,6 +10,7 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   View,
   type ImageStyle,
@@ -21,7 +22,11 @@ import apiClient from "@/shared/api/apiClient";
 import { AuthService } from "@/shared/api/authService";
 import { UserService } from "@/shared/api/userService";
 import ShipperScreenHeader from "@/shared/ui/layout/ShipperScreenHeader";
-import { clearCurrentUserSnapshot, getCurrentUserSnapshot } from "@/shared/utils/currentUserStorage";
+import {
+  clearCurrentUserSnapshot,
+  getCurrentUserSnapshot,
+  upsertCurrentUserSnapshot,
+} from "@/shared/utils/currentUserStorage";
 
 const PROFILE_IMAGE_STORAGE_KEY = "baro_profile_image_url_v1";
 
@@ -69,11 +74,59 @@ function normalizeAgeLabel(input?: unknown) {
   return `${Math.floor(age)}세`;
 }
 
+function toOptionalBoolean(value: unknown) {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value === 1 ? true : value === 0 ? false : undefined;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (["true", "1", "y", "yes", "on", "enabled", "active"].includes(normalized)) return true;
+    if (["false", "0", "n", "no", "off", "disabled", "inactive"].includes(normalized)) return false;
+  }
+  return undefined;
+}
+
+function resolveInstantDispatchEnabled(detail?: any, cached?: Awaited<ReturnType<typeof getCurrentUserSnapshot>>) {
+  const values = [
+    detail?.instantDispatchEnabled,
+    detail?.isInstantDispatchEnabled,
+    detail?.quickDispatchEnabled,
+    detail?.isQuickDispatchEnabled,
+    detail?.immediateDispatchEnabled,
+    detail?.isImmediateDispatchEnabled,
+    detail?.adminDispatchEnabled,
+    detail?.isAdminDispatchEnabled,
+    detail?.autoAssignEnabled,
+    detail?.isAutoAssignEnabled,
+    detail?.driver?.instantDispatchEnabled,
+    detail?.driver?.isInstantDispatchEnabled,
+    detail?.driver?.quickDispatchEnabled,
+    detail?.driver?.isQuickDispatchEnabled,
+    detail?.driver?.immediateDispatchEnabled,
+    detail?.driver?.isImmediateDispatchEnabled,
+    detail?.driver?.adminDispatchEnabled,
+    detail?.driver?.isAdminDispatchEnabled,
+    detail?.driver?.autoAssignEnabled,
+    detail?.driver?.isAutoAssignEnabled,
+    cached?.instantDispatchEnabled,
+  ];
+
+  for (const value of values) {
+    const normalized = toOptionalBoolean(value);
+    if (normalized !== undefined) return normalized;
+  }
+
+  return false;
+}
+
 export default function DriverMyPageScreen() {
   const router = useRouter();
 
   const [loggingOut, setLoggingOut] = React.useState(false);
   const [receiveOrderAlarm, setReceiveOrderAlarm] = React.useState(true);
+  const [instantDispatchEnabled, setInstantDispatchEnabled] = React.useState(false);
+  const [updatingInstantDispatch, setUpdatingInstantDispatch] = React.useState(false);
+  const [adminForceAllocateBlocked, setAdminForceAllocateBlocked] = React.useState(false);
+  const [savingAdminForceAllocateBlocked, setSavingAdminForceAllocateBlocked] = React.useState(false);
   const [profile, setProfile] = React.useState<DriverProfileView>({
     nickname: "차주",
     gender: "-",
@@ -103,6 +156,8 @@ export default function DriverMyPageScreen() {
 
           if (!active) return;
           setProfileImageUrl((localImageUrl ?? "") || me?.profileImageUrl || "");
+          setAdminForceAllocateBlocked(Boolean(me?.adminForceAllocateBlocked));
+          setInstantDispatchEnabled(resolveInstantDispatchEnabled(detail, cached));
           setProfile({
             nickname: toText(me?.nickname ?? cached?.nickname, "차주"),
             gender: normalizeGenderLabel(me?.gender ?? me?.sex ?? detail?.gender ?? detail?.user?.gender ?? cached?.gender),
@@ -115,6 +170,8 @@ export default function DriverMyPageScreen() {
           if (!active) return;
           setProfileImageUrl(localImageUrl ?? "");
           const cached = await getCurrentUserSnapshot();
+          setAdminForceAllocateBlocked(false);
+          setInstantDispatchEnabled(Boolean(cached?.instantDispatchEnabled));
           setProfile({
             nickname: toText(cached?.nickname, "차주"),
             gender: normalizeGenderLabel(cached?.gender),
@@ -159,6 +216,44 @@ export default function DriverMyPageScreen() {
       { text: "취소", style: "cancel" },
       { text: "로그아웃", style: "destructive", onPress: () => void doLogout() },
     ]);
+  };
+
+  const onToggleAdminForceAllocateBlocked = async (nextValue: boolean) => {
+    if (savingAdminForceAllocateBlocked) return;
+    const previousValue = adminForceAllocateBlocked;
+    setAdminForceAllocateBlocked(nextValue);
+    try {
+      setSavingAdminForceAllocateBlocked(true);
+      await UserService.updateAdminForceAllocateBlocked(nextValue);
+    } catch {
+      setAdminForceAllocateBlocked(previousValue);
+      Alert.alert("저장 실패", "강제배차 설정을 저장하지 못했습니다.");
+    } finally {
+      setSavingAdminForceAllocateBlocked(false);
+    }
+  };
+
+  const onToggleInstantDispatch = async () => {
+    if (updatingInstantDispatch) return;
+    const previousValue = instantDispatchEnabled;
+    const nextValue = !previousValue;
+    setInstantDispatchEnabled(nextValue);
+    try {
+      setUpdatingInstantDispatch(true);
+      await UserService.updateInstantDispatchEnabled(nextValue);
+      const cached = await getCurrentUserSnapshot();
+      if (cached?.email && cached?.nickname && cached?.role) {
+        await upsertCurrentUserSnapshot({
+          ...cached,
+          instantDispatchEnabled: nextValue,
+        });
+      }
+    } catch {
+      setInstantDispatchEnabled(previousValue);
+      Alert.alert("저장 실패", "직접 배차 설정을 저장하지 못했습니다.");
+    } finally {
+      setUpdatingInstantDispatch(false);
+    }
   };
 
   const s = React.useMemo(
@@ -239,28 +334,42 @@ export default function DriverMyPageScreen() {
         rowLabel: { flex: 1, fontSize: 14, fontWeight: "800", color: "#111827" } as TextStyle,
         rowValue: { fontSize: 14, fontWeight: "800", color: "#65758B", marginRight: 8 } as TextStyle,
         rowValuePrimary: { color: "#4E46E5" } as TextStyle,
+        toggleValueWrap: { marginLeft: 12 } as ViewStyle,
         divider: { height: 1, marginLeft: 54, backgroundColor: "#EEF2F7" } as ViewStyle,
-        headerAlertBtn: {
-          width: 52,
-          height: 30,
-          borderRadius: 15,
+        settingRow: {
+          minHeight: 72,
+          paddingHorizontal: 16,
+          flexDirection: "row",
+          alignItems: "center",
+        } as ViewStyle,
+        settingLabelWrap: { flex: 1 } as ViewStyle,
+        settingLabel: { fontSize: 15, fontWeight: "900", color: "#111827" } as TextStyle,
+        settingSub: { marginTop: 4, fontSize: 12, fontWeight: "700", color: "#7B8794" } as TextStyle,
+        settingActionWrap: { flexDirection: "row", alignItems: "center" } as ViewStyle,
+        settingActionButton: {
+          minWidth: 88,
+          height: 40,
+          borderRadius: 999,
           alignItems: "center",
           justifyContent: "center",
-          flexDirection: "row",
-          gap: 3,
-          borderWidth: 1,
-        } as ViewStyle,
-        headerAlertBtnOn: {
-          borderColor: "rgba(78, 70, 229, 0.36)",
-          backgroundColor: "rgba(78, 70, 229, 0.14)",
-        } as ViewStyle,
-        headerAlertBtnOff: {
-          borderColor: "#D5DCE6",
+          paddingHorizontal: 16,
+          borderWidth: 1.5,
           backgroundColor: "#FFFFFF",
         } as ViewStyle,
-        headerAlertText: { fontSize: 10, fontWeight: "900" } as TextStyle,
-        headerAlertTextOn: { color: "#4E46E5" } as TextStyle,
-        headerAlertTextOff: { color: "#64748B" } as TextStyle,
+        settingActionButtonOn: {
+          backgroundColor: "#EEF2FF",
+          borderColor: "#4E46E5",
+        } as ViewStyle,
+        settingActionButtonOff: {
+          backgroundColor: "#FFFFFF",
+          borderColor: "#CBD5E1",
+        } as ViewStyle,
+        settingActionButtonDisabled: {
+          opacity: 0.6,
+        } as ViewStyle,
+        settingActionText: { fontSize: 14, fontWeight: "900" } as TextStyle,
+        settingActionTextOn: { color: "#4338CA" } as TextStyle,
+        settingActionTextOff: { color: "#64748B" } as TextStyle,
         logoutWrap: { marginTop: 22, paddingVertical: 8 } as ViewStyle,
         logoutText: { textAlign: "center", fontSize: 16, fontWeight: "900", color: "#E14B42" } as TextStyle,
         versionText: { marginTop: 8, textAlign: "center", fontSize: 13, fontWeight: "700", color: "#A0ABBB" } as TextStyle,
@@ -270,26 +379,7 @@ export default function DriverMyPageScreen() {
 
   return (
     <View style={s.page}>
-      <ShipperScreenHeader
-        title="내 정보"
-        hideBackButton
-        right={
-          <Pressable
-            onPress={() => setReceiveOrderAlarm((prev) => !prev)}
-            style={[s.headerAlertBtn, receiveOrderAlarm ? s.headerAlertBtnOn : s.headerAlertBtnOff]}
-            hitSlop={8}
-          >
-            <Ionicons
-              name={receiveOrderAlarm ? "notifications" : "notifications-off-outline"}
-              size={12}
-              color={receiveOrderAlarm ? "#4E46E5" : "#64748B"}
-            />
-            <Text style={[s.headerAlertText, receiveOrderAlarm ? s.headerAlertTextOn : s.headerAlertTextOff]}>
-              {receiveOrderAlarm ? "ON" : "OFF"}
-            </Text>
-          </Pressable>
-        }
-      />
+      <ShipperScreenHeader title="내 정보" hideBackButton />
       <ScrollView contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
         <Pressable style={s.profileCard} onPress={() => router.push("/(common)/settings/profile" as any)}>
           <View style={s.profileAvatar}>
@@ -314,6 +404,72 @@ export default function DriverMyPageScreen() {
             <Ionicons name="chevron-forward" size={20} color="#7C8797" />
           </View>
         </Pressable>
+
+        <Text style={s.sectionTitle}>배차 설정</Text>
+        <View style={s.sectionCard}>
+          <View style={s.settingRow}>
+            <View style={s.iconWrap}>
+              <Ionicons
+                name={receiveOrderAlarm ? "notifications" : "notifications-off-outline"}
+                size={22}
+                color="#4E46E5"
+              />
+            </View>
+            <View style={s.settingLabelWrap}>
+              <Text style={s.settingLabel}>배차 알림</Text>
+              <Text style={s.settingSub}>새 배차 요청 알림 수신</Text>
+            </View>
+            <View style={s.settingActionWrap}>
+              <Pressable
+                onPress={() => setReceiveOrderAlarm((prev) => !prev)}
+                style={[
+                  s.settingActionButton,
+                  receiveOrderAlarm ? s.settingActionButtonOn : s.settingActionButtonOff,
+                ]}
+                hitSlop={8}
+              >
+                <Text
+                  style={[
+                    s.settingActionText,
+                    receiveOrderAlarm ? s.settingActionTextOn : s.settingActionTextOff,
+                  ]}
+                >
+                  {receiveOrderAlarm ? "ON" : "OFF"}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+          <View style={s.divider} />
+          <View style={s.settingRow}>
+            <View style={s.iconWrap}>
+              <Ionicons name="flash-outline" size={22} color="#DC2626" />
+            </View>
+            <View style={s.settingLabelWrap}>
+              <Text style={s.settingLabel}>직접 배차</Text>
+              <Text style={s.settingSub}>관리자 우선 배정 사용</Text>
+            </View>
+            <View style={s.settingActionWrap}>
+              <Pressable
+                onPress={() => void onToggleInstantDispatch()}
+                disabled={updatingInstantDispatch}
+                style={[
+                  s.settingActionButton,
+                  instantDispatchEnabled ? s.settingActionButtonOn : s.settingActionButtonOff,
+                  updatingInstantDispatch && s.settingActionButtonDisabled,
+                ]}
+              >
+                <Text
+                  style={[
+                    s.settingActionText,
+                    instantDispatchEnabled ? s.settingActionTextOn : s.settingActionTextOff,
+                  ]}
+                >
+                  {updatingInstantDispatch ? "저장중" : instantDispatchEnabled ? "ON" : "OFF"}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
 
         <Text style={s.sectionTitle}>운행 관리</Text>
         <View style={s.sectionCard}>
@@ -353,6 +509,22 @@ export default function DriverMyPageScreen() {
             <Text style={s.rowLabel}>서류 관리 (사업자/자격증)</Text>
             <Ionicons name="chevron-forward" size={20} color="#9BA7B7" />
           </Pressable>
+          <View style={s.divider} />
+          <View style={s.row}>
+            <View style={s.iconWrap}>
+              <Ionicons name="shield-outline" size={20} color="#E37A34" />
+            </View>
+            <Text style={s.rowLabel}>관리자 강제배차 차단</Text>
+            <View style={s.toggleValueWrap}>
+              <Switch
+                value={adminForceAllocateBlocked}
+                onValueChange={onToggleAdminForceAllocateBlocked}
+                disabled={savingAdminForceAllocateBlocked}
+                trackColor={{ false: "#D5DCE6", true: "rgba(78, 70, 229, 0.36)" }}
+                thumbColor={adminForceAllocateBlocked ? "#4E46E5" : "#FFFFFF"}
+              />
+            </View>
+          </View>
         </View>
 
         <Text style={s.sectionTitle}>고객 지원</Text>

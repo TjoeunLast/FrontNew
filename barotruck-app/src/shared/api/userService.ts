@@ -9,6 +9,29 @@ import {
 } from "../models/user";
 import apiClient from "./apiClient";
 
+function toFiniteNumber(value: unknown): number | undefined {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+export function buildDriverProfilePayload(data: DriverInfo): DriverInfo & Record<string, unknown> {
+  const address = String(data.address ?? "").trim() || undefined;
+  const lat = toFiniteNumber(data.lat);
+  const lng = toFiniteNumber(data.lng);
+
+  return {
+    ...data,
+    address,
+    lat,
+    lng,
+    latitude: lat,
+    longitude: lng,
+    activityAddress: address,
+    activityLat: lat,
+    activityLng: lng,
+  };
+}
+
 type MockSession = {
   userId?: number;
   email?: string;
@@ -58,7 +81,7 @@ export const UserService = {
    */
   saveDriverProfile: async (data: DriverInfo): Promise<string> => {
     if (USE_MOCK) return `목업 차주 프로필 저장 완료: ${data.carNum}`;
-    const res = await apiClient.post("/api/v1/drivers/me", data);
+    const res = await apiClient.post("/api/v1/drivers/me", buildDriverProfilePayload(data));
     return res.data;
   },
 
@@ -89,6 +112,41 @@ export const UserService = {
     console.log("🌐 [UserService] 서버로 FCM 토큰 전송 시도:", token);
     // .patch 대신 .post 사용
     await apiClient.post("/api/user/fcm-token", { fcmToken: token });
+  },
+
+  updateAdminForceAllocateBlocked: async (blocked: boolean): Promise<void> => {
+    await apiClient.post("/api/user/admin-force-allocate-blocked", { blocked });
+  },
+
+  updateInstantDispatchEnabled: async (enabled: boolean): Promise<void> => {
+    const candidates = [
+      { url: "/api/v1/drivers/me/instant-dispatch", payload: { enabled } },
+      { url: "/api/v1/drivers/me/instant-dispatch", payload: { instantDispatchEnabled: enabled } },
+      { url: "/api/v1/drivers/me/direct-dispatch", payload: { enabled } },
+      { url: "/api/v1/drivers/me/direct-dispatch", payload: { instantDispatchEnabled: enabled } },
+      { url: "/api/v1/drivers/me/quick-dispatch", payload: { enabled } },
+      { url: "/api/v1/drivers/me/quick-dispatch", payload: { quickDispatchEnabled: enabled } },
+      { url: "/api/v1/drivers/me/admin-dispatch", payload: { enabled } },
+      { url: "/api/v1/drivers/me/admin-dispatch", payload: { adminDispatchEnabled: enabled } },
+      { url: "/api/v1/drivers/me/auto-assign", payload: { enabled } },
+      { url: "/api/v1/drivers/me/auto-assign", payload: { autoAssignEnabled: enabled } },
+    ] as const;
+
+    let lastError: unknown;
+    for (const candidate of candidates) {
+      try {
+        await apiClient.post(candidate.url, candidate.payload);
+        return;
+      } catch (error: any) {
+        const status = error?.response?.status;
+        if (status && status !== 404 && status !== 405) {
+          throw error;
+        }
+        lastError = error;
+      }
+    }
+
+    throw lastError ?? new Error("Failed to update instant dispatch setting");
   },
 
   /** * 5. 비밀번호 변경 (POST /api/user/change-password) */

@@ -206,7 +206,6 @@ export default function SignupShipperScreen() {
         name: params.name,
         nickname: nickname.trim(),
         role: "SHIPPER",
-        level: 0,
         shipperType: shipperType === "business" ? "Y" : "N",
         gender: params.gender,
         birthDate: String(params.birthDate ?? "").trim() || undefined,

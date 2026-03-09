@@ -21,12 +21,10 @@ import {
 } from "@/features/shipper/create-order/model/createOrderDraft";
 import { AddressApi } from "@/shared/api/addressService";
 import { RouteApi } from "@/shared/api/routeService";
-import { UserService } from "@/shared/api/userService";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import { Button } from "@/shared/ui/base/Button";
 import { Card } from "@/shared/ui/base/Card";
 import ShipperScreenHeader from "@/shared/ui/layout/ShipperScreenHeader";
-import { getCurrentUserSnapshot } from "@/shared/utils/currentUserStorage";
 
 // 기존 import들 사이에 추가!
 import AddressSearch from "@/shared/utils/AddressSearch";
@@ -62,14 +60,135 @@ import {
 } from "./createOrderStep1.types";
 import {
   addDays,
-  calcLevelFee,
-  calcTossFee,
-  getLevelFeeRate,
   isSameDay,
   parseWonInput,
   toKoreanDateText,
   won,
 } from "./createOrderStep1.utils";
+
+function parseOptionTonnage(option: Option) {
+  const normalizedValue = option.value.replace(/_/g, ".");
+  const parsedValue = Number.parseFloat(normalizedValue);
+  if (Number.isFinite(parsedValue)) return parsedValue;
+
+  const match = option.label.match(/[0-9]+(\.[0-9]+)?/);
+  if (match) return Number.parseFloat(match[0]);
+
+  return 0;
+}
+
+function sanitizeWeightTonInput(value: string) {
+  const sanitized = value.replace(/[^0-9.]/g, "");
+  const [integerPart = "", ...decimalParts] = sanitized.split(".");
+  if (!decimalParts.length) return integerPart;
+  return `${integerPart}.${decimalParts.join("")}`;
+}
+
+const HHMM_REGEX = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
+function startOfDay(date: Date) {
+  const next = new Date(date);
+  next.setHours(0, 0, 0, 0);
+  return next;
+}
+
+function roundUpToNextMinute(date: Date) {
+  const next = new Date(date);
+  if (next.getSeconds() > 0 || next.getMilliseconds() > 0) {
+    next.setMinutes(next.getMinutes() + 1);
+  }
+  next.setSeconds(0, 0);
+  return next;
+}
+
+function isValidHHmm(v: string) {
+  return HHMM_REGEX.test(v.trim());
+}
+
+function formatHHmm(d: Date) {
+  return `${String(d.getHours()).padStart(2, "0")}:${String(
+    d.getMinutes(),
+  ).padStart(2, "0")}`;
+}
+
+function hhmmToDate(hhmm: string) {
+  const d = new Date();
+  const m = hhmm.match(HHMM_REGEX);
+  if (m) {
+    d.setHours(Number(m[1]), Number(m[2]), 0, 0);
+  }
+  return d;
+}
+
+function isPastLoadDate(date: Date, now = new Date()) {
+  return startOfDay(date).getTime() < startOfDay(now).getTime();
+}
+
+function clampLoadDateToToday(date: Date, now = new Date()) {
+  return isPastLoadDate(date, now) ? now : date;
+}
+
+function getMinimumAllowedDateTime(baseDate: Date, now = new Date()) {
+  return isSameDay(baseDate, now) ? roundUpToNextMinute(now) : null;
+}
+
+function toScheduledDateTime(baseDate: Date, hhmm: string) {
+  const match = hhmm.trim().match(HHMM_REGEX);
+  if (!match) return null;
+
+  const next = new Date(baseDate);
+  next.setHours(Number(match[1]), Number(match[2]), 0, 0);
+  return next;
+}
+
+function isPastDateTime(baseDate: Date, hhmm: string, now = new Date()) {
+  const scheduled = toScheduledDateTime(baseDate, hhmm);
+  if (!scheduled) return false;
+
+  const minAllowed = getMinimumAllowedDateTime(baseDate, now);
+  return minAllowed ? scheduled.getTime() < minAllowed.getTime() : false;
+}
+
+function getDefaultTimeForDate(baseDate: Date, fallbackHHmm: string) {
+  const minAllowed = getMinimumAllowedDateTime(baseDate);
+  return minAllowed ? formatHHmm(minAllowed) : fallbackHHmm;
+}
+
+function getSafeTimeText(
+  baseDate: Date,
+  rawHHmm: string | undefined,
+  fallbackHHmm: string,
+) {
+  const trimmed = rawHHmm?.trim() ?? "";
+  if (isValidHHmm(trimmed) && !isPastDateTime(baseDate, trimmed)) {
+    return trimmed;
+  }
+  return getDefaultTimeForDate(baseDate, fallbackHHmm);
+}
+
+function getSafeOptionalTimeText(baseDate: Date, rawHHmm: string | undefined) {
+  const trimmed = rawHHmm?.trim() ?? "";
+  if (isValidHHmm(trimmed) && !isPastDateTime(baseDate, trimmed)) {
+    return trimmed;
+  }
+  return "";
+}
+
+function getTimePickerValue(
+  baseDate: Date,
+  rawHHmm: string | undefined,
+  fallbackHHmm: string,
+) {
+  const trimmed = rawHHmm?.trim() ?? "";
+  if (isValidHHmm(trimmed) && !isPastDateTime(baseDate, trimmed)) {
+    return hhmmToDate(trimmed);
+  }
+
+  const minAllowed = getMinimumAllowedDateTime(baseDate);
+  if (minAllowed) return minAllowed;
+
+  return hhmmToDate(fallbackHHmm);
+}
 
 export function ShipperCreateOrderStep1Screen() {
   const t = useAppTheme();
@@ -77,6 +196,9 @@ export function ShipperCreateOrderStep1Screen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const initialDraft = getCreateOrderDraft();
+  const initialLoadDate = initialDraft?.loadDateISO
+    ? clampLoadDateToToday(new Date(initialDraft.loadDateISO))
+    : new Date();
   const normalizeLoadDay = (v?: string): LoadDayType => {
     if (v === "당상(오늘)" || v === "당상") return "당상";
     if (v === "익상(내일)" || v === "익상") return "익상";
@@ -95,9 +217,6 @@ export function ShipperCreateOrderStep1Screen() {
   const [startAddrDetail, setStartAddrDetail] = useState(
     initialDraft?.startAddrDetail ?? "",
   );
-  const [startContact, setStartContact] = useState(
-    initialDraft?.startContact ?? "",
-  );
   const [startSearch, setStartSearch] = useState(
     initialDraft?.startSelected ?? "",
   );
@@ -105,11 +224,11 @@ export function ShipperCreateOrderStep1Screen() {
     normalizeLoadDay(initialDraft?.loadDay),
   );
   const [loadDate, setLoadDate] = useState(
-    initialDraft?.loadDateISO ? new Date(initialDraft.loadDateISO) : new Date(),
+    initialLoadDate,
   );
   const [loadDatePickerOpen, setLoadDatePickerOpen] = useState(false);
   const [startTimeHHmm, setStartTimeHHmm] = useState(
-    initialDraft?.startTimeHHmm ?? "09:00",
+    getSafeTimeText(initialLoadDate, initialDraft?.startTimeHHmm, "09:00"),
   );
   const [startTimePickerOpen, setStartTimePickerOpen] = useState(false);
   const [endAddr, setEndAddr] = useState(initialDraft?.endAddr ?? "");
@@ -122,13 +241,11 @@ export function ShipperCreateOrderStep1Screen() {
   const [endAddrDetail, setEndAddrDetail] = useState(
     initialDraft?.endAddrDetail ?? "",
   );
-  const [endContact, setEndContact] = useState(initialDraft?.endContact ?? "");
   const [endTimeHHmm, setEndTimeHHmm] = useState(
-    initialDraft?.endTimeHHmm ?? "",
+    getSafeOptionalTimeText(initialLoadDate, initialDraft?.endTimeHHmm),
   );
   const [lastEndTimeHHmm, setLastEndTimeHHmm] = useState(() => {
-    const initial = (initialDraft?.endTimeHHmm ?? "").trim();
-    return /^([01]\d|2[0-3]):([0-5]\d)$/.test(initial) ? initial : "18:00";
+    return getSafeTimeText(initialLoadDate, initialDraft?.endTimeHHmm, "18:00");
   });
   const [endTimePickerOpen, setEndTimePickerOpen] = useState(false);
   const [arriveType, setArriveType] = useState<ArriveType>(
@@ -183,7 +300,6 @@ export function ShipperCreateOrderStep1Screen() {
   const [estimatedDurationMin, setEstimatedDurationMin] = useState<
     number | undefined
   >(initialDraft?.estimatedDurationMin);
-  const [userLevel, setUserLevel] = useState<number>(initialDraft?.userLevel ?? 0);
   const aiFare = useMemo(
     () => getRecommendedFareByDistance(distanceKm),
     [distanceKm],
@@ -203,38 +319,35 @@ export function ShipperCreateOrderStep1Screen() {
     [appliedBaseFare, tripType],
   );
 
-  React.useEffect(() => {
-    let active = true;
+  const fee = useMemo(() => {
+    if (pay === "card") return Math.round(appliedFare * 0.1);
+    return 0;
+  }, [appliedFare, pay]);
 
-    void (async () => {
-      try {
-        const snapshot = await getCurrentUserSnapshot();
-        const snapshotLevel = Number(snapshot?.level);
-        if (Number.isFinite(snapshotLevel)) {
-          if (active) setUserLevel(snapshotLevel);
-          return;
-        }
-
-        const me = (await UserService.getMyInfo()) as any;
-        const nextLevel = Number(me?.level ?? me?.user_level);
-        if (active && Number.isFinite(nextLevel)) {
-          setUserLevel(nextLevel);
-        }
-      } catch {
-        // ignore level fetch failure and keep default preview rate
-      }
-    })();
-
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  const tossFee = useMemo(() => calcTossFee(appliedFare, pay), [appliedFare, pay]);
-  const levelFee = useMemo(() => calcLevelFee(appliedFare, pay, userLevel), [appliedFare, pay, userLevel]);
-  const levelFeeRate = useMemo(() => getLevelFeeRate(userLevel), [userLevel]);
-  const totalFee = useMemo(() => tossFee + levelFee, [tossFee, levelFee]);
-  const totalPay = useMemo(() => appliedFare + totalFee, [appliedFare, totalFee]);
+  const totalPay = useMemo(() => appliedFare + fee, [appliedFare, fee]);
+  const vehicleTonnage = useMemo(() => parseOptionTonnage(ton), [ton]);
+  const startTimePickerValue = useMemo(
+    () => getTimePickerValue(loadDate, startTimeHHmm, "09:00"),
+    [loadDate, startTimeHHmm],
+  );
+  const endTimePickerValue = useMemo(
+    () => getTimePickerValue(loadDate, endTimeHHmm || lastEndTimeHHmm, "18:00"),
+    [endTimeHHmm, lastEndTimeHHmm, loadDate],
+  );
+  const trimmedWeightTon = weightTon.trim();
+  const parsedWeightTon = Number.parseFloat(trimmedWeightTon);
+  const hasWeightTonInput = trimmedWeightTon.length > 0;
+  const weightTonError = useMemo(() => {
+    if (!hasWeightTonInput) return "";
+    if (!Number.isFinite(parsedWeightTon) || parsedWeightTon <= 0) {
+      return "중량은 0보다 큰 숫자만 입력할 수 있습니다.";
+    }
+    if (parsedWeightTon >= vehicleTonnage) {
+      return `차량 톤수(${ton.label})보다 가벼운 중량만 입력하세요.`;
+    }
+    return "";
+  }, [hasWeightTonInput, parsedWeightTon, ton.label, vehicleTonnage]);
+  const hasWeightTonError = weightTonError.length > 0;
 
   const fetchAddressSuggestions = React.useCallback(
     async (
@@ -357,6 +470,26 @@ export function ShipperCreateOrderStep1Screen() {
     };
   }, [endAddr, fetchAddressSuggestions]);
 
+  React.useEffect(() => {
+    if (isPastLoadDate(loadDate)) {
+      setLoadDate(new Date());
+      setLoadDay("당상");
+      return;
+    }
+
+    const minAllowed = getMinimumAllowedDateTime(loadDate);
+    if (!minAllowed) return;
+
+    const minHHmm = formatHHmm(minAllowed);
+    if (isPastDateTime(loadDate, startTimeHHmm)) {
+      setStartTimeHHmm(minHHmm);
+    }
+    if (endTimeHHmm.trim() && isPastDateTime(loadDate, endTimeHHmm)) {
+      setEndTimeHHmm(minHHmm);
+      setLastEndTimeHHmm(minHHmm);
+    }
+  }, [endTimeHHmm, loadDate, startTimeHHmm]);
+
   const onPressStartSearch = () => {
     void fetchAddressSuggestions(startSearch, setStartAddrSuggestions, 1);
   };
@@ -379,21 +512,12 @@ export function ShipperCreateOrderStep1Screen() {
     setAppliedBaseFare(aiFare);
   };
 
-  const isValidHHmm = (v: string) =>
-    /^([01]\d|2[0-3]):([0-5]\d)$/.test(v.trim());
-  const formatHHmm = (d: Date) =>
-    `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-  const hhmmToDate = (hhmm: string) => {
-    const d = new Date();
-    const m = hhmm.match(/^([01]\d|2[0-3]):([0-5]\d)$/);
-    if (m) {
-      d.setHours(Number(m[1]), Number(m[2]), 0, 0);
-    }
-    return d;
-  };
-
   const submit = () => {
     const resolvedStartAddr = (startSelected || startSearch).trim();
+    if (isPastLoadDate(loadDate)) {
+      Alert.alert("확인", "지난 날짜는 선택할 수 없습니다.");
+      return;
+    }
     if (!resolvedStartAddr) {
       Alert.alert("필수", "상차지 주소를 입력해주세요.");
       return;
@@ -402,12 +526,12 @@ export function ShipperCreateOrderStep1Screen() {
       Alert.alert("필수", "상차지 상세 주소를 입력해주세요.");
       return;
     }
-    if (!startContact.trim()) {
-      Alert.alert("필수", "상차지 연락처를 입력해주세요.");
-      return;
-    }
     if (!isValidHHmm(startTimeHHmm)) {
       Alert.alert("필수", "상차 시간을 HH:MM 형식으로 입력해주세요.");
+      return;
+    }
+    if (isPastDateTime(loadDate, startTimeHHmm)) {
+      Alert.alert("확인", "지난 상차 시간은 선택할 수 없습니다.");
       return;
     }
     if (!endAddr.trim()) {
@@ -418,12 +542,12 @@ export function ShipperCreateOrderStep1Screen() {
       Alert.alert("필수", "하차지 상세 주소를 입력해주세요.");
       return;
     }
-    if (!endContact.trim()) {
-      Alert.alert("필수", "하차지 연락처를 입력해주세요.");
-      return;
-    }
     if (endTimeHHmm.trim() && !isValidHHmm(endTimeHHmm)) {
       Alert.alert("확인", "하차 시간은 HH:MM 형식으로 입력해주세요.");
+      return;
+    }
+    if (endTimeHHmm.trim() && isPastDateTime(loadDate, endTimeHHmm)) {
+      Alert.alert("확인", "지난 하차 시간은 선택할 수 없습니다.");
       return;
     }
     if (!cargoDetail.trim()) {
@@ -434,9 +558,15 @@ export function ShipperCreateOrderStep1Screen() {
       Alert.alert("필수", "중량(톤)을 입력해주세요.");
       return;
     }
-    const parsedWeightTon = Number.parseFloat(weightTon.trim());
     if (!Number.isFinite(parsedWeightTon) || parsedWeightTon <= 0) {
       Alert.alert("필수", "중량(톤)은 0보다 큰 숫자로 입력해주세요.");
+      return;
+    }
+    if (parsedWeightTon >= vehicleTonnage) {
+      Alert.alert(
+        "중량 확인",
+        `차량 톤수(${ton.label})보다 가벼운 중량만 입력하세요.`,
+      );
       return;
     }
     if (appliedFare <= 0) {
@@ -450,7 +580,6 @@ export function ShipperCreateOrderStep1Screen() {
       startLat,
       startLng,
       startAddrDetail: startAddrDetail.trim(),
-      startContact: startContact.trim(),
       loadDay,
       loadDateISO: loadDate.toISOString(),
       startTimeHHmm: startTimeHHmm.trim(),
@@ -458,7 +587,6 @@ export function ShipperCreateOrderStep1Screen() {
       endLat,
       endLng,
       endAddrDetail: endAddrDetail.trim(),
-      endContact: endContact.trim(),
       endTimeHHmm: endTimeHHmm.trim(),
       arriveType,
       carType,
@@ -470,7 +598,6 @@ export function ShipperCreateOrderStep1Screen() {
       dispatch,
       tripType,
       pay,
-      userLevel,
       distanceKm,
       estimatedDurationMin,
       appliedFare,
@@ -501,6 +628,13 @@ export function ShipperCreateOrderStep1Screen() {
     if (Platform.OS === "android") setLoadDatePickerOpen(false);
     if (event.type === "dismissed" || !picked) return;
 
+    if (isPastLoadDate(picked)) {
+      Alert.alert("확인", "지난 날짜는 선택할 수 없습니다.");
+      setLoadDate(new Date());
+      setLoadDay("당상");
+      return;
+    }
+
     const today = new Date();
     const tomorrow = addDays(today, 1);
 
@@ -514,18 +648,25 @@ export function ShipperCreateOrderStep1Screen() {
   const onChangeStartTime = (event: DateTimePickerEvent, picked?: Date) => {
     if (Platform.OS === "android") setStartTimePickerOpen(false);
     if (event.type === "dismissed" || !picked) return;
-    setStartTimeHHmm(formatHHmm(picked));
+    const next = formatHHmm(picked);
+    if (isPastDateTime(loadDate, next)) {
+      Alert.alert("확인", "지난 상차 시간은 선택할 수 없습니다.");
+      return;
+    }
+    setStartTimeHHmm(next);
   };
 
   const onChangeEndTime = (event: DateTimePickerEvent, picked?: Date) => {
     if (Platform.OS === "android") setEndTimePickerOpen(false);
     if (event.type === "dismissed" || !picked) return;
     const next = formatHHmm(picked);
+    if (isPastDateTime(loadDate, next)) {
+      Alert.alert("확인", "지난 하차 시간은 선택할 수 없습니다.");
+      return;
+    }
     setEndTimeHHmm(next);
     setLastEndTimeHHmm(next);
   };
-
-  const digitsOnly = (v: string) => v.replace(/[^0-9]/g, "");
 
   return (
     <View style={[s.page, { backgroundColor: c.bg.canvas }]}>
@@ -597,31 +738,6 @@ export function ShipperCreateOrderStep1Screen() {
                       />
                     </View>
                   </View>
-
-                  <View style={{ marginTop: 10 }}>
-                    <Text style={[s.fieldLabel, { color: c.text.primary }]}>
-                      연락처
-                    </Text>
-                    <View
-                      style={[
-                        s.inputWrap,
-                        {
-                          backgroundColor: c.bg.surface,
-                          borderColor: c.border.default,
-                        },
-                      ]}
-                    >
-                      <TextInput
-                        value={startContact}
-                        onChangeText={(v) => setStartContact(digitsOnly(v))}
-                        placeholder="예: 01012345678"
-                        keyboardType="phone-pad"
-                        placeholderTextColor={c.text.secondary}
-                        style={[s.input, { color: c.text.primary }]}
-                      />
-                    </View>
-                  </View>
-
                   <View style={{ marginTop: 10 }}>
                     <Text style={[s.fieldLabel, { color: c.text.primary }]}>
                       상차 시간
@@ -651,7 +767,7 @@ export function ShipperCreateOrderStep1Screen() {
                     {startTimePickerOpen ? (
                       <View style={{ marginTop: 8 }}>
                         <DateTimePicker
-                          value={hhmmToDate(startTimeHHmm)}
+                          value={startTimePickerValue}
                           mode="time"
                           display={
                             Platform.OS === "ios" ? "spinner" : "default"
@@ -708,6 +824,7 @@ export function ShipperCreateOrderStep1Screen() {
                     value={loadDate}
                     mode="date"
                     display={Platform.OS === "ios" ? "spinner" : "default"}
+                    minimumDate={startOfDay(new Date())}
                     onChange={onChangeLoadDate}
                   />
                 </View>
@@ -760,31 +877,6 @@ export function ShipperCreateOrderStep1Screen() {
                       />
                     </View>
                   </View>
-
-                  <View style={{ marginTop: 10 }}>
-                    <Text style={[s.fieldLabel, { color: c.text.primary }]}>
-                      연락처
-                    </Text>
-                    <View
-                      style={[
-                        s.inputWrap,
-                        {
-                          backgroundColor: c.bg.surface,
-                          borderColor: c.border.default,
-                        },
-                      ]}
-                    >
-                      <TextInput
-                        value={endContact}
-                        onChangeText={(v) => setEndContact(digitsOnly(v))}
-                        placeholder="예: 01012345678"
-                        keyboardType="phone-pad"
-                        placeholderTextColor={c.text.secondary}
-                        style={[s.input, { color: c.text.primary }]}
-                      />
-                    </View>
-                  </View>
-
                   <View style={{ marginTop: 10 }}>
                     <View
                       style={{
@@ -871,7 +963,7 @@ export function ShipperCreateOrderStep1Screen() {
                     {endTimePickerOpen ? (
                       <View style={{ marginTop: 8 }}>
                         <DateTimePicker
-                          value={hhmmToDate(endTimeHHmm)}
+                          value={endTimePickerValue}
                           mode="time"
                           display={
                             Platform.OS === "ios" ? "spinner" : "default"
@@ -971,19 +1063,28 @@ export function ShipperCreateOrderStep1Screen() {
                   s.inputWrap,
                   {
                     backgroundColor: c.bg.surface,
-                    borderColor: c.border.default,
+                    borderColor: hasWeightTonError
+                      ? c.status.danger
+                      : c.border.default,
                   },
                 ]}
               >
                 <TextInput
                   value={weightTon}
-                  onChangeText={setWeightTon}
+                  onChangeText={(next) =>
+                    setWeightTon(sanitizeWeightTonInput(next))
+                  }
                   placeholder="0"
                   keyboardType="numeric"
                   placeholderTextColor={c.text.secondary}
                   style={[s.input, { color: c.text.primary }]}
                 />
               </View>
+              {hasWeightTonError ? (
+                <Text style={[s.errorText, { color: c.status.danger }]}>
+                  {weightTonError}
+                </Text>
+              ) : null}
             </View>
           </View>
         </Card>
@@ -1180,7 +1281,7 @@ export function ShipperCreateOrderStep1Screen() {
             >
               {pay === "card"
                 ? "토스 결제 선택 시 수수료 10%가 추가됩니다."
-                : `착불 결제 시 레벨 수수료 ${Math.round(levelFeeRate * 100)}%가 추가됩니다.`}
+                : "선택한 결제 방식은 별도 수수료가 없습니다."}
             </Text>
           </View>
 
@@ -1193,22 +1294,12 @@ export function ShipperCreateOrderStep1Screen() {
                 {won(appliedFare)}
               </Text>
             </View>
-            {pay === "card" ? (
-              <View style={s.feeRow}>
-                <Text style={[s.feeLabel, { color: c.text.secondary }]}>
-                  수수료 (토스 10%)
-                </Text>
-                <Text style={[s.feeValue, { color: c.text.primary }]}>
-                  + {won(tossFee)}
-                </Text>
-              </View>
-            ) : null}
             <View style={s.feeRow}>
               <Text style={[s.feeLabel, { color: c.text.secondary }]}>
-                레벨 수수료 ({Math.round(levelFeeRate * 100)}%)
+                수수료 (토스 10%)
               </Text>
               <Text style={[s.feeValue, { color: c.text.primary }]}>
-                + {won(levelFee)}
+                + {won(fee)}
               </Text>
             </View>
             <View style={[s.hr, { backgroundColor: c.border.default }]} />
@@ -1278,12 +1369,17 @@ export function ShipperCreateOrderStep1Screen() {
               희망 운임 {won(appliedFare)}
             </Text>
             <Text style={[s.stickySub, { color: c.text.secondary }]}>
-              수수료 +{won(totalFee)}
+              {pay === "card" ? `수수료 +${won(fee)}` : "수수료 0원"}
             </Text>
           </View>
         </View>
 
-        <Button title="다음" onPress={submit} fullWidth />
+        <Button
+          title="다음"
+          onPress={submit}
+          fullWidth
+          disabled={hasWeightTonError}
+        />
       </View>
     </View>
   );

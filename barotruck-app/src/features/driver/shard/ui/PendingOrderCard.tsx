@@ -4,10 +4,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { Badge } from "@/shared/ui/feedback/Badge";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import {
-  isDeferredPayment,
-  toPaymentMethodLabel,
-} from "@/features/common/payment/lib/paymentMethods";
 
 export const PendingOrderCard = ({
   order,
@@ -135,8 +131,8 @@ export const PendingOrderCard = ({
             </Text>
           </View>
           <Badge
-            label={toPaymentMethodLabel(payMethod)}
-            tone={isDeferredPayment(payMethod) ? "payPrepaid" : "payDeferred"}
+            label={payMethod}
+            tone={payMethod?.includes("선착불") ? "payPrepaid" : "payDeferred"}
             style={{ marginTop: 4, alignSelf: "flex-end" }}
           />
         </View>

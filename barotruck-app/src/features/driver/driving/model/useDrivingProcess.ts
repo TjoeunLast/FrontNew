@@ -5,8 +5,14 @@ import { OrderService } from "@/shared/api/orderService";
 export const useDrivingProcess = (onRefresh?: () => void) => {
   // 인수증
   const [modalOpen, setModalOpen] = useState(false);
+  const [receiptOrderId, setReceiptOrderId] = useState<number | null>(null);
   // 서버 응답 시 중복 클릭 방지
   const [isLoading, setIsLoading] = useState(false);
+
+  const closeReceiptModal = () => {
+    setModalOpen(false);
+    setReceiptOrderId(null);
+  };
 
   // 오더 상태 업데이트
   const handleUpdateStatus = async (orderId: number, nextStatus: string) => {
@@ -34,6 +40,7 @@ export const useDrivingProcess = (onRefresh?: () => void) => {
       }
 
       if (nextStatus === "COMPLETED") {
+        setReceiptOrderId(orderId);
         setModalOpen(true); // 하차 완료 시 인수증 모달 오픈
       }
 
@@ -116,6 +123,9 @@ export const useDrivingProcess = (onRefresh?: () => void) => {
   return {
     modalOpen,
     setModalOpen,
+    receiptOrderId,
+    setReceiptOrderId,
+    closeReceiptModal,
     isLoading,
     handleUpdateStatus,
     handleCancelOrder,

@@ -12,6 +12,7 @@ export interface UserProfile {
   ratingAvg: number;
   gender?: string;
   age?: number;
+  adminForceAllocateBlocked?: boolean;
   DriverInfo?: DriverInfo; // 차주 상세 정보 (차주인 경우)
   ShipperInfo?: ShipperInfo; // 화주 상세 정보 (화주인 경우)
 }

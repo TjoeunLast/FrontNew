@@ -1,6 +1,5 @@
 import { ImageInfo } from "./ImageInfo";
-import type { SettlementStatus } from "./Settlement";
-import type { OrderPaymentSummary } from "./payment";
+import type { SettlementStatus as PaymentSettlementStatus } from "./Settlement";
 
 // @/shared/models/order.
 
@@ -15,8 +14,6 @@ export type OrderStatus =
   | "COMPLETED" // 운송 완료
   | "CANCELLED" // 취소
   | "PENDING"; // 접수 대기
-
-export type OrderSettlementStatus = SettlementStatus;
 
 /** * 오더 생성 요청 (OrderRequest.java 대응)
  */
@@ -93,8 +90,7 @@ export interface OrderResponse {
   orderId: number;
   status: OrderStatus;
 
-  settlementStatus?: OrderSettlementStatus; // 정산 엔티티 상태
-  paymentSummary?: OrderPaymentSummary; // 실제 결제 상태는 paymentSummary에서 관리
+  settlementStatus?: "READY" | "COMPLETED"; // 정산 상태
 
   createdAt: string;
   updated?: string;
@@ -186,6 +182,9 @@ export interface AssignedDriverInfoResponse {
   email?: string;
   profileImage?: ImageInfo;
   ratingAvg?: number; // 기사 평균 별점
+  age?: number;
+  level?: number;
+  role?: string;
 
   // --- 차주 전용 상세 정보 (Driver 엔티티 대응) ---
   driverId: number;

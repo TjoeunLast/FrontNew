@@ -46,7 +46,8 @@ export default function DrivingListScreen() {
     handleStartTransport,
     handleUpdateStatus,
     modalOpen,
-    setModalOpen,
+    receiptOrderId,
+    closeReceiptModal,
   } = useDrivingProcess(refresh);
 
   // 외부 파라미터 수신 시 탭 자동 전환 로직
@@ -266,7 +267,12 @@ export default function DrivingListScreen() {
       )}
 
       {/* 모달 */}
-      <ReceiptModal visible={modalOpen} onClose={() => setModalOpen(false)} />
+      <ReceiptModal
+        visible={modalOpen}
+        orderId={receiptOrderId}
+        onClose={closeReceiptModal}
+        onSubmitted={refresh}
+      />
     </View>
   );
 }
