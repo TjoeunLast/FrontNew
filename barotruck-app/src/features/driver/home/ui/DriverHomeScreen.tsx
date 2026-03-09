@@ -6,11 +6,11 @@ import {
   View,
   Pressable,
   RefreshControl,
+  Image,
 } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
-
 import { DrOrderCard } from "@/features/driver/shard/ui/DrOrderCard";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import { useDriverHome } from "@/features/driver/home/model/useDriverHome";
@@ -124,7 +124,11 @@ export default function DriverHomeScreen() {
     <View style={[styles.container, { backgroundColor: c.bg.canvas }]}>
       {/* 헤더 */}
       <View style={[styles.header, { backgroundColor: c.bg.surface }]}>
-        <Text style={[styles.logoText, { color: c.brand.primary }]}>BARO</Text>
+        <Image
+          source={require("../../../../../assets/images/logo-text.png")}
+          style={{ width: 130, height: 20 }}
+          resizeMode="cover"
+        />
         <View style={styles.headerIcons}>
           <Pressable
             onPress={() => router.push("/(chat)")}
