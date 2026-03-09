@@ -137,6 +137,10 @@ export const Badge = memo(function Badge({
   );
 });
 
+export type SHOrderCardProps = BadgeProps;
+export const SHOrderCard = Badge;
+export default SHOrderCard;
+
 const s = StyleSheet.create({
   badge: {
     paddingHorizontal: 8,

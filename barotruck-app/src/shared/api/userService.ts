@@ -118,6 +118,37 @@ export const UserService = {
     await apiClient.post("/api/user/admin-force-allocate-blocked", { blocked });
   },
 
+  updateInstantDispatchEnabled: async (enabled: boolean): Promise<void> => {
+    const candidates = [
+      { url: "/api/v1/drivers/me/instant-dispatch", payload: { enabled } },
+      { url: "/api/v1/drivers/me/instant-dispatch", payload: { instantDispatchEnabled: enabled } },
+      { url: "/api/v1/drivers/me/direct-dispatch", payload: { enabled } },
+      { url: "/api/v1/drivers/me/direct-dispatch", payload: { instantDispatchEnabled: enabled } },
+      { url: "/api/v1/drivers/me/quick-dispatch", payload: { enabled } },
+      { url: "/api/v1/drivers/me/quick-dispatch", payload: { quickDispatchEnabled: enabled } },
+      { url: "/api/v1/drivers/me/admin-dispatch", payload: { enabled } },
+      { url: "/api/v1/drivers/me/admin-dispatch", payload: { adminDispatchEnabled: enabled } },
+      { url: "/api/v1/drivers/me/auto-assign", payload: { enabled } },
+      { url: "/api/v1/drivers/me/auto-assign", payload: { autoAssignEnabled: enabled } },
+    ] as const;
+
+    let lastError: unknown;
+    for (const candidate of candidates) {
+      try {
+        await apiClient.post(candidate.url, candidate.payload);
+        return;
+      } catch (error: any) {
+        const status = error?.response?.status;
+        if (status && status !== 404 && status !== 405) {
+          throw error;
+        }
+        lastError = error;
+      }
+    }
+
+    throw lastError ?? new Error("Failed to update instant dispatch setting");
+  },
+
   /** * 5. 비밀번호 변경 (POST /api/user/change-password) */
   changePassword: async (data: ChangePasswordRequest): Promise<string> => {
     const res = await apiClient.post("/api/user/change-password", data);
