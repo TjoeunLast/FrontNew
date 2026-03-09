@@ -10,6 +10,7 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   View,
   type ImageStyle,
@@ -74,6 +75,8 @@ export default function DriverMyPageScreen() {
 
   const [loggingOut, setLoggingOut] = React.useState(false);
   const [receiveOrderAlarm, setReceiveOrderAlarm] = React.useState(true);
+  const [adminForceAllocateBlocked, setAdminForceAllocateBlocked] = React.useState(false);
+  const [savingAdminForceAllocateBlocked, setSavingAdminForceAllocateBlocked] = React.useState(false);
   const [profile, setProfile] = React.useState<DriverProfileView>({
     nickname: "차주",
     gender: "-",
@@ -103,6 +106,7 @@ export default function DriverMyPageScreen() {
 
           if (!active) return;
           setProfileImageUrl((localImageUrl ?? "") || me?.profileImageUrl || "");
+          setAdminForceAllocateBlocked(Boolean(me?.adminForceAllocateBlocked));
           setProfile({
             nickname: toText(me?.nickname ?? cached?.nickname, "차주"),
             gender: normalizeGenderLabel(me?.gender ?? me?.sex ?? detail?.gender ?? detail?.user?.gender ?? cached?.gender),
@@ -115,6 +119,7 @@ export default function DriverMyPageScreen() {
           if (!active) return;
           setProfileImageUrl(localImageUrl ?? "");
           const cached = await getCurrentUserSnapshot();
+          setAdminForceAllocateBlocked(false);
           setProfile({
             nickname: toText(cached?.nickname, "차주"),
             gender: normalizeGenderLabel(cached?.gender),
@@ -159,6 +164,21 @@ export default function DriverMyPageScreen() {
       { text: "취소", style: "cancel" },
       { text: "로그아웃", style: "destructive", onPress: () => void doLogout() },
     ]);
+  };
+
+  const onToggleAdminForceAllocateBlocked = async (nextValue: boolean) => {
+    if (savingAdminForceAllocateBlocked) return;
+    const previousValue = adminForceAllocateBlocked;
+    setAdminForceAllocateBlocked(nextValue);
+    try {
+      setSavingAdminForceAllocateBlocked(true);
+      await UserService.updateAdminForceAllocateBlocked(nextValue);
+    } catch {
+      setAdminForceAllocateBlocked(previousValue);
+      Alert.alert("저장 실패", "강제배차 설정을 저장하지 못했습니다.");
+    } finally {
+      setSavingAdminForceAllocateBlocked(false);
+    }
   };
 
   const s = React.useMemo(
@@ -239,6 +259,7 @@ export default function DriverMyPageScreen() {
         rowLabel: { flex: 1, fontSize: 14, fontWeight: "800", color: "#111827" } as TextStyle,
         rowValue: { fontSize: 14, fontWeight: "800", color: "#65758B", marginRight: 8 } as TextStyle,
         rowValuePrimary: { color: "#4E46E5" } as TextStyle,
+        toggleValueWrap: { marginLeft: 12 } as ViewStyle,
         divider: { height: 1, marginLeft: 54, backgroundColor: "#EEF2F7" } as ViewStyle,
         headerAlertBtn: {
           width: 52,
@@ -353,6 +374,22 @@ export default function DriverMyPageScreen() {
             <Text style={s.rowLabel}>서류 관리 (사업자/자격증)</Text>
             <Ionicons name="chevron-forward" size={20} color="#9BA7B7" />
           </Pressable>
+          <View style={s.divider} />
+          <View style={s.row}>
+            <View style={s.iconWrap}>
+              <Ionicons name="shield-outline" size={20} color="#E37A34" />
+            </View>
+            <Text style={s.rowLabel}>관리자 강제배차 차단</Text>
+            <View style={s.toggleValueWrap}>
+              <Switch
+                value={adminForceAllocateBlocked}
+                onValueChange={onToggleAdminForceAllocateBlocked}
+                disabled={savingAdminForceAllocateBlocked}
+                trackColor={{ false: "#D5DCE6", true: "rgba(78, 70, 229, 0.36)" }}
+                thumbColor={adminForceAllocateBlocked ? "#4E46E5" : "#FFFFFF"}
+              />
+            </View>
+          </View>
         </View>
 
         <Text style={s.sectionTitle}>고객 지원</Text>
