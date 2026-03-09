@@ -15,7 +15,7 @@ import {
   View,
   type ImageStyle,
   type TextStyle,
-  type ViewStyle,
+  type ViewStyle
 } from "react-native";
 
 import apiClient from "@/shared/api/apiClient";
@@ -346,30 +346,7 @@ export default function DriverMyPageScreen() {
         settingLabel: { fontSize: 15, fontWeight: "900", color: "#111827" } as TextStyle,
         settingSub: { marginTop: 4, fontSize: 12, fontWeight: "700", color: "#7B8794" } as TextStyle,
         settingActionWrap: { flexDirection: "row", alignItems: "center" } as ViewStyle,
-        settingActionButton: {
-          minWidth: 88,
-          height: 40,
-          borderRadius: 999,
-          alignItems: "center",
-          justifyContent: "center",
-          paddingHorizontal: 16,
-          borderWidth: 1.5,
-          backgroundColor: "#FFFFFF",
-        } as ViewStyle,
-        settingActionButtonOn: {
-          backgroundColor: "#EEF2FF",
-          borderColor: "#4E46E5",
-        } as ViewStyle,
-        settingActionButtonOff: {
-          backgroundColor: "#FFFFFF",
-          borderColor: "#CBD5E1",
-        } as ViewStyle,
-        settingActionButtonDisabled: {
-          opacity: 0.6,
-        } as ViewStyle,
-        settingActionText: { fontSize: 14, fontWeight: "900" } as TextStyle,
-        settingActionTextOn: { color: "#4338CA" } as TextStyle,
-        settingActionTextOff: { color: "#64748B" } as TextStyle,
+        settingActionDisabled: { opacity: 0.55 } as ViewStyle,
         logoutWrap: { marginTop: 22, paddingVertical: 8 } as ViewStyle,
         logoutText: { textAlign: "center", fontSize: 16, fontWeight: "900", color: "#E14B42" } as TextStyle,
         versionText: { marginTop: 8, textAlign: "center", fontSize: 13, fontWeight: "700", color: "#A0ABBB" } as TextStyle,
@@ -420,23 +397,13 @@ export default function DriverMyPageScreen() {
               <Text style={s.settingSub}>새 배차 요청 알림 수신</Text>
             </View>
             <View style={s.settingActionWrap}>
-              <Pressable
-                onPress={() => setReceiveOrderAlarm((prev) => !prev)}
-                style={[
-                  s.settingActionButton,
-                  receiveOrderAlarm ? s.settingActionButtonOn : s.settingActionButtonOff,
-                ]}
-                hitSlop={8}
-              >
-                <Text
-                  style={[
-                    s.settingActionText,
-                    receiveOrderAlarm ? s.settingActionTextOn : s.settingActionTextOff,
-                  ]}
-                >
-                  {receiveOrderAlarm ? "ON" : "OFF"}
-                </Text>
-              </Pressable>
+              <Switch
+                value={receiveOrderAlarm}
+                onValueChange={setReceiveOrderAlarm}
+                trackColor={{ false: "#D7DEE8", true: "#C7D2FE" }}
+                thumbColor={receiveOrderAlarm ? "#4E46E5" : "#FFFFFF"}
+                ios_backgroundColor="#D7DEE8"
+              />
             </View>
           </View>
           <View style={s.divider} />
@@ -448,25 +415,15 @@ export default function DriverMyPageScreen() {
               <Text style={s.settingLabel}>직접 배차</Text>
               <Text style={s.settingSub}>관리자 우선 배정 사용</Text>
             </View>
-            <View style={s.settingActionWrap}>
-              <Pressable
-                onPress={() => void onToggleInstantDispatch()}
+            <View style={[s.settingActionWrap, updatingInstantDispatch && s.settingActionDisabled]}>
+              <Switch
+                value={instantDispatchEnabled}
+                onValueChange={() => void onToggleInstantDispatch()}
                 disabled={updatingInstantDispatch}
-                style={[
-                  s.settingActionButton,
-                  instantDispatchEnabled ? s.settingActionButtonOn : s.settingActionButtonOff,
-                  updatingInstantDispatch && s.settingActionButtonDisabled,
-                ]}
-              >
-                <Text
-                  style={[
-                    s.settingActionText,
-                    instantDispatchEnabled ? s.settingActionTextOn : s.settingActionTextOff,
-                  ]}
-                >
-                  {updatingInstantDispatch ? "저장중" : instantDispatchEnabled ? "ON" : "OFF"}
-                </Text>
-              </Pressable>
+                trackColor={{ false: "#D7DEE8", true: "#FECACA" }}
+                thumbColor={instantDispatchEnabled ? "#DC2626" : "#FFFFFF"}
+                ios_backgroundColor="#D7DEE8"
+              />
             </View>
           </View>
         </View>
@@ -509,22 +466,6 @@ export default function DriverMyPageScreen() {
             <Text style={s.rowLabel}>서류 관리 (사업자/자격증)</Text>
             <Ionicons name="chevron-forward" size={20} color="#9BA7B7" />
           </Pressable>
-          <View style={s.divider} />
-          <View style={s.row}>
-            <View style={s.iconWrap}>
-              <Ionicons name="shield-outline" size={20} color="#E37A34" />
-            </View>
-            <Text style={s.rowLabel}>관리자 강제배차 차단</Text>
-            <View style={s.toggleValueWrap}>
-              <Switch
-                value={adminForceAllocateBlocked}
-                onValueChange={onToggleAdminForceAllocateBlocked}
-                disabled={savingAdminForceAllocateBlocked}
-                trackColor={{ false: "#D5DCE6", true: "rgba(78, 70, 229, 0.36)" }}
-                thumbColor={adminForceAllocateBlocked ? "#4E46E5" : "#FFFFFF"}
-              />
-            </View>
-          </View>
         </View>
 
         <Text style={s.sectionTitle}>고객 지원</Text>
