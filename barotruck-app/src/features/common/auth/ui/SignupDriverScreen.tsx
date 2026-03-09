@@ -16,7 +16,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { AuthService } from "@/shared/api/authService";
-import { UserService } from "@/shared/api/userService";
+import { buildDriverProfilePayload, UserService } from "@/shared/api/userService";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import { RegisterRequest } from "@/shared/models/auth";
 import { Button } from "@/shared/ui/base/Button";
@@ -335,7 +335,7 @@ export default function SignupDriverScreen() {
         regflag: "Y",
         ratingAvg: 0,
         user_level: 0,
-        driver: driverProfilePayload,
+        driver: buildDriverProfilePayload(driverProfilePayload) as RegisterRequest["driver"],
       };
 
       await AuthService.register(payload);

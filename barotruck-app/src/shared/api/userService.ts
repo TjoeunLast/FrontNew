@@ -9,6 +9,29 @@ import {
 } from "../models/user";
 import apiClient from "./apiClient";
 
+function toFiniteNumber(value: unknown): number | undefined {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+export function buildDriverProfilePayload(data: DriverInfo): DriverInfo & Record<string, unknown> {
+  const address = String(data.address ?? "").trim() || undefined;
+  const lat = toFiniteNumber(data.lat);
+  const lng = toFiniteNumber(data.lng);
+
+  return {
+    ...data,
+    address,
+    lat,
+    lng,
+    latitude: lat,
+    longitude: lng,
+    activityAddress: address,
+    activityLat: lat,
+    activityLng: lng,
+  };
+}
+
 type MockSession = {
   userId?: number;
   email?: string;
@@ -58,7 +81,7 @@ export const UserService = {
    */
   saveDriverProfile: async (data: DriverInfo): Promise<string> => {
     if (USE_MOCK) return `목업 차주 프로필 저장 완료: ${data.carNum}`;
-    const res = await apiClient.post("/api/v1/drivers/me", data);
+    const res = await apiClient.post("/api/v1/drivers/me", buildDriverProfilePayload(data));
     return res.data;
   },
 
