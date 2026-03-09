@@ -32,6 +32,8 @@ import { DriverSettlementItem } from "./components/DriverSettlementItem";
 import { DisputeModal } from "./components/DisputeModal";
 import type { PaymentDisputeReason } from "@/shared/models/payment";
 
+type PaymentMethodFilter = "ALL" | "TOSS" | "DEFERRED";
+
 export default function DriverSettlementScreen() {
   const { colors: c } = useAppTheme();
   const insets = useSafeAreaInsets();
@@ -39,6 +41,8 @@ export default function DriverSettlementScreen() {
 
   // 상태 관리
   const [filter, setFilter] = useState<SettlementFilter>("ALL");
+  const [paymentFilter, setPaymentFilter] =
+    useState<PaymentMethodFilter>("ALL");
   const [viewMonth, setViewMonth] = useState<Date>(currentMonth);
   const [items, setItems] = useState<SettlementItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -91,11 +95,18 @@ export default function DriverSettlementScreen() {
     [items, viewMonth],
   );
   const filtered = useMemo(() => {
-    if (filter === "ALL") return monthItems;
+    const methodFiltered =
+      paymentFilter === "ALL"
+        ? monthItems
+        : monthItems.filter((x) =>
+            paymentFilter === "TOSS" ? x.isToss : !x.isToss,
+          );
+
+    if (filter === "ALL") return methodFiltered;
     if (filter === "PENDING")
-      return monthItems.filter((x) => x.status !== "PAID");
-    return monthItems.filter((x) => x.status === "PAID");
-  }, [filter, monthItems]);
+      return methodFiltered.filter((x) => x.status !== "PAID");
+    return methodFiltered.filter((x) => x.status === "PAID");
+  }, [filter, monthItems, paymentFilter]);
 
   const summaryTotal = useMemo(
     () => monthItems.reduce((acc, cur) => acc + cur.amount, 0),
@@ -212,6 +223,27 @@ export default function DriverSettlementScreen() {
             </View>
           </View>
 
+          <View style={s.paymentFilterRow}>
+            {[
+              ["ALL", "결제 전체"],
+              ["TOSS", "토스"],
+              ["DEFERRED", "착불"],
+            ].map(([key, label]) => {
+              const active = paymentFilter === key;
+              return (
+                <Pressable
+                  key={key}
+                  style={[s.categoryBtn, active && s.categoryBtnActive]}
+                  onPress={() => setPaymentFilter(key as PaymentMethodFilter)}
+                >
+                  <Text style={[s.categoryText, active && s.categoryTextActive]}>
+                    {label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
           {/* 목록부 */}
           {loading ? (
             <View style={s.emptyCard}>
@@ -271,6 +303,12 @@ const getStyles = (c: any) =>
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "space-between",
+      paddingHorizontal: 16,
+      marginBottom: 12,
+    },
+    paymentFilterRow: {
+      flexDirection: "row",
+      gap: 6,
       paddingHorizontal: 16,
       marginBottom: 12,
     },
