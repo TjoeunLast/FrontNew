@@ -26,7 +26,7 @@
         "foregroundImage": "./assets/images/logo-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "permissions": ["ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION"],
+      "permissions": ["ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION", "CAMERA"],
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "package": "com.com.and", // Firebase 콘솔에 등록한 패키지명과 일치해야 함
@@ -39,6 +39,13 @@
     },
     "plugins": [
       "expo-router",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "인수증과 서류 사진을 등록하려면 사진 접근 권한이 필요합니다.",
+          "cameraPermission": "인수증을 촬영하려면 카메라 접근 권한이 필요합니다."
+        }
+      ],
       "expo-secure-store",
       "@react-native-community/datetimepicker",
       "@react-native-firebase/app",

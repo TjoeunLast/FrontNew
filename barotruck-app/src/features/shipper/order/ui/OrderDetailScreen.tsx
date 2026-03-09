@@ -32,9 +32,11 @@ import {
 import apiClient from "@/shared/api/apiClient";
 import { KakaoLocalApi } from "@/shared/api/kakaoLocalService";
 import { OrderApi } from "@/shared/api/orderService";
+import { ProofService } from "@/shared/api/proofService";
 import { ReportService, ReviewService } from "@/shared/api/reviewService";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import type { AssignedDriverInfoResponse, OrderResponse } from "@/shared/models/order";
+import type { ProofResponse } from "@/shared/models/proof";
 import { hasKakaoMapJsKey } from "@/shared/ui/business/RoutePreviewModal";
 
 type ReportType = "ACCIDENT" | "NO_SHOW" | "RUDE" | "ETC";
@@ -100,6 +102,8 @@ export default function OrderDetailScreen() {
   const [reportType, setReportType] = useState<ReportType>("ETC");
   const [reportDescription, setReportDescription] = useState("");
   const [reportLoading, setReportLoading] = useState(false);
+  const [proof, setProof] = useState<ProofResponse | null>(null);
+  const [proofLoading, setProofLoading] = useState(false);
 
   const applicantsFromParam = useMemo(() => {
     const raw = Array.isArray(applicants) ? applicants[0] : applicants;
@@ -185,6 +189,37 @@ export default function OrderDetailScreen() {
         // noop
       }
     })();
+
+    return () => {
+      active = false;
+    };
+  }, [order?.orderId, order?.status, resolvedOrderId]);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadProof = async () => {
+      const idNum = Number(order?.orderId ?? resolvedOrderId);
+      if (!Number.isFinite(idNum) || !isCompletedStatus(order?.status)) {
+        if (active) {
+          setProof(null);
+          setProofLoading(false);
+        }
+        return;
+      }
+
+      setProofLoading(true);
+      try {
+        const response = await ProofService.getProof(idNum);
+        if (active) setProof(response);
+      } catch {
+        if (active) setProof(null);
+      } finally {
+        if (active) setProofLoading(false);
+      }
+    };
+
+    void loadProof();
 
     return () => {
       active = false;
@@ -739,6 +774,8 @@ export default function OrderDetailScreen() {
               shipperInfo={shipperInfo}
               requestTags={requestTags}
               requestSummary={requestSummary}
+              proof={proof}
+              proofLoading={proofLoading}
               routePreviewData={routePreviewData}
               routeWebviewError={routeWebviewError}
               onChangeRouteWebviewError={setRouteWebviewError}
