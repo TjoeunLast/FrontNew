@@ -2,7 +2,14 @@
 import { useFocusEffect } from "@react-navigation/native";
 import { useRouter } from "expo-router";
 import React, { useMemo, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import {
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  Image,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { OrderApi } from "@/shared/api/orderService";
@@ -151,7 +158,11 @@ export function ShipperHomeScreen() {
           },
         ]}
       >
-        <Text style={[s.logoText, { color: c.brand.primary }]}>BARO</Text>
+        <Image
+          source={require("../../../../../assets/images/logo-text.png")}
+          style={{ width: 130, height: 20 }}
+          resizeMode="cover"
+        />
         <View style={s.headerIcons}>
           <Pressable onPress={goChat} style={s.chatIconWrap}>
             <Ionicons
