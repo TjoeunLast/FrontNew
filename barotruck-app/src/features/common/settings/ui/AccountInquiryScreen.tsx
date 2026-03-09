@@ -18,10 +18,14 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AuthService } from "@/shared/api/authService";
+import apiClient from "@/shared/api/apiClient";
+import { fetchMyChatRooms } from "@/shared/api/chatApi";
 import { ReportService } from "@/shared/api/reviewService";
+import type { ChatRoomResponse } from "@/shared/models/chat";
 import { UserService } from "@/shared/api/userService";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import ShipperScreenHeader from "@/shared/ui/layout/ShipperScreenHeader";
+import { storeChatRoomTitle } from "@/shared/utils/chatOrderSummary";
 import { withAlpha } from "@/shared/utils/color";
 import { clearCurrentUserSnapshot, getCurrentUserSnapshot } from "@/shared/utils/currentUserStorage";
 
@@ -37,6 +41,49 @@ const ACCOUNT_SCOPED_STORAGE_KEYS = [
   "baro_shipper_reviewed_order_ids_v1",
   "baro_driver_extra_vehicles_v1",
 ] as const;
+const ADMIN_CHAT_KEYWORDS = ["관리자", "운영자", "admin", "support", "customer service", "cs"];
+
+function normalizeText(value: unknown) {
+  return String(value ?? "").trim();
+}
+
+function includesAdminKeyword(value: unknown) {
+  const text = normalizeText(value).toLowerCase();
+  return text ? ADMIN_CHAT_KEYWORDS.some((keyword) => text.includes(keyword.toLowerCase())) : false;
+}
+
+function findExistingAdminChatRoomId(rooms: ChatRoomResponse[]): number | null {
+  for (const room of rooms) {
+    const row = room as ChatRoomResponse & Record<string, unknown>;
+    const hasAdminRole = [
+      row.otherUserRole,
+      row.partnerRole,
+      row.targetRole,
+      row.userRole,
+      row.opponentRole,
+      row.role,
+    ].some((value) => normalizeText(value).toUpperCase() === "ADMIN");
+
+    const hasAdminName = [
+      row.otherUserNickname,
+      row.partnerNickname,
+      row.targetNickname,
+      row.opponentNickname,
+      row.userNickname,
+      row.partnerName,
+      row.userName,
+      row.roomName,
+      row.name,
+    ].some(includesAdminKeyword);
+
+    if (hasAdminRole || hasAdminName) {
+      const roomId = Number(row.roomId);
+      if (Number.isFinite(roomId) && roomId > 0) return roomId;
+    }
+  }
+
+  return null;
+}
 
 export default function AccountInquiryScreen() {
   const router = useRouter();
@@ -48,6 +95,7 @@ export default function AccountInquiryScreen() {
   const [title, setTitle] = React.useState("");
   const [content, setContent] = React.useState("");
   const [email, setEmail] = React.useState("");
+  const [adminChatLoading, setAdminChatLoading] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
   const [withdrawing, setWithdrawing] = React.useState(false);
 
@@ -60,6 +108,52 @@ export default function AccountInquiryScreen() {
     }
     router.replace("/(shipper)/(tabs)/my" as any);
   }, [router]);
+
+  const goAdminChat = React.useCallback(() => {
+    if (adminChatLoading) return;
+
+    const adminTargetId = Number(String(process.env.EXPO_PUBLIC_ADMIN_CHAT_TARGET_ID ?? "").trim());
+
+    void (async () => {
+      try {
+        setAdminChatLoading(true);
+
+        const rooms = await fetchMyChatRooms();
+        const existingRoomId = findExistingAdminChatRoomId(rooms);
+        if (existingRoomId) {
+          await storeChatRoomTitle(String(existingRoomId), "관리자");
+          router.push({
+            pathname: "/(chat)/[roomId]",
+            params: { roomId: String(existingRoomId) },
+          });
+          return;
+        }
+
+        if (!Number.isFinite(adminTargetId) || adminTargetId <= 0) {
+          Alert.alert("안내", "관리자 채팅 대상이 아직 설정되지 않았습니다.");
+          return;
+        }
+
+        const res = await apiClient.post<number>(`/api/chat/room/personal/${adminTargetId}`);
+        const roomId = Number(res.data);
+        if (!Number.isFinite(roomId) || roomId <= 0) {
+          Alert.alert("오류", "관리자 채팅방을 열 수 없습니다.");
+          return;
+        }
+
+        await storeChatRoomTitle(String(roomId), "관리자");
+        router.push({
+          pathname: "/(chat)/[roomId]",
+          params: { roomId: String(roomId) },
+        });
+      } catch (err) {
+        console.error("관리자 채팅 열기 실패:", (err as any)?.response?.data ?? err);
+        Alert.alert("오류", "관리자 채팅방을 열 수 없습니다.");
+      } finally {
+        setAdminChatLoading(false);
+      }
+    })();
+  }, [adminChatLoading, router]);
 
   React.useEffect(() => {
     let mounted = true;
@@ -351,6 +445,16 @@ export default function AccountInquiryScreen() {
                 </View>
                 <Text style={s.rowValue}>평일 09:00 - 18:00</Text>
               </View>
+              <View style={s.divider} />
+              <Pressable style={s.row} onPress={goAdminChat}>
+                <View style={s.rowLeft}>
+                  <View style={[s.rowIconWrap, { backgroundColor: withAlpha(c.brand.primary, 0.12) }]}>
+                    <Ionicons name="chatbubble-ellipses-outline" size={17} color={c.brand.primary} />
+                  </View>
+                  <Text style={s.rowLabel}>관리자 채팅</Text>
+                </View>
+                <Text style={s.rowValue}>{adminChatLoading ? "연결 중..." : "바로가기"}</Text>
+              </Pressable>
             </View>
           </View>
 
