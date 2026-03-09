@@ -2,12 +2,19 @@
 import { useFocusEffect } from "@react-navigation/native";
 import { useRouter } from "expo-router";
 import React, { useMemo, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import {
+  Image,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { fetchMyUnreadChatCount } from "@/shared/api/chatApi";
 import { OrderApi } from "@/shared/api/orderService";
 import { UserService } from "@/shared/api/userService";
-import { fetchMyUnreadChatCount } from "@/shared/api/chatApi";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import { Button } from "@/shared/ui/base/Button";
 import { RecommendedOrderCard } from "@/shared/ui/business/RecommendedOrderCard";
@@ -132,8 +139,20 @@ useFocusEffect(
 
   return (
     <View style={[s.page, { backgroundColor: c.bg.canvas }]}>
-      <View style={[s.header, { backgroundColor: c.bg.surface, paddingTop: Math.max(16, insets.top + 8) }]}>
-        <Text style={[s.logoText, { color: c.brand.primary }]}>BARO</Text>
+      <View
+        style={[
+          s.header,
+          {
+            backgroundColor: c.bg.surface,
+            paddingTop: Math.max(16, insets.top + 8),
+          },
+        ]}
+      >
+        <Image
+          source={require("../../../../../assets/images/logo-text.png")}
+          style={{ width: 130, height: 20 }}
+          resizeMode="cover"
+        />
         <View style={s.headerIcons}>
           <Pressable onPress={goChat} style={s.chatIconWrap}>
             <Ionicons name="chatbubble-outline" size={24} color={c.text.primary} />

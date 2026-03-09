@@ -321,6 +321,8 @@ function mapOrderToSettlement(
   };
 }
 
+type PaymentMethodFilter = "ALL" | "TOSS" | "DEFERRED";
+
 export default function ShipperSettlementScreen() {
   const { colors: c } = useAppTheme();
   const insets = useSafeAreaInsets();
@@ -328,6 +330,8 @@ export default function ShipperSettlementScreen() {
   const currentMonth = startOfMonth(new Date());
 
   const [filter, setFilter] = useState<SettlementFilter>("ALL");
+  const [paymentFilter, setPaymentFilter] =
+    useState<PaymentMethodFilter>("ALL");
   const [viewMonth, setViewMonth] = useState<Date>(currentMonth);
   const [items, setItems] = useState<SettlementItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -396,11 +400,18 @@ export default function ShipperSettlementScreen() {
   );
 
   const filtered = useMemo(() => {
-    if (filter === "ALL") return monthItems;
+    const methodFiltered =
+      paymentFilter === "ALL"
+        ? monthItems
+        : monthItems.filter((x) =>
+            paymentFilter === "TOSS" ? x.isToss : !x.isToss,
+          );
+
+    if (filter === "ALL") return methodFiltered;
     if (filter === "UNPAID")
-      return monthItems.filter((x) => x.status === "UNPAID");
-    return monthItems.filter((x) => x.status === "TAX_INVOICE");
-  }, [filter, monthItems]);
+      return methodFiltered.filter((x) => x.status === "UNPAID");
+    return methodFiltered.filter((x) => x.status === "TAX_INVOICE");
+  }, [filter, monthItems, paymentFilter]);
 
   const summaryTotal = useMemo(
     () => monthItems.reduce((acc, cur) => acc + cur.amount, 0),
@@ -1089,6 +1100,28 @@ export default function ShipperSettlementScreen() {
             })}
           </View>
 
+          <View style={s.paymentFilterRow}>
+            {[
+              ["ALL", "결제 전체"],
+              ["TOSS", "토스"],
+              ["DEFERRED", "착불"],
+            ].map(([key, label]) => {
+              const active = paymentFilter === key;
+              return (
+                <Pressable
+                  key={key}
+                  style={[s.categoryBtn, active && s.categoryBtnActive]}
+                  onPress={() => setPaymentFilter(key as PaymentMethodFilter)}
+                >
+                  <Text style={[s.categoryText, active && s.categoryTextActive]}>
+                    {label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          {/* 목록 영역 */}
           {loading ? (
             <View style={s.emptyCard}>
               <Text style={s.emptyText}>정산 내역을 불러오는 중입니다.</Text>
@@ -1322,3 +1355,58 @@ export default function ShipperSettlementScreen() {
     </View>
   );
 }
+
+const getStyles = (c: any) =>
+  StyleSheet.create({
+    page: { flex: 1, backgroundColor: "#F5F6FA" },
+    scrollContent: { paddingBottom: 30 },
+    // 월 선택 스타일
+    monthRow: {
+      height: 64,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 20,
+      backgroundColor: "#FFF",
+      borderBottomWidth: 1,
+      borderBottomColor: "#F1F5F9",
+    },
+    monthText: { fontSize: 18, fontWeight: "800", color: "#1E293B" },
+    monthNavBtn: { padding: 4 },
+    // 필터 및 건수 일렬 배치 스타일
+    section: { marginTop: 20 },
+    filterAndCountRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingHorizontal: 16,
+      marginBottom: 12,
+    },
+    paymentFilterRow: {
+      flexDirection: "row",
+      gap: 6,
+      paddingHorizontal: 16,
+      marginBottom: 12,
+    },
+    countText: { fontSize: 14, fontWeight: "800", color: "#475569" },
+    filterGroup: { flexDirection: "row", gap: 6 },
+    // 차주 오더목록 스타일 카테고리 버튼
+    categoryBtn: {
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 99,
+      backgroundColor: "#F1F5F9",
+    },
+    categoryBtnActive: { backgroundColor: "#1E293B" },
+    categoryText: { fontSize: 12, fontWeight: "700", color: "#94A3B8" },
+    categoryTextActive: { color: "#FFF" },
+    // 리스트 공통 스타일
+    listWrap: { paddingHorizontal: 16, gap: 12 },
+    emptyCard: {
+      marginHorizontal: 16,
+      padding: 40,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    emptyText: { fontSize: 14, color: "#94A3B8", fontWeight: "600" },
+  });

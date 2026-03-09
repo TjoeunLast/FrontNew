@@ -6,6 +6,8 @@
     "start": "expo start",
     "start:8081": "expo start --port 8081",
     "start:yang": "set EXPO_PUBLIC_API_BASE_URL=http://yangtheory.site:8080 && expo start --port 8081",
+    "start:yang:domain": "set EXPO_PUBLIC_API_BASE_URL=http://yangtheory.site:8080 && set REACT_NATIVE_PACKAGER_HOSTNAME=yangtheory.site && expo start --lan --port 8081",
+    "start:emulator": "set EXPO_PUBLIC_API_BASE_URL=http://10.0.2.2:8080 && expo start --lan --port 8081",
     "start:tunnel": "expo start --tunnel --port 8081",
     "start:yang:tunnel": "set EXPO_PUBLIC_API_BASE_URL=http://yangtheory.site:8080 && expo start --tunnel --port 8081 -c",
     "android": "expo run:android",

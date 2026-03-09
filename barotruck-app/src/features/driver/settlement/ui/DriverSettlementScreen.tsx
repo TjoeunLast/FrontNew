@@ -4,24 +4,24 @@ import React, { useCallback, useMemo, useState } from "react";
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { OrderService } from "@/shared/api/orderService";
-import { PaymentService } from "@/shared/api/paymentService";
-import { useAppTheme } from "@/shared/hooks/useAppTheme";
-import type { OrderResponse } from "@/shared/models/order";
-import ShipperScreenHeader from "@/shared/ui/layout/ShipperScreenHeader";
+import {
+  isCashPayment,
+  isShipperActivePaymentMethod,
+  isTossPayment,
+  toPaymentMethodLabel,
+} from "@/features/common/payment/lib/paymentMethods";
 import {
   calcOrderAmount,
   statusText,
   toSettlementStatus,
   toWon,
 } from "@/features/common/settlement/lib/settlementHelpers";
-import {
-  isShipperActivePaymentMethod,
-  isCashPayment,
-  isTossPayment,
-  toPaymentMethodLabel,
-} from "@/features/common/payment/lib/paymentMethods";
 import { SalesSummaryCard } from "@/features/driver/shard/ui/SalesSummaryCard";
+import { OrderService } from "@/shared/api/orderService";
+import { PaymentService } from "@/shared/api/paymentService";
+import { useAppTheme } from "@/shared/hooks/useAppTheme";
+import type { OrderResponse } from "@/shared/models/order";
+import ShipperScreenHeader from "@/shared/ui/layout/ShipperScreenHeader";
 
 type SettlementFilter = "ALL" | "PENDING" | "PAID";
 type SettlementStatus = "UNPAID" | "PENDING" | "PAID" | "TAX_INVOICE";
@@ -119,12 +119,16 @@ function mapOrderToSettlement(order: OrderResponse): SettlementItem | null {
   };
 }
 
+type PaymentMethodFilter = "ALL" | "TOSS" | "DEFERRED";
+
 export default function DriverSettlementScreen() {
   const { colors: c } = useAppTheme();
   const insets = useSafeAreaInsets();
   const currentMonth = startOfMonth(new Date());
 
   const [filter, setFilter] = useState<SettlementFilter>("ALL");
+  const [paymentFilter, setPaymentFilter] =
+    useState<PaymentMethodFilter>("ALL");
   const [viewMonth, setViewMonth] = useState<Date>(currentMonth);
   const [items, setItems] = useState<SettlementItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -170,10 +174,18 @@ export default function DriverSettlementScreen() {
   const monthItems = useMemo(() => items.filter((x) => isSameMonth(x.scheduledAt, viewMonth)), [items, viewMonth]);
 
   const filtered = useMemo(() => {
-    if (filter === "ALL") return monthItems;
-    if (filter === "PENDING") return monthItems.filter((x) => x.status !== "PAID");
-    return monthItems.filter((x) => x.status === "PAID");
-  }, [filter, monthItems]);
+    const methodFiltered =
+      paymentFilter === "ALL"
+        ? monthItems
+        : monthItems.filter((x) =>
+            paymentFilter === "TOSS" ? x.isToss : !x.isToss,
+          );
+
+    if (filter === "ALL") return methodFiltered;
+    if (filter === "PENDING")
+      return methodFiltered.filter((x) => x.status !== "PAID");
+    return methodFiltered.filter((x) => x.status === "PAID");
+  }, [filter, monthItems, paymentFilter]);
 
   const summaryMonthTotal = useMemo(() => monthItems.reduce((acc, cur) => acc + cur.amount, 0), [monthItems]);
   const summaryPaid = useMemo(
@@ -355,6 +367,28 @@ export default function DriverSettlementScreen() {
             })}
           </View>
 
+          <View style={s.paymentFilterRow}>
+            {[
+              ["ALL", "결제 전체"],
+              ["TOSS", "토스"],
+              ["DEFERRED", "착불"],
+            ].map(([key, label]) => {
+              const active = paymentFilter === key;
+              return (
+                <Pressable
+                  key={key}
+                  style={[s.categoryBtn, active && s.categoryBtnActive]}
+                  onPress={() => setPaymentFilter(key as PaymentMethodFilter)}
+                >
+                  <Text style={[s.categoryText, active && s.categoryTextActive]}>
+                    {label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          {/* 목록부 */}
           {loading ? (
             <View style={s.emptyCard}>
               <Text style={s.emptyText}>불러오는 중...</Text>
@@ -427,3 +461,47 @@ export default function DriverSettlementScreen() {
     </View>
   );
 }
+
+const getStyles = (c: any) =>
+  StyleSheet.create({
+    page: { flex: 1, backgroundColor: "#F5F6FA" },
+    monthRow: {
+      height: 64,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 20,
+      backgroundColor: "#FFF",
+      borderBottomWidth: 1,
+      borderBottomColor: "#F1F5F9",
+    },
+    monthText: { fontSize: 18, fontWeight: "800", color: "#1E293B" },
+    section: { marginTop: 20 },
+    filterAndCountRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingHorizontal: 16,
+      marginBottom: 12,
+    },
+    paymentFilterRow: {
+      flexDirection: "row",
+      gap: 6,
+      paddingHorizontal: 16,
+      marginBottom: 12,
+    },
+    countText: { fontSize: 14, fontWeight: "800", color: "#475569" },
+    filterGroup: { flexDirection: "row", gap: 6 },
+    categoryBtn: {
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 99,
+      backgroundColor: "#F1F5F9",
+    },
+    categoryBtnActive: { backgroundColor: "#1E293B" },
+    categoryText: { fontSize: 12, fontWeight: "700", color: "#94A3B8" },
+    categoryTextActive: { color: "#FFF" },
+    listWrap: { paddingHorizontal: 16, gap: 12 },
+    emptyCard: { padding: 40, alignItems: "center" },
+    emptyText: { color: "#94A3B8", fontWeight: "600" },
+  });
