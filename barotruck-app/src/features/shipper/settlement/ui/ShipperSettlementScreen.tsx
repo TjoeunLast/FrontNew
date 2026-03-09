@@ -809,6 +809,12 @@ export default function ShipperSettlementScreen() {
           gap: 8,
           paddingHorizontal: 16,
         } as ViewStyle,
+        paymentFilterRow: {
+          flexDirection: "row",
+          gap: 8,
+          paddingHorizontal: 16,
+          marginTop: 12,
+        } as ViewStyle,
         filterBtn: {
           borderRadius: 18,
           paddingHorizontal: 14,
@@ -828,6 +834,22 @@ export default function ShipperSettlementScreen() {
           color: "#667085",
         } as TextStyle,
         filterTextActive: { color: "#FFFFFF" } as TextStyle,
+        categoryBtn: {
+          borderRadius: 16,
+          paddingHorizontal: 12,
+          height: 32,
+          justifyContent: "center",
+          backgroundColor: "#F1F5F9",
+        } as ViewStyle,
+        categoryBtnActive: {
+          backgroundColor: "#0F172A",
+        } as ViewStyle,
+        categoryText: {
+          fontSize: 12,
+          fontWeight: "800",
+          color: "#94A3B8",
+        } as TextStyle,
+        categoryTextActive: { color: "#FFFFFF" } as TextStyle,
         listWrap: {
           marginTop: 10,
           paddingHorizontal: 16,

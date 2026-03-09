@@ -245,6 +245,7 @@ export default function DriverSettlementScreen() {
     },
     contentWrap: { paddingHorizontal: 16, paddingTop: 14, gap: 10 },
     filterRow: { flexDirection: "row", gap: 8 },
+    paymentFilterRow: { flexDirection: "row", gap: 8, marginTop: 2 },
     filterBtn: {
       borderRadius: 18,
       paddingHorizontal: 14,
@@ -260,6 +261,18 @@ export default function DriverSettlementScreen() {
     },
     filterText: { fontSize: 13, fontWeight: "800", color: "#667085" },
     filterTextActive: { color: "#FFFFFF" },
+    categoryBtn: {
+      borderRadius: 16,
+      paddingHorizontal: 12,
+      height: 32,
+      justifyContent: "center",
+      backgroundColor: "#F1F5F9",
+    },
+    categoryBtnActive: {
+      backgroundColor: "#0F172A",
+    },
+    categoryText: { fontSize: 12, fontWeight: "800", color: "#94A3B8" },
+    categoryTextActive: { color: "#FFFFFF" },
     emptyCard: {
       marginTop: 8,
       borderRadius: 14,
