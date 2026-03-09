@@ -84,9 +84,9 @@ export const ReportService = {
   },
 
   // 2. 내 신고 목록 조회 (상태별)
-  getReportsByStatus: async (status: string): Promise<ReportResponse[]> => {
+  getReportsByStatus: async (type: string): Promise<ReportResponse[]> => {
     if (USE_MOCK) return [];
-    const res = await apiClient.get('/api/reports/status', { params: { status } });
+    const res = await apiClient.get('/api/reports/status', { params: { type } });
     return res.data;
   },
 
