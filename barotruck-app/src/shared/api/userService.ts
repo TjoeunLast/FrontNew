@@ -168,21 +168,33 @@ export const UserService = {
     return res.data;
   },
 
-  /** * 8. 프로필 이미지 업로드 (POST /api/user/profile-image)
-   * 백엔드 UsersService.uploadProfileImage 로직 대응
+/** * 프로필 이미지 업로드 및 수정 
+   * POST /api/v1/users/me/image
    */
-  uploadProfileImage: async (file: File | any): Promise<void> => {
+  uploadProfileImage: async (file: any): Promise<string> => {
     const formData = new FormData();
-    formData.append("file", file);
+    // 백엔드 @RequestParam("image")에 맞춰 키값을 "image"로 설정
+    formData.append("image", file);
 
-    await apiClient.post("/api/user/profile-image", formData, {
+    const res = await apiClient.post("/api/v1/users/me/image", formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
+    return res.data; // 이미지 URL 반환
   },
 
-  /** * 9. 프로필 이미지 삭제 (DELETE /api/user/profile-image) */
+  /** * 프로필 이미지 조회 
+   * GET /api/v1/users/me/image
+   */
+  getProfileImage: async (): Promise<string> => {
+    const res = await apiClient.get("/api/v1/users/me/image");
+    return res.data;
+  },
+
+  /** * 프로필 이미지 삭제 
+   * DELETE /api/v1/users/me/image
+   */
   deleteProfileImage: async (): Promise<void> => {
-    await apiClient.delete("/api/user/profile-image");
+    await apiClient.delete("/api/v1/users/me/image");
   },
 
   /**
@@ -202,4 +214,6 @@ export const UserService = {
     });
     return res.data;
   },
+
+  
 };
