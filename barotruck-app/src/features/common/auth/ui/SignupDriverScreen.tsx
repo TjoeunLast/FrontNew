@@ -357,6 +357,7 @@ export default function SignupDriverScreen() {
         name,
         nickname: nickname.trim(),
         role: "DRIVER",
+        level: 0,
         gender,
         birthDate: String(birthDate ?? "").trim() || undefined,
         activityAddress: address,
