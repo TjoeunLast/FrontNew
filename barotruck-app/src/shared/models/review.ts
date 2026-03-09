@@ -5,6 +5,8 @@ export interface ReviewRequest {
   orderId: number;   // 대상 오더 ID
   rating: number;    // 1~5점
   content: string;   // 리뷰 내용
+
+  
 }
 
 export interface ReviewResponse {
@@ -22,6 +24,9 @@ export interface ReportRequest {
   orderId: number;      // 관련 오더 ID
   reportType: 'ACCIDENT' | 'NO_SHOW' | 'RUDE' | 'ETC'; // 신고 유형
   description: string;  // 상세 내용
+  type: string;   // DISCUSS 1:1 문의 / REPORT 신고 
+  email: string;   // 이메일
+  title: string;   // 제목
 }
 
 export interface ReportResponse {
@@ -33,4 +38,7 @@ export interface ReportResponse {
   description: string;
   status: 'PENDING' | 'PROCESSING' | 'RESOLVED'; // 처리 상태
   createdAt: string;
+  type: string;   // DISCUSS 1:1 문의 / REPORT 신고 
+  email: string;   // 이메일
+  title: string;   // 제목
 }
