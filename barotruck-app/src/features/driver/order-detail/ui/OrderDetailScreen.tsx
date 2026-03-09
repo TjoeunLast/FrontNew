@@ -514,6 +514,7 @@ export default function OrderDetailScreen() {
     setReportLoading(true);
     try {
       await ReportService.createReport({
+        type: "REPORT",
         orderId: id,
         reportType,
         description,
@@ -523,8 +524,14 @@ export default function OrderDetailScreen() {
       setReportDescription("");
       Alert.alert("완료", "신고가 접수되었습니다.");
     } catch (err) {
-      console.error("신고 접수 실패:", err);
-      Alert.alert("오류", "신고 접수에 실패했습니다. 다시 시도해주세요.");
+      const serverMessage =
+        typeof (err as any)?.response?.data?.message === "string"
+          ? (err as any).response.data.message
+          : typeof (err as any)?.response?.data === "string"
+            ? (err as any).response.data
+            : "";
+      console.error("신고 접수 실패:", (err as any)?.response?.data ?? err);
+      Alert.alert("오류", serverMessage || "신고 접수에 실패했습니다. 다시 시도해주세요.");
     } finally {
       setReportLoading(false);
     }
