@@ -188,6 +188,7 @@ export default function OrderDetailScreen() {
   const [reportLoading, setReportLoading] = useState(false);
   const [proof, setProof] = useState<ProofResponse | null>(null);
   const [proofLoading, setProofLoading] = useState(false);
+  const [proofRefreshKey, setProofRefreshKey] = useState(0);
 
   // 데이터 밒 기능 로드
   const {
@@ -297,7 +298,7 @@ export default function OrderDetailScreen() {
     return () => {
       active = false;
     };
-  }, [order?.orderId, order?.status]);
+  }, [order?.orderId, order?.status, proofRefreshKey]);
 
   useEffect(() => {
     let active = true;
@@ -1496,6 +1497,7 @@ export default function OrderDetailScreen() {
           visible={modalOpen}
           orderId={receiptOrderId}
           onClose={closeReceiptModal}
+          onSubmitted={() => setProofRefreshKey((prev) => prev + 1)}
         />
       </OrderDetailPageFrame>
     </View>

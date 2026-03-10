@@ -248,7 +248,7 @@ function toUiCard(order: OrderResponse): DispatchCardItem | null {
       loadMethodShort,
       workToolShort,
       priceWon,
-      receiptLabel: "인수증 확인",
+      receiptLabel: "배송 완료 확인",
     };
   }
 

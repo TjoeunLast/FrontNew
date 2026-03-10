@@ -96,26 +96,34 @@ export type ReportRequest =
       email?: string; // 문의 회신용 이메일
       title?: string; // 문의 제목
     }
-  | {
+  | 
+  
+  {
       type: "DISCUSS"; // 1:1 문의
       description: string; // 문의 내용
       email: string; // 회신용 이메일
       title: string; // 문의 제목
       orderId?: number | null; // 관련 오더 ID
+      targetId?: number | null; // 문의 대상 사용자 ID(관리자)
+      id?: number | null; // 백엔드 호환용 ID 필드
+      userId?: number | null; // 백엔드 호환용 사용자 ID 필드
       reportType?: ReportTypeCode | ReportTypeLabel; // 신고 유형
     };
+
+export type InquiryRequest = Extract<ReportRequest, { type: "DISCUSS" }>;
+export type OrderReportRequest = Extract<ReportRequest, { type: "REPORT" }>;
 
 export interface ReportResponse {
   reportId: number;
   orderId?: number;
-  reporterNickname: string;
-  targetNickname: string;
+  reporterNickname?: string;
+  targetNickname?: string;
   reportType?: string;
-  description: string;
+  description?: string;
   status: ReportStatusCode | string; // 처리 상태
   reportTypeLabel?: string;
   statusLabel?: string;
-  createdAt: string;
+  createdAt?: string;
   type: ReportSubmissionType | string; // DISCUSS 1:1 문의 / REPORT 신고
   email?: string; // 이메일
   title?: string; // 제목

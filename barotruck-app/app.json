@@ -42,8 +42,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "인수증과 서류 사진을 등록하려면 사진 접근 권한이 필요합니다.",
-          "cameraPermission": "인수증을 촬영하려면 카메라 접근 권한이 필요합니다."
+          "photosPermission": "배송 완료 인증 사진과 서류 사진을 등록하려면 사진 접근 권한이 필요합니다.",
+          "cameraPermission": "배송 완료 인증 사진을 촬영하려면 카메라 접근 권한이 필요합니다."
         }
       ],
       "expo-secure-store",
