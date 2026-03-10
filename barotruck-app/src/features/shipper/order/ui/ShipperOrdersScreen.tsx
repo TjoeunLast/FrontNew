@@ -4,6 +4,7 @@ import React from "react";
 import { Alert, Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { resolveShipperOrderStatus } from "@/features/shipper/order/lib/shipperOrderExpiry";
 import { type DispatchStatusKey } from "@/features/shipper/order/ui/DispatchStatusBadge";
 import { OrderApi } from "@/shared/api/orderService";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
@@ -114,17 +115,9 @@ function resolveApplicants(order: OrderResponse) {
 }
 
 function toUiCard(order: OrderResponse): DispatchCardItem | null {
-  const statusUpper = String(order.status ?? "").toUpperCase();
-  const hasCancellationMeta = Boolean(
-    order.cancellation?.cancelledAt ||
-      order.cancellation?.cancelReason ||
-      order.cancellation?.cancelledBy ||
-      (order as any)?.cancelledAt ||
-      (order as any)?.cancelReason ||
-      (order as any)?.cancelledBy
-  );
-  const isCancelledLike =
-    statusUpper === "CANCELLED" || statusUpper === "CANCELED" || statusUpper === "CANCEL" || hasCancellationMeta;
+  const resolvedStatus = resolveShipperOrderStatus(order) ?? order.status;
+  const statusUpper = String(resolvedStatus ?? "").toUpperCase();
+  const isCancelledLike = statusUpper === "CANCELLED";
   const from = order.startAddr || order.startPlace || "출발지 미정";
   const to = order.endAddr || order.endPlace || "도착지 미정";
   const fromDetail = order.startPlace || "";
