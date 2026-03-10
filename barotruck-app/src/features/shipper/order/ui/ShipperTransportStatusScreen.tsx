@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { resolveShipperOrderStatus } from "@/features/shipper/order/lib/shipperOrderExpiry";
 import { OrderApi } from "@/shared/api/orderService";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import type { OrderResponse, OrderStatus } from "@/shared/models/order";
@@ -188,6 +189,10 @@ export default function ShipperTransportStatusScreen() {
 
   const [loading, setLoading] = React.useState(true);
   const [order, setOrder] = React.useState<OrderResponse | null>(null);
+  const displayStatus = React.useMemo(
+    () => resolveShipperOrderStatus(order) ?? order?.status,
+    [order],
+  );
 
   const loadOrder = React.useCallback(async () => {
     if (!Number.isFinite(resolvedOrderId)) {
@@ -227,8 +232,8 @@ export default function ShipperTransportStatusScreen() {
     }, [loadOrder])
   );
 
-  const statusMeta = getStatusMeta(order?.status);
-  const currentStageIndex = getCurrentStageIndex(order?.status);
+  const statusMeta = getStatusMeta(displayStatus);
+  const currentStageIndex = getCurrentStageIndex(displayStatus);
 
   if (loading) {
     return (

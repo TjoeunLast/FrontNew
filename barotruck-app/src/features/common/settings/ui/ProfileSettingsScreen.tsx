@@ -1,6 +1,5 @@
 ﻿import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import * as FileSystem from "expo-file-system/legacy";
 import * as ImagePicker from "expo-image-picker";
 import { useFocusEffect, useRouter } from "expo-router";
 import React from "react";
@@ -24,7 +23,7 @@ import { UserService } from "@/shared/api/userService";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import ShipperScreenHeader from "@/shared/ui/layout/ShipperScreenHeader";
 import { getCurrentUserSnapshot } from "@/shared/utils/currentUserStorage";
-import { buildProfileImageFileStem, buildProfileImageStorageKey } from "@/shared/utils/profileImageStorage";
+import { buildProfileImageStorageKey } from "@/shared/utils/profileImageStorage";
 
 type ProfileState = {
   name: string;
@@ -315,24 +314,6 @@ function normalizeRating(input: unknown): number {
   return Math.max(0, Math.min(5, n));
 }
 
-async function persistProfileImage(uri: string, identity?: string): Promise<string> {
-  const docDir = FileSystem.documentDirectory;
-  if (!docDir) return uri;
-
-  const cleanUri = uri.split("?")[0] || uri;
-  const ext = cleanUri.includes(".") ? cleanUri.substring(cleanUri.lastIndexOf(".")) : ".jpg";
-  const safeExt = ext.length >= 2 && ext.length <= 5 ? ext : ".jpg";
-  const targetUri = `${docDir}${buildProfileImageFileStem(identity)}${safeExt}`;
-
-  const targetInfo = await FileSystem.getInfoAsync(targetUri);
-  if (targetInfo.exists) {
-    await FileSystem.deleteAsync(targetUri, { idempotent: true });
-  }
-
-  await FileSystem.copyAsync({ from: uri, to: targetUri });
-  return targetUri;
-}
-
 function toUploadFile(uri: string) {
   const normalized = uri.split("?")[0] || uri;
   const ext = normalized.includes(".") ? normalized.substring(normalized.lastIndexOf(".") + 1).toLowerCase() : "jpg";
@@ -385,11 +366,19 @@ export default function ProfileSettingsScreen() {
 
         try {
           const me = (await UserService.getMyInfo()) as any;
+          const storageKey = buildProfileImageStorageKey(me?.email ?? cached?.email);
           const [detail, receivedReviews] = await Promise.all([
             fetchRoleDetail(me?.role),
             me?.userId ? ReviewService.getReviewsByTarget(Number(me.userId)).catch(() => []) : Promise.resolve([]),
           ]);
-          const localImageUrl = (await AsyncStorage.getItem(buildProfileImageStorageKey(me?.email ?? cached?.email))) ?? "";
+          const [localImageUrl, remoteImageUrl] = await Promise.all([
+            AsyncStorage.getItem(storageKey).catch(() => ""),
+            UserService.getProfileImage().catch(() => ""),
+          ]);
+          const resolvedImageUrl = remoteImageUrl || (localImageUrl ?? "") || me.profileImageUrl || "";
+          if (resolvedImageUrl && resolvedImageUrl !== (localImageUrl ?? "")) {
+            await AsyncStorage.setItem(storageKey, resolvedImageUrl);
+          }
           const validRatings = (Array.isArray(receivedReviews) ? receivedReviews : [])
             .map((row: any) => Number(row?.rating))
             .filter((value: number) => Number.isFinite(value));
@@ -412,7 +401,7 @@ export default function ProfileSettingsScreen() {
             phone: normalizePhone(
               pickFirstText(me?.phone, me?.user?.phone, detail?.phone, detail?.user?.phone, detail?.driver?.phone, cached?.phone)
             ),
-            imageUrl: localImageUrl || me.profileImageUrl || "",
+            imageUrl: resolvedImageUrl,
             ratingAvg,
             ratingCount: validRatings.length,
             activityAddress: normalizeNickname(
@@ -586,11 +575,11 @@ export default function ProfileSettingsScreen() {
       return "reset" as const;
     }
 
-    const persistedUri = await persistProfileImage(draftImageUri, profile.email);
-    await UserService.uploadProfileImage(toUploadFile(persistedUri));
-    await AsyncStorage.setItem(storageKey, persistedUri);
-    setProfile((prev) => ({ ...prev, imageUrl: persistedUri }));
-    setDraftImageUri(persistedUri);
+    const uploadedImageUrl = await UserService.uploadProfileImage(toUploadFile(draftImageUri));
+    const resolvedImageUrl = uploadedImageUrl || (await UserService.getProfileImage().catch(() => "")) || draftImageUri;
+    await AsyncStorage.setItem(storageKey, resolvedImageUrl);
+    setProfile((prev) => ({ ...prev, imageUrl: resolvedImageUrl }));
+    setDraftImageUri(resolvedImageUrl);
     return "saved" as const;
   };
 

@@ -134,7 +134,7 @@ useFocusEffect(
 
   // 최근 등록 오더 (최대 3개)
   const recentOrders = useMemo(() => {
-    return liveOrders.slice(0, 3);
+    return liveOrders.filter((item) => item.status !== "CANCELLED").slice(0, 3);
   }, [liveOrders]);
 
   return (

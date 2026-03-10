@@ -1,4 +1,5 @@
 import type { OrderResponse, OrderStatus } from "@/shared/models/order";
+import { resolveShipperOrderStatus } from "@/features/shipper/order/lib/shipperOrderExpiry";
 
 export type SummaryItem = {
   key: "matching" | "driving" | "done";
@@ -8,7 +9,7 @@ export type SummaryItem = {
 
 export type LiveOrderItem = {
   id: string;
-  status: "MATCHING" | "DISPATCHED" | "DRIVING" | "DONE";
+  status: "MATCHING" | "DISPATCHED" | "DRIVING" | "DONE" | "CANCELLED";
   applicantsCount?: number;
   isInstantDispatch?: boolean;
   pickupTypeLabel?: string;
@@ -45,6 +46,7 @@ function toWorkToolShort(v?: string) {
 }
 
 function mapStatus(status: OrderStatus): LiveOrderItem["status"] {
+  if (status === "CANCELLED") return "CANCELLED";
   if (status === "COMPLETED") return "DONE";
   if (status === "REQUESTED" || status === "PENDING" || status === "APPLIED") return "MATCHING";
   if (status === "ACCEPTED") return "DISPATCHED";
@@ -111,6 +113,7 @@ export function sortLiveOrdersByLatest(items: LiveOrderItem[]) {
 
 export function mapOrderToLiveItem(o: OrderResponse): LiveOrderItem {
   const updatedIso = o.updated ?? o.createdAt;
+  const resolvedStatus = resolveShipperOrderStatus(o) ?? o.status;
   const toHHmm = (v?: string) => {
     if (!v) return undefined;
     const normalized = v.includes("T") ? v : v.replace(" ", "T");
@@ -120,17 +123,17 @@ export function mapOrderToLiveItem(o: OrderResponse): LiveOrderItem {
   };
 
   const drivingStageLabel =
-    o.status === "LOADING"
+    resolvedStatus === "LOADING"
       ? "상차 완료"
-      : o.status === "IN_TRANSIT"
+      : resolvedStatus === "IN_TRANSIT"
         ? "배달 중"
-        : o.status === "UNLOADING"
+        : resolvedStatus === "UNLOADING"
           ? "하차 직전"
           : undefined;
 
   return {
     id: String(o.orderId),
-    status: mapStatus(o.status),
+    status: mapStatus(resolvedStatus),
     applicantsCount: Math.max(0, Math.floor(Number((o as any).applicantCount ?? 0) || 0)),
     isInstantDispatch: o.driveMode === "instant",
     pickupTypeLabel: o.startType || "당상",

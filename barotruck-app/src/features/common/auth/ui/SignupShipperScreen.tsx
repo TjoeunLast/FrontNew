@@ -198,8 +198,8 @@ export default function SignupShipperScreen() {
             String(params.profileImageUri),
             params.email,
           );
-          await UserService.uploadProfileImage(toUploadFile(persistedUri));
-          await AsyncStorage.setItem(buildProfileImageStorageKey(params.email), persistedUri);
+          const uploadedImageUrl = await UserService.uploadProfileImage(toUploadFile(persistedUri));
+          await AsyncStorage.setItem(buildProfileImageStorageKey(params.email), uploadedImageUrl || persistedUri);
         } catch (imageError) {
           console.error("signup profile image upload failed", imageError);
         }

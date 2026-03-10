@@ -20,7 +20,6 @@ export function toSettlementStatusFromRaw(raw?: string | null): SettlementUiStat
 }
 
 export function toSettlementStatus(row: OrderResponse): SettlementUiStatus {
-  // 영수증/월말 방식은 결제 버튼 대신 세금계산서 흐름으로 분기.
   const isTaxInvoice =
     String(row.payMethod ?? "").toLowerCase().includes("receipt") ||
     String(row.payMethod ?? "").includes("영수증");
