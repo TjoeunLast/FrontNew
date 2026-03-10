@@ -244,6 +244,10 @@ export interface DriverPayoutItemStatusResponse {
   sellerId?: string | null;
   sellerRef?: string | null;
   sellerStatus?: string | null;
+  lastWebhookId?: number | null;
+  lastWebhookExternalEventId?: string | null;
+  lastWebhookEventType?: string | null;
+  lastWebhookProcessResult?: string | null;
   webhookStatus?: string | null;
   lastWebhookReceivedAt?: string | null;
   lastWebhookProcessedAt?: string | null;

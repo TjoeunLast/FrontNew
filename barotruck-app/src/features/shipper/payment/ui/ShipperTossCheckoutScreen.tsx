@@ -24,6 +24,10 @@ type TossCheckoutSession = {
   html: string;
 };
 
+function pickSearchParam(value?: string | string[]) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
 function escapeHtmlValue(v: string) {
   return v
     .replace(/&/g, "&amp;")
@@ -142,15 +146,66 @@ export default function ShipperTossCheckoutScreen() {
   const { colors: c } = useAppTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const params = useLocalSearchParams<{ orderId?: string | string[] }>();
+  const params = useLocalSearchParams<{
+    orderId?: string | string[];
+    clientKey?: string | string[];
+    pgOrderId?: string | string[];
+    amount?: string | string[];
+    orderName?: string | string[];
+    successUrl?: string | string[];
+    failUrl?: string | string[];
+  }>();
 
   const orderId = useMemo(() => {
     // expo-router 라우트 파라미터는 string|string[] 형태로 들어올 수 있다.
-    const raw = params.orderId;
-    const text = Array.isArray(raw) ? raw[0] : raw;
+    const text = pickSearchParam(params.orderId);
     const parsed = Number(text);
     return Number.isFinite(parsed) ? parsed : 0;
   }, [params.orderId]);
+
+  const preparedCheckout = useMemo(() => {
+    const clientKey = String(pickSearchParam(params.clientKey) ?? "").trim();
+    const pgOrderId = String(pickSearchParam(params.pgOrderId) ?? "").trim();
+    const successUrl = String(pickSearchParam(params.successUrl) ?? "").trim();
+    const failUrl = String(pickSearchParam(params.failUrl) ?? "").trim();
+    const orderName =
+      String(pickSearchParam(params.orderName) ?? "").trim() || `운송 결제 #${orderId}`;
+    const amount = Number(pickSearchParam(params.amount));
+
+    if (
+      !orderId ||
+      !clientKey ||
+      !pgOrderId ||
+      !successUrl ||
+      !failUrl ||
+      !Number.isFinite(amount) ||
+      amount <= 0
+    ) {
+      return null;
+    }
+
+    return {
+      orderId,
+      successUrl,
+      failUrl,
+      html: buildTossCheckoutHtml({
+        clientKey,
+        amount,
+        pgOrderId,
+        orderName,
+        successUrl,
+        failUrl,
+      }),
+    } satisfies TossCheckoutSession;
+  }, [
+    orderId,
+    params.amount,
+    params.clientKey,
+    params.failUrl,
+    params.orderName,
+    params.pgOrderId,
+    params.successUrl,
+  ]);
 
   const [preparing, setPreparing] = useState(true);
   const [confirming, setConfirming] = useState(false);
@@ -161,6 +216,13 @@ export default function ShipperTossCheckoutScreen() {
     if (!orderId) {
       Alert.alert("결제 오류", "주문 정보를 확인할 수 없습니다.");
       router.back();
+      return;
+    }
+
+    if (preparedCheckout) {
+      handledUrlRef.current = null;
+      setCheckout(preparedCheckout);
+      setPreparing(false);
       return;
     }
 
@@ -203,7 +265,7 @@ export default function ShipperTossCheckoutScreen() {
     return () => {
       mounted = false;
     };
-  }, [orderId, router]);
+  }, [orderId, preparedCheckout, router]);
 
   const onClose = useCallback(() => {
     if (confirming) return;

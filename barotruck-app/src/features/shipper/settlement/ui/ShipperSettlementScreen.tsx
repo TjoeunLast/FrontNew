@@ -784,6 +784,28 @@ export default function ShipperSettlementScreen() {
         } as TextStyle,
         summaryBigRight: { textAlign: "right" } as TextStyle,
         summarySmallRight: { textAlign: "right" } as TextStyle,
+        flowGuideCard: {
+          marginTop: 12,
+          marginHorizontal: 16,
+          borderRadius: 14,
+          borderWidth: 1,
+          borderColor: "#D9E2F2",
+          backgroundColor: "#FFFFFF",
+          paddingHorizontal: 14,
+          paddingVertical: 12,
+        } as ViewStyle,
+        flowGuideTitle: {
+          fontSize: 13,
+          fontWeight: "900",
+          color: "#0F172A",
+        } as TextStyle,
+        flowGuideText: {
+          marginTop: 6,
+          fontSize: 12,
+          fontWeight: "700",
+          lineHeight: 18,
+          color: "#64748B",
+        } as TextStyle,
         section: {
           marginTop: 16,
           paddingTop: 14,
@@ -888,6 +910,12 @@ export default function ShipperSettlementScreen() {
           fontSize: 12,
           fontWeight: "700",
           color: c.text.secondary,
+        } as TextStyle,
+        flowHintText: {
+          marginTop: 6,
+          fontSize: 11,
+          fontWeight: "700",
+          color: "#64748B",
         } as TextStyle,
         arrowText: { color: "#94A3B8" } as TextStyle,
         actionRow: {
@@ -1086,6 +1114,16 @@ export default function ShipperSettlementScreen() {
           </View>
         </View>
 
+        <View style={s.flowGuideCard}>
+          <Text style={s.flowGuideTitle}>정산 테스트 순서</Text>
+          <Text style={s.flowGuideText}>
+            1. 이 화면에서 결제하기를 눌러 화주 결제를 완료합니다.{"\n"}
+            2. 차주 앱에서 결제확인을 진행합니다.{"\n"}
+            3. 관리자에서 지급 요청을 실행합니다.{"\n"}
+            4. 차주 앱 정산 화면에서 지급 상태를 조회합니다.
+          </Text>
+        </View>
+
         <View style={s.section}>
           <View style={s.filterRow}>
             {[
@@ -1193,6 +1231,13 @@ export default function ShipperSettlementScreen() {
                     </Text>
                     <Text style={s.payMethodText}>
                       결제 방식: {item.payMethodLabel}
+                    </Text>
+                    <Text style={s.flowHintText}>
+                      {isUnpaid
+                        ? "1단계: 화주 결제를 진행할 차례입니다."
+                        : isPending
+                          ? "결제 요청이 생성되었습니다. 완료 후 차주 확인 단계로 넘어갑니다."
+                          : "결제 완료 건입니다. 이후 관리자 지급 요청과 차주 지급 상태 확인 단계로 이어집니다."}
                     </Text>
 
                     <View style={s.actionRow}>

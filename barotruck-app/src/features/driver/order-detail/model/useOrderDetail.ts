@@ -68,21 +68,30 @@ export const useOrderDetail = () => {
   const fetchDetail = async () => {
     try {
       setLoading(true);
+      const idNum = Number(id);
+      let found = Number.isFinite(idNum)
+        ? await OrderService.getOrderDetail(idNum).catch(() => null)
+        : null;
 
-      const myOrders = await OrderService.getMyDrivingOrders();
-      let found = myOrders.find((o) => o.orderId.toString() === id);
+      if (!found) {
+        const myOrders = await OrderService.getMyDrivingOrders();
+        found = myOrders.find((o) => o.orderId.toString() === id) ?? null;
+      }
 
       if (!found) {
         const available = await OrderService.getAvailableOrders();
-        found = available.find((o) => o.orderId.toString() === id);
+        found = available.find((o) => o.orderId.toString() === id) ?? null;
       }
 
       if (found) {
         setOrder({ ...found });
         console.log("✅ 데이터 동기화 완료:", found.status);
+      } else {
+        setOrder(null);
       }
     } catch (error) {
       console.error("데이터 매칭 실패:", error);
+      setOrder(null);
     } finally {
       setLoading(false);
     }
@@ -90,12 +99,16 @@ export const useOrderDetail = () => {
 
   const {
     handleUpdateStatus,
+    handleArriveWithPhoto,
     handleCancelOrder,
     handleStartTransport,
     modalOpen,
     setModalOpen,
     receiptOrderId,
     closeReceiptModal,
+    arrivalPhotoModalOpen,
+    arrivalPhotoOrderId,
+    closeArrivalPhotoModal,
     handleAcceptOrder,
   } = useDrivingProcess(fetchDetail);
 
@@ -181,6 +194,10 @@ export const useOrderDetail = () => {
     setModalOpen,
     receiptOrderId,
     closeReceiptModal,
+    arrivalPhotoModalOpen,
+    arrivalPhotoOrderId,
+    closeArrivalPhotoModal,
+    handleArriveWithPhoto,
     myLocation,
 
     // 계산된 데이터

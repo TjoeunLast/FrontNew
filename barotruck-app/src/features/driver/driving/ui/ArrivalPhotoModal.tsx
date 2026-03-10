@@ -7,20 +7,19 @@ import {
   Pressable,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 
-import { ProofService } from "@/shared/api/proofService";
+import { OrderService } from "@/shared/api/orderService";
 
-interface ReceiptModalProps {
+interface ArrivalPhotoModalProps {
   visible: boolean;
   orderId?: number | null;
   onClose: () => void;
-  onSubmitted?: () => void;
+  onSubmitted?: (orderId: number) => Promise<void> | void;
 }
 
 const guessMimeType = (uri: string) => {
@@ -31,20 +30,18 @@ const guessMimeType = (uri: string) => {
   return "image/jpeg";
 };
 
-export const ReceiptModal = ({
+export const ArrivalPhotoModal = ({
   visible,
   orderId,
   onClose,
   onSubmitted,
-}: ReceiptModalProps) => {
-  const [receiptUri, setReceiptUri] = useState("");
-  const [recipientName, setRecipientName] = useState("");
+}: ArrivalPhotoModalProps) => {
+  const [photoUri, setPhotoUri] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (visible) return;
-    setReceiptUri("");
-    setRecipientName("");
+    setPhotoUri("");
     setSubmitting(false);
   }, [visible]);
 
@@ -61,7 +58,7 @@ export const ReceiptModal = ({
     });
 
     if (result.canceled || !result.assets?.[0]?.uri) return;
-    setReceiptUri(result.assets[0].uri);
+    setPhotoUri(result.assets[0].uri);
   };
 
   const handleSubmit = async () => {
@@ -69,53 +66,34 @@ export const ReceiptModal = ({
       Alert.alert("오류", "주문 정보를 찾을 수 없습니다.");
       return;
     }
-
-    const trimmedRecipientName = recipientName.trim();
-
-    if (!receiptUri) {
-      Alert.alert("완료", "배송 완료 처리되었습니다.", [
-        {
-          text: "확인",
-          onPress: () => {
-            onSubmitted?.();
-            onClose();
-          },
-        },
-      ]);
-      return;
-    }
-
-    if (!trimmedRecipientName) {
-      Alert.alert("확인", "수령인 이름을 입력해 주세요.");
+    if (!photoUri) {
+      Alert.alert("확인", "하차지 도착 사진을 먼저 촬영해 주세요.");
       return;
     }
 
     try {
       setSubmitting(true);
-      const extension = receiptUri.split(".").pop()?.split("?")[0] || "jpg";
+      const extension = photoUri.split(".").pop()?.split("?")[0] || "jpg";
 
-      await ProofService.uploadProof({
-        orderId,
-        recipientName: trimmedRecipientName,
-        receipt: {
-          uri: receiptUri,
-          name: `receipt-${orderId}.${extension}`,
-          type: guessMimeType(receiptUri),
-        } as any,
-      });
+      await OrderService.uploadArrivalPhoto(orderId, {
+        uri: photoUri,
+        name: `arrival-photo-${orderId}.${extension}`,
+        type: guessMimeType(photoUri),
+      } as any);
 
-      Alert.alert("등록 완료", "배송 완료 인증이 등록되었습니다.", [
+      await onSubmitted?.(orderId);
+
+      Alert.alert("등록 완료", "하차지 도착 사진이 저장되었습니다.", [
         {
           text: "확인",
           onPress: () => {
-            onSubmitted?.();
             onClose();
           },
         },
       ]);
     } catch (error: any) {
       const message =
-        error?.response?.data?.message || "배송 완료 인증 등록에 실패했습니다. 다시 시도해 주세요.";
+        error?.response?.data?.message || "하차지 도착 사진 저장에 실패했습니다. 다시 시도해 주세요.";
       Alert.alert("등록 실패", message);
     } finally {
       setSubmitting(false);
@@ -132,7 +110,7 @@ export const ReceiptModal = ({
       <View style={s.overlay}>
         <View style={s.container}>
           <View style={s.header}>
-            <Text style={s.title}>배송 완료 등록</Text>
+            <Text style={s.title}>하차지 도착 사진</Text>
             <Pressable disabled={submitting} onPress={onClose}>
               <Ionicons name="close" size={24} color="#64748B" />
             </Pressable>
@@ -140,18 +118,18 @@ export const ReceiptModal = ({
 
           <View style={s.content}>
             <Text style={s.description}>
-              운송이 완료되었습니다.{"\n"}배송 완료 인증 사진을 촬영하고 수령인 정보를 입력해 주세요.
+              하차지에 도착한 위치 사진을 촬영해 주세요.
             </Text>
 
             <TouchableOpacity
-              style={[s.photoBox, receiptUri ? s.photoBoxFilled : null]}
+              style={[s.photoBox, photoUri ? s.photoBoxFilled : null]}
               onPress={() => void takePhoto()}
               activeOpacity={0.9}
               disabled={submitting}
             >
-              {receiptUri ? (
+              {photoUri ? (
                 <>
-                  <Image source={{ uri: receiptUri }} style={s.previewImage} />
+                  <Image source={{ uri: photoUri }} style={s.previewImage} />
                   <View style={s.previewBadge}>
                     <Ionicons name="camera" size={16} color="#FFF" />
                     <Text style={s.previewBadgeText}>다시 촬영</Text>
@@ -160,22 +138,10 @@ export const ReceiptModal = ({
               ) : (
                 <>
                   <Ionicons name="camera" size={40} color="#CBD5E1" />
-                  <Text style={s.photoText}>배송 완료 인증 사진 촬영</Text>
+                  <Text style={s.photoText}>하차지 도착 사진 촬영</Text>
                 </>
               )}
             </TouchableOpacity>
-
-            <View style={s.fieldBlock}>
-              <Text style={s.fieldLabel}>수령인 이름</Text>
-              <TextInput
-                value={recipientName}
-                onChangeText={setRecipientName}
-                placeholder="예: 홍길동"
-                placeholderTextColor="#94A3B8"
-                editable={!submitting}
-                style={s.input}
-              />
-            </View>
           </View>
 
           <TouchableOpacity
@@ -187,7 +153,7 @@ export const ReceiptModal = ({
             {submitting ? (
               <ActivityIndicator color="#FFF" />
             ) : (
-              <Text style={s.submitBtnText}>등록 완료</Text>
+              <Text style={s.submitBtnText}>사진 저장</Text>
             )}
           </TouchableOpacity>
         </View>
@@ -227,7 +193,7 @@ const s = StyleSheet.create({
   },
   photoBox: {
     width: "100%",
-    height: 180,
+    height: 220,
     backgroundColor: "#F8FAFC",
     borderRadius: 16,
     borderStyle: "dashed",
@@ -260,25 +226,6 @@ const s = StyleSheet.create({
   },
   previewBadgeText: { color: "#FFF", fontSize: 12, fontWeight: "700" },
   photoText: { fontSize: 14, color: "#94A3B8", fontWeight: "600" },
-  fieldBlock: {
-    marginTop: 18,
-    gap: 8,
-  },
-  fieldLabel: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#334155",
-  },
-  input: {
-    height: 50,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "#CBD5E1",
-    paddingHorizontal: 14,
-    fontSize: 15,
-    color: "#0F172A",
-    backgroundColor: "#FFF",
-  },
   submitBtn: {
     width: "100%",
     height: 56,

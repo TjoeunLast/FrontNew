@@ -1,17 +1,15 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import React from "react";
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type TextStyle, type ViewStyle } from "react-native";
 
+import apiClient from "@/shared/api/apiClient";
+import { UserService } from "@/shared/api/userService";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import ShipperScreenHeader from "@/shared/ui/layout/ShipperScreenHeader";
-
-const STORAGE_KEY = "baro_driver_settlement_account_v1";
 
 type AccountState = {
   bankName: string;
   accountNumber: string;
-  holderName: string;
 };
 
 function onlyDigits(v: string) {
@@ -32,21 +30,26 @@ export default function DriverSettlementAccountScreen() {
   const [draft, setDraft] = React.useState<AccountState>({
     bankName: "",
     accountNumber: "",
-    holderName: "",
   });
   const [saved, setSaved] = React.useState<AccountState | null>(null);
+  const [saving, setSaving] = React.useState(false);
 
   React.useEffect(() => {
     let active = true;
     void (async () => {
       try {
-        const raw = await AsyncStorage.getItem(STORAGE_KEY);
-        if (!active || !raw) return;
-        const parsed = JSON.parse(raw) as Partial<AccountState>;
+        const [meRes, driverRes] = await Promise.all([
+          UserService.getMyInfo().catch(() => null),
+          apiClient.get("/api/v1/drivers/me").catch(() => null),
+        ]);
+        if (!active) return;
+
+        const driver = driverRes?.data ?? null;
         const next: AccountState = {
-          bankName: String(parsed.bankName ?? "").trim(),
-          accountNumber: onlyDigits(String(parsed.accountNumber ?? "")),
-          holderName: String(parsed.holderName ?? "").trim(),
+          bankName: String(driver?.bankName ?? driver?.driver?.bankName ?? meRes?.DriverInfo?.bankName ?? "").trim(),
+          accountNumber: onlyDigits(
+            String(driver?.accountNum ?? driver?.driver?.accountNum ?? meRes?.DriverInfo?.accountNum ?? "")
+          ),
         };
         setSaved(next);
         setDraft(next);
@@ -68,24 +71,50 @@ export default function DriverSettlementAccountScreen() {
   }, [router]);
 
   const onSave = React.useCallback(async () => {
-    if (!draft.bankName.trim() || !draft.accountNumber.trim() || !draft.holderName.trim()) {
-      Alert.alert("입력 확인", "은행명, 계좌번호, 예금주를 모두 입력해 주세요.");
+    if (saving) return;
+    if (!draft.bankName.trim() || !draft.accountNumber.trim()) {
+      Alert.alert("입력 확인", "은행명과 계좌번호를 모두 입력해 주세요.");
       return;
     }
 
     const next: AccountState = {
       bankName: draft.bankName.trim(),
       accountNumber: onlyDigits(draft.accountNumber),
-      holderName: draft.holderName.trim(),
     };
     try {
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      setSaving(true);
+      const [meRes, driverRes] = await Promise.all([
+        UserService.getMyInfo(),
+        apiClient.get("/api/v1/drivers/me"),
+      ]);
+      const driver = driverRes?.data ?? {};
+      const driverInfo = meRes?.DriverInfo;
+
+      await UserService.saveDriverProfile({
+        carNum: String(driver?.carNum ?? driver?.driver?.carNum ?? driverInfo?.carNum ?? "").trim(),
+        carType: String(driver?.carType ?? driver?.driver?.carType ?? driverInfo?.carType ?? "CARGO").trim() || "CARGO",
+        tonnage: Number(driver?.tonnage ?? driver?.driver?.tonnage ?? driverInfo?.tonnage ?? 0) || 0,
+        career: Number(driver?.career ?? driver?.driver?.career ?? driverInfo?.career ?? 0) || 0,
+        bankName: next.bankName,
+        accountNum: next.accountNumber,
+        type: String(driver?.type ?? driver?.driver?.type ?? driverInfo?.type ?? "").trim() || undefined,
+        address: String(driver?.address ?? driver?.driver?.address ?? driverInfo?.address ?? "").trim() || undefined,
+        lat: driver?.lat ?? driver?.driver?.lat ?? driverInfo?.lat,
+        lng: driver?.lng ?? driver?.driver?.lng ?? driverInfo?.lng,
+        nbhId: driver?.nbhId ?? driver?.driver?.nbhId ?? driverInfo?.nbhId,
+      });
       setSaved(next);
       Alert.alert("저장 완료", "정산 계좌가 저장되었습니다.");
-    } catch {
-      Alert.alert("저장 실패", "다시 시도해 주세요.");
+    } catch (error: any) {
+      const message =
+        typeof error?.response?.data === "string"
+          ? error.response.data
+          : error?.response?.data?.message || "다시 시도해 주세요.";
+      Alert.alert("저장 실패", String(message));
+    } finally {
+      setSaving(false);
     }
-  }, [draft]);
+  }, [draft, saving]);
 
   const s = React.useMemo(
     () =>
@@ -165,19 +194,9 @@ export default function DriverSettlementAccountScreen() {
               placeholderTextColor={c.text.secondary}
             />
           </View>
-          <View style={s.row}>
-            <Text style={s.label}>예금주</Text>
-            <TextInput
-              value={draft.holderName}
-              onChangeText={(v) => setDraft((p) => ({ ...p, holderName: v }))}
-              style={s.input}
-              placeholder="예: 김차주"
-              placeholderTextColor={c.text.secondary}
-            />
-          </View>
-          <Text style={s.hint}>입금 계좌 변경 시 다음 정산 건부터 적용됩니다.</Text>
-          <Pressable style={s.saveBtn} onPress={() => void onSave()}>
-            <Text style={s.saveBtnText}>저장</Text>
+          <Text style={s.hint}>예금주는 회원 실명 기준으로 지급 처리됩니다. 계좌 변경 시 다음 정산 건부터 적용됩니다.</Text>
+          <Pressable style={[s.saveBtn, saving && { opacity: 0.6 }]} onPress={() => void onSave()} disabled={saving}>
+            <Text style={s.saveBtnText}>{saving ? "저장 중..." : "저장"}</Text>
           </Pressable>
         </View>
 
@@ -192,10 +211,6 @@ export default function DriverSettlementAccountScreen() {
               <View style={s.valueRow}>
                 <Text style={s.key}>계좌번호</Text>
                 <Text style={s.value}>{maskAccount(saved.accountNumber)}</Text>
-              </View>
-              <View style={[s.valueRow, { borderBottomWidth: 0 }]}>
-                <Text style={s.key}>예금주</Text>
-                <Text style={s.value}>{saved.holderName}</Text>
               </View>
             </>
           ) : (

@@ -129,10 +129,8 @@ export const useOrderList = () => {
         setDriverAddress(fetchedAddress);
         console.log("✅ [주소 세팅 완료] driverAddress:", fetchedAddress);
       } else {
-        console.log(
-          "⚠️ [주소 없음] 백엔드에서 안 줌. 필터 테스트를 위해 강제 세팅합니다!",
-        );
-        setDriverAddress("경기 안산시 상록구");
+        console.log("⚠️ [주소 없음] 백엔드에서 활동 주소를 받지 못했습니다.");
+        setDriverAddress(null);
       }
     } catch (error: any) {
       // 🚨 범인 색출용 콘솔 로그!!
@@ -212,11 +210,11 @@ export const useOrderList = () => {
               (cityAndGu && o.startAddr && o.startAddr.includes(cityAndGu));
 
             if (!isAddressMatch) return false;
-          } else {
-            // GPS도 없고, 서버에서 주소도 못 받아왔다면 필터링 기준이 없음
-            return false;
-          }
+        } else {
+          // GPS도 없고 활동 주소도 없으면 반경 필터를 강제하지 않습니다.
+          return true;
         }
+      }
       }
 
       // 4. 차종/중량 필터링
