@@ -53,6 +53,20 @@ const post = async <T>(
   return unwrap<T>(res.data);
 };
 
+const patch = async <T>(
+  url: string,
+  body?: unknown,
+  params?: Record<string, unknown>
+): Promise<T> => {
+  const res = await apiClient.patch(url, body ?? null, params ? { params } : undefined);
+  return unwrap<T>(res.data);
+};
+
+const isConfirmFallbackError = (error: any) => {
+  const status = Number(error?.response?.status ?? 0);
+  return status === 404 || status === 405;
+};
+
 type TossPrepareResponseRaw = Omit<TossPrepareResponse, 'provider'> & {
   provider?: PaymentProvider | null;
 };
@@ -71,8 +85,21 @@ export const PaymentService = {
     post<TransportPaymentResponse>(`${USER_PAYMENT_BASE}/orders/${orderId}/mark-paid`, request),
 
   /** 차주 결제 확인 */
-  confirmByDriver: (orderId: number) =>
-    post<TransportPaymentResponse>(`${USER_PAYMENT_BASE}/orders/${orderId}/confirm`),
+  confirmByDriver: async (orderId: number): Promise<unknown> => {
+    try {
+      return await post<TransportPaymentResponse>(`${USER_PAYMENT_BASE}/orders/${orderId}/confirm`);
+    } catch (error) {
+      if (!isConfirmFallbackError(error)) throw error;
+    }
+
+    try {
+      return await patch<TransportPaymentResponse>(`${USER_PAYMENT_BASE}/orders/${orderId}/confirm`);
+    } catch (error) {
+      if (!isConfirmFallbackError(error)) throw error;
+    }
+
+    return patch<unknown>(`/api/v1/settlements/orders/${orderId}/complete-by-user`);
+  },
 
   /** 차주/관리자 결제 이의 생성 */
   createDispute: (orderId: number, request: CreatePaymentDisputeRequest) =>
