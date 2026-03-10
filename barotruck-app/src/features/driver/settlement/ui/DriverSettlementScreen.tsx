@@ -419,9 +419,12 @@ export default function DriverSettlementScreen() {
                 const isPaid = item.status === "PAID";
                 const isSubmitting = submittingOrderId === item.orderId;
                 const needsDriverConfirm = item.confirmByDriver && !isPaid;
+                const supportsDriverConfirm = item.isToss || item.isPrepaid;
+                const showDriverConfirmButton =
+                  supportsDriverConfirm && (needsDriverConfirm || isPaid);
                 const statusColor = isPaid ? "#E8F5E9" : item.status === "PENDING" ? "#FEF9C3" : "#FEE2E2";
                 const actionText = isPaid
-                  ? "결제완료"
+                  ? "완료"
                   : item.isToss
                     ? "토스 결제확인"
                     : "착불 결제확인";
@@ -451,7 +454,7 @@ export default function DriverSettlementScreen() {
                     <Text style={s.payMethodText}>결제 방식: {item.payMethodLabel}</Text>
 
                     <View style={s.actionRow}>
-                      {needsDriverConfirm ? (
+                      {showDriverConfirmButton ? (
                         <Pressable
                           style={[s.actionBtn, (isPaid || isSubmitting) && s.actionBtnDisabled]}
                           disabled={isPaid || isSubmitting}
