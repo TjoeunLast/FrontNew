@@ -346,8 +346,8 @@ export default function SignupDriverScreen() {
             String(profileImageUri),
             email,
           );
-          await UserService.uploadProfileImage(toUploadFile(persistedUri));
-          await AsyncStorage.setItem(buildProfileImageStorageKey(email), persistedUri);
+          const uploadedImageUrl = await UserService.uploadProfileImage(toUploadFile(persistedUri));
+          await AsyncStorage.setItem(buildProfileImageStorageKey(email), uploadedImageUrl || persistedUri);
         } catch (imageError) {
           console.error("signup profile image upload failed", imageError);
         }

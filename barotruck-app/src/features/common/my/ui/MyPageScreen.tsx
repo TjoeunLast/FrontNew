@@ -201,7 +201,12 @@ export default function MyPageScreen() {
         try {
           const me = (await UserService.getMyInfo()) as any;
           const cached = await getCurrentUserSnapshot();
-          const localImageUrl = await AsyncStorage.getItem(buildProfileImageStorageKey(me.email ?? cached?.email));
+          const storageKey = buildProfileImageStorageKey(me.email ?? cached?.email);
+          const [localImageUrl, remoteImageUrl] = await Promise.all([
+            AsyncStorage.getItem(storageKey).catch(() => ""),
+            UserService.getProfileImage().catch(() => ""),
+          ]);
+          const resolvedImageUrl = remoteImageUrl || (localImageUrl ?? "") || me.profileImageUrl || "";
           const shipperDetail = await fetchShipperDetailFromServer(me);
           const shipperType = resolveShipperType(
             me,
@@ -249,7 +254,10 @@ export default function MyPageScreen() {
           };
           if (!active) return;
           setProfile(next);
-          setProfileImageUrl((localImageUrl ?? "") || me.profileImageUrl || "");
+          setProfileImageUrl(resolvedImageUrl);
+          if (resolvedImageUrl && resolvedImageUrl !== (localImageUrl ?? "")) {
+            await AsyncStorage.setItem(storageKey, resolvedImageUrl);
+          }
           try {
             await saveCurrentUserSnapshot({
               email: me.email,
