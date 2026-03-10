@@ -1,5 +1,6 @@
 import { USE_MOCK } from "@/shared/config/mock";
 import {
+  InquiryRequest,
   ReportRequest, ReportResponse,
   ReviewRequest, ReviewResponse,
   toReportStatusLabel,
@@ -26,7 +27,6 @@ async function normalizeReportRequest(data: ReportRequest) {
   if (data.type === "DISCUSS") {
     return {
       type: "DISCUSS" as const,
-      orderId: null,
       description: String(data.description ?? "").trim(),
       email: String(data.email ?? fallbackEmail).trim(),
       title: String(data.title ?? "").trim(),
@@ -61,9 +61,7 @@ function buildReportPayloadVariants(payload: Record<string, unknown>): Array<Rec
   const targetId = Number(payload.targetId);
   const candidates = [orderId, id, targetId].filter((value) => Number.isFinite(value) && value >= 0);
 
-  if (candidates.length === 0) {
-    return [payload];
-  }
+  if (candidates.length === 0) return [payload];
 
   const resolvedId = candidates[0];
 
@@ -171,18 +169,27 @@ export const ReportService = {
         lastError = error;
         const status = Number((error as any)?.response?.status);
         const serverMessage = String((error as any)?.response?.data?.message ?? "");
+        const isNullIdError = /given id must not be null|id must not be null/i.test(serverMessage);
         console.log(`[ReportService.createReport] failure ${index + 1}/${variants.length}:`, {
           status,
           data: (error as any)?.response?.data,
           candidate,
         });
-        if (status !== 400 || !/id must not be null/i.test(serverMessage)) {
+        if (!isNullIdError) {
           throw error;
         }
       }
     }
 
     throw lastError;
+  },
+
+  // 1-1. 1:1 문의 접수
+  createInquiry: async (data: Omit<InquiryRequest, "type">): Promise<boolean> => {
+    return ReportService.createReport({
+      type: "DISCUSS",
+      ...data,
+    });
   },
 
   // 2. 내 신고 목록 조회 (상태별)

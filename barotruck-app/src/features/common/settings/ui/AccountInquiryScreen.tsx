@@ -53,6 +53,19 @@ function includesAdminKeyword(value: unknown) {
 }
 
 function findExistingAdminChatRoomId(rooms: ChatRoomResponse[]): number | null {
+  const room = findAdminChatRoom(rooms);
+  if (!room) return null;
+  const roomId = Number((room as any).roomId);
+  return Number.isFinite(roomId) && roomId > 0 ? roomId : null;
+}
+
+function toPositiveId(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  const id = Number(value);
+  return Number.isFinite(id) && id > 0 ? Math.trunc(id) : null;
+}
+
+function findAdminChatRoom(rooms: ChatRoomResponse[]): (ChatRoomResponse & Record<string, unknown>) | null {
   for (const room of rooms) {
     const row = room as ChatRoomResponse & Record<string, unknown>;
     const hasAdminRole = [
@@ -77,9 +90,35 @@ function findExistingAdminChatRoomId(rooms: ChatRoomResponse[]): number | null {
     ].some(includesAdminKeyword);
 
     if (hasAdminRole || hasAdminName) {
-      const roomId = Number(row.roomId);
-      if (Number.isFinite(roomId) && roomId > 0) return roomId;
+      return row;
     }
+  }
+
+  return null;
+}
+
+function resolveAdminTargetIdFromRoom(
+  room: (ChatRoomResponse & Record<string, unknown>) | null,
+  myUserId?: number | null,
+): number | null {
+  if (!room) return null;
+  const candidates = [
+    room.otherUserId,
+    room.partnerId,
+    room.targetId,
+    room.opponentId,
+    room.memberId,
+    room.userId,
+    (room.otherUser as any)?.userId,
+    (room.partner as any)?.userId,
+    (room.target as any)?.userId,
+    (room.opponent as any)?.userId,
+  ]
+    .map(toPositiveId)
+    .filter((value): value is number => value !== null);
+
+  for (const candidate of candidates) {
+    if (!myUserId || candidate !== myUserId) return candidate;
   }
 
   return null;
@@ -112,13 +151,12 @@ export default function AccountInquiryScreen() {
   const goAdminChat = React.useCallback(() => {
     if (adminChatLoading) return;
 
-    const adminTargetId = Number(String(process.env.EXPO_PUBLIC_ADMIN_CHAT_TARGET_ID ?? "").trim());
-
     void (async () => {
       try {
         setAdminChatLoading(true);
 
         const rooms = await fetchMyChatRooms();
+        const adminRoom = findAdminChatRoom(rooms);
         const existingRoomId = findExistingAdminChatRoomId(rooms);
         if (existingRoomId) {
           await storeChatRoomTitle(String(existingRoomId), "관리자");
@@ -129,7 +167,12 @@ export default function AccountInquiryScreen() {
           return;
         }
 
-        if (!Number.isFinite(adminTargetId) || adminTargetId <= 0) {
+        const envAdminTargetId = toPositiveId(process.env.EXPO_PUBLIC_ADMIN_CHAT_TARGET_ID);
+        const me = await UserService.getMyInfo().catch(() => null as any);
+        const myUserId = toPositiveId(me?.userId);
+        const adminTargetId = envAdminTargetId ?? resolveAdminTargetIdFromRoom(adminRoom, myUserId);
+
+        if (!adminTargetId) {
           Alert.alert("안내", "관리자 채팅 대상이 아직 설정되지 않았습니다.");
           return;
         }
@@ -193,12 +236,9 @@ export default function AccountInquiryScreen() {
         title: resolvedTitle,
         description: resolvedContent,
         email: resolvedEmail,
-        orderId: null,
         reportType: "ETC",
       });
-      await ReportService.createReport({
-        type: "DISCUSS",
-        orderId: null,
+      await ReportService.createInquiry({
         reportType: "ETC",
         title: `[${type}] ${resolvedTitle}`,
         description: resolvedContent,
