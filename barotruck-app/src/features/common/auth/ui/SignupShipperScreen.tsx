@@ -126,6 +126,7 @@ export default function SignupShipperScreen() {
     profileImageUri?: string;
     gender?: "M" | "F";
     birthDate?: string;
+
   }>();
 
   const [shipperType, setShipperType] = useState<ShipperType>("business");
@@ -187,6 +188,8 @@ export default function SignupShipperScreen() {
           isCorporate: shipperType === "business" ? "Y" : "N",
         },
       };
+
+      
 
       await AuthService.register(payload);
       if (params.profileImageUri) {

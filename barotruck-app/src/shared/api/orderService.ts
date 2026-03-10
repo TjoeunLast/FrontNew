@@ -563,6 +563,30 @@ export const OrderService = {
       }
   },
 
+  uploadOrderImage: async (orderId: number, file: any): Promise<string> => {
+    const formData = new FormData();
+    // 백엔드 @RequestParam("image")에 맞춰 키값을 "image"로 설정
+    formData.append("image", file);
 
+    const res = await apiClient.post(`/api/v1/orders/${orderId}/image`, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    return res.data;
+  },
+
+  /** * 오더 이미지 조회 
+   * GET /api/v1/orders/{orderId}/image
+   */
+  getOrderImage: async (orderId: number): Promise<string> => {
+    const res = await apiClient.get(`/api/v1/orders/${orderId}/image`);
+    return res.data;
+  },
+
+  /** * 오더 이미지 삭제 
+   * DELETE /api/v1/orders/{orderId}/image
+   */
+  deleteOrderImage: async (orderId: number): Promise<void> => {
+    await apiClient.delete(`/api/v1/orders/${orderId}/image`);
+  },
 
 };
