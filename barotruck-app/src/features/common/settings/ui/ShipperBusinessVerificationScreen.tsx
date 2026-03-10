@@ -25,7 +25,6 @@ const PROCESS_STEPS = [
   "사업자등록번호와 업체명, 대표자명 확인",
   "필요 시 사업자등록증 업로드 또는 고객센터 제출",
   "관리자 확인 후 인증 상태 반영",
-  "세금계산서/정산 기능과 연동",
 ];
 
 const DOC_ITEMS = ["사업자등록증", "대표자명 확인 가능 정보", "사업장 주소 정보", "문의 회신용 이메일"] as const;
@@ -274,9 +273,6 @@ export default function ShipperBusinessVerificationScreen() {
         <View style={s.actionRow}>
           <Pressable style={s.primaryBtn} onPress={() => router.push("/(common)/settings/account" as any)}>
             <Text style={s.primaryBtnText}>1:1 문의하기</Text>
-          </Pressable>
-          <Pressable style={s.secondaryBtn} onPress={() => router.push("/(common)/settings/shipper/business" as any)}>
-            <Text style={s.secondaryBtnText}>세금계산서 관리</Text>
           </Pressable>
         </View>
       </ScrollView>

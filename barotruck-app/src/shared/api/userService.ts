@@ -22,6 +22,39 @@ function pickFirstText(...values: unknown[]): string | undefined {
   return undefined;
 }
 
+function extractProfileImageUrl(payload: unknown, depth = 0): string {
+  if (typeof payload === "string") return payload.trim();
+  if (!payload || typeof payload !== "object" || depth > 3) return "";
+
+  const record = payload as Record<string, unknown>;
+  const directCandidates = [
+    record.imageUrl,
+    record.profileImageUrl,
+    record.url,
+    record.fileUrl,
+  ];
+
+  for (const candidate of directCandidates) {
+    if (typeof candidate === "string" && candidate.trim()) {
+      return candidate.trim();
+    }
+  }
+
+  const nestedCandidates = [
+    record.data,
+    record.result,
+    record.image,
+    record.profileImage,
+  ];
+
+  for (const candidate of nestedCandidates) {
+    const resolved = extractProfileImageUrl(candidate, depth + 1);
+    if (resolved) return resolved;
+  }
+
+  return "";
+}
+
 export function buildDriverProfilePayload(data: DriverInfo): DriverInfo & Record<string, unknown> {
   const address = String(data.address ?? "").trim() || undefined;
   const lat = toFiniteNumber(data.lat);
@@ -190,33 +223,33 @@ export const UserService = {
     return res.data;
   },
 
-/** * 프로필 이미지 업로드 및 수정 
-   * POST /api/v1/users/me/image
+/** * 프로필 이미지 업로드 및 수정
+   * POST /api/user/me/image
    */
   uploadProfileImage: async (file: any): Promise<string> => {
     const formData = new FormData();
     // 백엔드 @RequestParam("image")에 맞춰 키값을 "image"로 설정
     formData.append("image", file);
 
-    const res = await apiClient.post("/api/v1/users/me/image", formData, {
+    const res = await apiClient.post("/api/user/me/image", formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
-    return res.data; // 이미지 URL 반환
+    return extractProfileImageUrl(res.data);
   },
 
-  /** * 프로필 이미지 조회 
-   * GET /api/v1/users/me/image
+  /** * 프로필 이미지 조회
+   * GET /api/user/me/image
    */
   getProfileImage: async (): Promise<string> => {
-    const res = await apiClient.get("/api/v1/users/me/image");
-    return res.data;
+    const res = await apiClient.get("/api/user/me/image");
+    return extractProfileImageUrl(res.data);
   },
 
-  /** * 프로필 이미지 삭제 
-   * DELETE /api/v1/users/me/image
+  /** * 프로필 이미지 삭제
+   * DELETE /api/user/me/image
    */
   deleteProfileImage: async (): Promise<void> => {
-    await apiClient.delete("/api/v1/users/me/image");
+    await apiClient.delete("/api/user/me/image");
   },
 
   /**

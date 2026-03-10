@@ -144,7 +144,11 @@ export default function DriverMyPageScreen() {
         try {
           const me = (await UserService.getMyInfo()) as any;
           const cached = await getCurrentUserSnapshot();
-          const localImageUrl = await AsyncStorage.getItem(buildProfileImageStorageKey(me?.email ?? cached?.email));
+          const storageKey = buildProfileImageStorageKey(me?.email ?? cached?.email);
+          const [localImageUrl, remoteImageUrl] = await Promise.all([
+            AsyncStorage.getItem(storageKey).catch(() => ""),
+            UserService.getProfileImage().catch(() => ""),
+          ]);
           let detail: any = null;
           try {
             const res = await apiClient.get("/api/v1/drivers/me");
@@ -154,7 +158,11 @@ export default function DriverMyPageScreen() {
           }
 
           if (!active) return;
-          setProfileImageUrl((localImageUrl ?? "") || me?.profileImageUrl || "");
+          const resolvedImageUrl = remoteImageUrl || (localImageUrl ?? "") || me?.profileImageUrl || "";
+          setProfileImageUrl(resolvedImageUrl);
+          if (resolvedImageUrl && resolvedImageUrl !== (localImageUrl ?? "")) {
+            await AsyncStorage.setItem(storageKey, resolvedImageUrl);
+          }
           setAdminForceAllocateBlocked(Boolean(me?.adminForceAllocateBlocked));
           setInstantDispatchEnabled(resolveInstantDispatchEnabled(detail, cached));
           setProfile({

@@ -1099,7 +1099,6 @@ export default function ShipperSettlementScreen() {
             {[
               ["ALL", "전체"],
               ["UNPAID", "미결제"],
-              ["TAX", "세금계산서"],
             ].map(([key, label]) => {
               const active = filter === key;
               return (
