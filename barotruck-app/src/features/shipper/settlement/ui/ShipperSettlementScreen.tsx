@@ -287,14 +287,6 @@ function mapOrderToSettlement(
       ? "PENDING"
       : baseStatus;
   const isTransportCompleted = true;
-  if (__DEV__) {
-    console.log("[settlement-map]", {
-      orderId: order.orderId,
-      settlementStatus: order.settlementStatus,
-      payMethod: order.payMethod,
-      resolvedStatus: status,
-    });
-  }
   const vehicleInfo =
     `${order.reqCarType || "차량"} ${order.reqTonnage || ""}`.trim();
 
