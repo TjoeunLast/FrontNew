@@ -20,7 +20,6 @@ export function toSettlementStatusFromRaw(raw?: string | null): SettlementUiStat
 }
 
 export function toSettlementStatus(row: OrderResponse): SettlementUiStatus {
-  // 영수증/월말 방식은 결제 버튼 대신 세금계산서 흐름으로 분기.
   const isTaxInvoice =
     String(row.payMethod ?? "").toLowerCase().includes("receipt") ||
     String(row.payMethod ?? "").includes("영수증");
@@ -28,6 +27,19 @@ export function toSettlementStatus(row: OrderResponse): SettlementUiStatus {
   if (isTaxInvoice) return "TAX_INVOICE";
 
   return toSettlementStatusFromRaw(row.settlementStatus);
+}
+
+export function isSettlementPaid(raw?: string | null) {
+  return toSettlementStatusFromRaw(raw) === "PAID";
+}
+
+export function isOrderSettlementPaid(row: OrderResponse) {
+  return isSettlementPaid(row.settlementStatus);
+}
+
+export function isDriverSettlementEligibleOrder(row: OrderResponse) {
+  // 차주 정산 화면은 차주가 배송 완료 처리한 주문만 노출한다.
+  return row.status === "COMPLETED";
 }
 
 export function statusText(status: SettlementUiStatus) {

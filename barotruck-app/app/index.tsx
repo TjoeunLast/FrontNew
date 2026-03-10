@@ -1,6 +1,8 @@
 import { SplashView } from "@/shared/ui/layout/SplashView";
-import { getCurrentUserSnapshot } from "@/shared/utils/currentUserStorage";
-import { tokenStorage } from "@/shared/utils/tokenStorage";
+import {
+  clearStoredAuthSession,
+  validateStoredSession,
+} from "@/shared/utils/authSession";
 import { useRouter } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect, useState } from "react";
@@ -25,21 +27,20 @@ export default function Index() {
           setTimeout(resolve, 1500),
         );
 
-        // 토큰 확인 등 비동기 작업
-        const tokenPromise = tokenStorage.getItem("userToken");
-
-        // 딜레이와 토큰 확인을 동시에 진행
-        const [, token] = await Promise.all([minSplashTime, tokenPromise]);
+        const [, session] = await Promise.all([
+          minSplashTime,
+          validateStoredSession(),
+        ]);
 
         if (!active) return;
 
-        if (!token) {
+        if (!session.ok || !session.role) {
+          await clearStoredAuthSession();
           router.replace("/(auth)/login");
           return;
         }
 
-        const snapshot = await getCurrentUserSnapshot();
-        const role = String(snapshot?.role ?? "").toUpperCase();
+        const role = session.role;
 
         if (role === "DRIVER") {
           router.replace("/(driver)/(tabs)");

@@ -1,5 +1,5 @@
 import { ImageInfo } from "./ImageInfo";
-import type { SettlementStatus as PaymentSettlementStatus } from "./Settlement";
+import type { TransportPaymentStatus } from "./payment";
 
 // @/shared/models/order.
 
@@ -90,7 +90,8 @@ export interface OrderResponse {
   orderId: number;
   status: OrderStatus;
 
-  settlementStatus?: "READY" | "COMPLETED"; // 정산 상태
+  settlementStatus?: "READY" | "WAIT" | "COMPLETED"; // 정산 상태
+  paymentStatus?: TransportPaymentStatus; // 결제 상태
 
   createdAt: string;
   updated?: string;
@@ -143,6 +144,7 @@ export interface OrderResponse {
   user?: UserSummary;
   cancellation?: CancellationSummary;
   applicantCount?: number;
+  profileImage?: ImageInfo;
 }
 
 export interface UserSummary {

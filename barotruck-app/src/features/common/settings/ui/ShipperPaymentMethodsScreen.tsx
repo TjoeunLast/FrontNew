@@ -1,558 +1,695 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Ionicons } from "@expo/vector-icons";
-import { useFocusEffect, useRouter } from "expo-router";
-import React from "react";
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useFocusEffect, useRouter } from 'expo-router';
+import React from 'react';
 import {
   Alert,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
   type TextStyle,
   type ViewStyle,
-} from "react-native";
+} from 'react-native';
 
-import { useAppTheme } from "@/shared/hooks/useAppTheme";
-import ShipperScreenHeader from "@/shared/ui/layout/ShipperScreenHeader";
-import { withAlpha } from "@/shared/utils/color";
+import { PaymentService } from '@/shared/api/paymentService';
+import { useAppTheme } from '@/shared/hooks/useAppTheme';
+import type { BillingAgreementStatus, ShipperBillingAgreementResponse } from '@/shared/models/payment';
+import { Button } from '@/shared/ui/base';
+import { useToast } from '@/shared/ui/feedback/ToastProvider';
+import ShipperScreenHeader from '@/shared/ui/layout/ShipperScreenHeader';
+import {
+  formatBillingAgreementDate,
+  getBillingAgreementMethodLabel,
+  getBillingAgreementStatusLabel,
+} from '@/shared/utils/payment/billingAgreement';
+import { withAlpha } from '@/shared/utils/color';
 
-const STORAGE_KEY = "baro_shipper_payment_methods_v1";
+function getApiErrorMessage(error: unknown, fallback: string) {
+  const candidate = error as {
+    message?: unknown;
+    response?: { data?: { message?: unknown } };
+  };
 
-type CardItem = {
-  id: string;
-  cardCompany: string;
-  cardNumber: string;
-  holderName: string;
-  expiry: string;
-  isDefault: boolean;
-};
+  const message =
+    candidate?.response?.data?.message ?? candidate?.message ?? fallback;
 
-type RefundAccountItem = {
-  id: string;
-  bankName: string;
-  accountNumber: string;
-  holderName: string;
-  isDefault: boolean;
-};
-
-type PaymentStore = {
-  cards: CardItem[];
-  refundAccounts: RefundAccountItem[];
-};
-
-const INITIAL_STORE: PaymentStore = {
-  cards: [
-    {
-      id: "card-1",
-      cardCompany: "신한카드",
-      cardNumber: "1234123412345678",
-      holderName: "홍길동",
-      expiry: "1228",
-      isDefault: true,
-    },
-  ],
-  refundAccounts: [
-    {
-      id: "refund-1",
-      bankName: "국민은행",
-      accountNumber: "12345678901234",
-      holderName: "홍길동",
-      isDefault: true,
-    },
-  ],
-};
-
-function onlyDigits(value: string) {
-  return value.replace(/\D/g, "");
+  return String(message || fallback);
 }
 
-function maskCardNumber(value: string) {
-  const digits = onlyDigits(value);
-  if (!digits) return "-";
-  if (digits.length <= 8) return digits;
-  const head = digits.slice(0, 4);
-  const tail = digits.slice(-4);
-  return `${head} **** **** ${tail}`;
+function getStatusColors(status: BillingAgreementStatus | null | undefined, colors: ReturnType<typeof useAppTheme>['colors']) {
+  switch (status) {
+    case 'ACTIVE':
+      return {
+        bg: withAlpha(colors.status.success, 0.14),
+        border: withAlpha(colors.status.success, 0.3),
+        text: colors.status.success,
+      };
+    case 'INACTIVE':
+      return {
+        bg: withAlpha(colors.status.warning, 0.16),
+        border: withAlpha(colors.status.warning, 0.34),
+        text: colors.status.warning,
+      };
+    case 'DELETED':
+      return {
+        bg: withAlpha(colors.status.danger, 0.12),
+        border: withAlpha(colors.status.danger, 0.28),
+        text: colors.status.danger,
+      };
+    default:
+      return {
+        bg: withAlpha(colors.brand.primary, 0.1),
+        border: withAlpha(colors.brand.primary, 0.22),
+        text: colors.brand.primary,
+      };
+  }
 }
 
-function maskAccountNumber(value: string) {
-  const digits = onlyDigits(value);
-  if (!digits) return "-";
-  if (digits.length <= 6) return digits;
-  return `${digits.slice(0, 3)}*****${digits.slice(-3)}`;
+function getCardSummary(agreement: ShipperBillingAgreementResponse | null) {
+  if (!agreement) {
+    return '자동 결제용 카드가 아직 등록되지 않았습니다.';
+  }
+
+  const cardCompany = String(agreement.cardCompany ?? '').trim();
+  const cardNumberMasked = String(agreement.cardNumberMasked ?? '').trim();
+  const pieces = [cardCompany, cardNumberMasked].filter(Boolean);
+
+  if (pieces.length > 0) {
+    return pieces.join(' ');
+  }
+
+  return agreement.status === 'ACTIVE'
+    ? '등록된 카드 정보가 아직 동기화되지 않았습니다.'
+    : '해지된 billing agreement입니다.';
 }
 
-function formatExpiry(value: string) {
-  const digits = onlyDigits(value).slice(0, 4);
-  if (digits.length <= 2) return digits;
-  return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+function getAgreementDescription(agreement: ShipperBillingAgreementResponse | null) {
+  if (!agreement) {
+    return '월별 수수료 자동청구를 사용하려면 카드 등록을 진행해 주세요.';
+  }
+
+  if (agreement.status === 'ACTIVE') {
+    return '현재 등록된 카드로 billing agreement가 활성화되어 있습니다.';
+  }
+
+  return '이전 billing agreement가 비활성 상태입니다. 자동청구를 재개하려면 다시 등록해 주세요.';
 }
+
+function DetailRow({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  const { colors: c } = useAppTheme();
+
+  return (
+    <View style={detailStyles.row}>
+      <Text style={[detailStyles.label, { color: c.text.secondary }]}>{label}</Text>
+      <Text style={[detailStyles.value, { color: c.text.primary }]}>{value || '-'}</Text>
+    </View>
+  );
+}
+
+const detailStyles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  label: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  value: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '700',
+    textAlign: 'right',
+  },
+});
 
 export default function ShipperPaymentMethodsScreen() {
   const router = useRouter();
+  const toast = useToast();
   const t = useAppTheme();
   const c = t.colors;
 
-  const [cards, setCards] = React.useState<CardItem[]>([]);
-  const [refundAccounts, setRefundAccounts] = React.useState<RefundAccountItem[]>([]);
-  const [showCardForm, setShowCardForm] = React.useState(false);
-  const [showAccountForm, setShowAccountForm] = React.useState(false);
+  const [agreement, setAgreement] = React.useState<ShipperBillingAgreementResponse | null>(null);
+  const [loading, setLoading] = React.useState(true);
+  const [refreshing, setRefreshing] = React.useState(false);
+  const [deactivating, setDeactivating] = React.useState(false);
+  const [lastError, setLastError] = React.useState<string | null>(null);
+  const [hasLoadedOnce, setHasLoadedOnce] = React.useState(false);
 
-  const [cardDraft, setCardDraft] = React.useState({
-    cardCompany: "",
-    cardNumber: "",
-    holderName: "",
-    expiry: "",
-  });
-  const [accountDraft, setAccountDraft] = React.useState({
-    bankName: "",
-    accountNumber: "",
-    holderName: "",
-  });
-
-  useFocusEffect(
-    React.useCallback(() => {
-      let active = true;
-
-      void (async () => {
-        try {
-          const raw = await AsyncStorage.getItem(STORAGE_KEY);
-          if (!active) return;
-          if (!raw) {
-            setCards(INITIAL_STORE.cards);
-            setRefundAccounts(INITIAL_STORE.refundAccounts);
-            return;
-          }
-
-          const parsed = JSON.parse(raw) as Partial<PaymentStore> | null;
-          const nextCards = Array.isArray(parsed?.cards) ? parsed?.cards : [];
-          const nextAccounts = Array.isArray(parsed?.refundAccounts) ? parsed?.refundAccounts : [];
-          setCards(nextCards);
-          setRefundAccounts(nextAccounts);
-        } catch {
-          if (!active) return;
-          setCards(INITIAL_STORE.cards);
-          setRefundAccounts(INITIAL_STORE.refundAccounts);
-        }
-      })();
-
-      return () => {
-        active = false;
-      };
-    }, [])
-  );
-
-  const persist = React.useCallback(async (nextCards: CardItem[], nextAccounts: RefundAccountItem[]) => {
-    setCards(nextCards);
-    setRefundAccounts(nextAccounts);
-    try {
-      await AsyncStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify({
-          cards: nextCards,
-          refundAccounts: nextAccounts,
-        })
-      );
-    } catch {
-      Alert.alert("저장 실패", "결제 수단 저장에 실패했습니다.");
-    }
-  }, []);
+  const statusLabel = getBillingAgreementStatusLabel(agreement?.status);
+  const statusColors = getStatusColors(agreement?.status, c);
+  const paymentMethodLabel = getBillingAgreementMethodLabel(agreement);
 
   const goBack = React.useCallback(() => {
     if (router.canGoBack()) {
       router.back();
       return;
     }
-    router.replace("/(shipper)/(tabs)/my" as any);
+    router.replace('/(shipper)/(tabs)/my' as any);
   }, [router]);
 
-  const setDefaultCard = React.useCallback(
-    (id: string) => {
-      const nextCards = cards.map((card) => ({ ...card, isDefault: card.id === id }));
-      void persist(nextCards, refundAccounts);
+  const fetchAgreement = React.useCallback(
+    async (mode: 'initial' | 'refresh' = 'refresh') => {
+      if (mode === 'initial') {
+        setLoading(true);
+      } else {
+        setRefreshing(true);
+      }
+
+      try {
+        const nextAgreement = await PaymentService.getMyBillingAgreement();
+        setAgreement(nextAgreement);
+        setLastError(null);
+      } catch (error) {
+        const message = getApiErrorMessage(
+          error,
+          'billing agreement 상태를 불러오지 못했습니다.'
+        );
+        setLastError(message);
+        toast.show(message, 'danger');
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+        setHasLoadedOnce(true);
+      }
     },
-    [cards, persist, refundAccounts]
+    [toast]
   );
 
-  const setDefaultAccount = React.useCallback(
-    (id: string) => {
-      const nextAccounts = refundAccounts.map((account) => ({ ...account, isDefault: account.id === id }));
-      void persist(cards, nextAccounts);
-    },
-    [cards, persist, refundAccounts]
+  useFocusEffect(
+    React.useCallback(() => {
+      void fetchAgreement(hasLoadedOnce ? 'refresh' : 'initial');
+    }, [fetchAgreement, hasLoadedOnce])
   );
 
-  const removeCard = React.useCallback(
-    (id: string) => {
-      Alert.alert("카드 삭제", "이 카드를 삭제할까요?", [
-        { text: "취소", style: "cancel" },
+  const onPressRegister = React.useCallback(() => {
+    router.push('/(common)/settings/shipper/billing-checkout' as any);
+  }, [router]);
+
+  const executeDeactivate = React.useCallback(async () => {
+    if (!agreement || agreement.status !== 'ACTIVE' || deactivating) {
+      return;
+    }
+
+    try {
+      setDeactivating(true);
+      const nextAgreement = await PaymentService.deactivateMyBillingAgreement();
+      setAgreement(nextAgreement);
+      setLastError(null);
+      toast.show('billing agreement를 해지했습니다.', 'success');
+    } catch (error) {
+      const message = getApiErrorMessage(
+        error,
+        'billing agreement 해지에 실패했습니다.'
+      );
+      setLastError(message);
+      toast.show(message, 'danger');
+    } finally {
+      setDeactivating(false);
+    }
+  }, [agreement, deactivating, toast]);
+
+  const onPressDeactivate = React.useCallback(() => {
+    if (!agreement || agreement.status !== 'ACTIVE' || deactivating) {
+      return;
+    }
+
+    Alert.alert(
+      '자동결제 카드 해지',
+      '현재 등록된 billing agreement를 해지할까요? 이후 자동청구는 다시 등록하기 전까지 중단됩니다.',
+      [
+        { text: '취소', style: 'cancel' },
         {
-          text: "삭제",
-          style: "destructive",
+          text: '해지',
+          style: 'destructive',
           onPress: () => {
-            const nextCards = cards.filter((card) => card.id !== id);
-            void persist(nextCards, refundAccounts);
+            void executeDeactivate();
           },
         },
-      ]);
-    },
-    [cards, persist, refundAccounts]
-  );
-
-  const removeAccount = React.useCallback(
-    (id: string) => {
-      Alert.alert("계좌 삭제", "이 환불 계좌를 삭제할까요?", [
-        { text: "취소", style: "cancel" },
-        {
-          text: "삭제",
-          style: "destructive",
-          onPress: () => {
-            const nextAccounts = refundAccounts.filter((account) => account.id !== id);
-            void persist(cards, nextAccounts);
-          },
-        },
-      ]);
-    },
-    [cards, persist, refundAccounts]
-  );
-
-  const saveCard = React.useCallback(() => {
-    if (!cardDraft.cardCompany.trim() || !cardDraft.cardNumber.trim() || !cardDraft.holderName.trim()) {
-      Alert.alert("입력 확인", "카드사, 카드번호, 카드 소유자명을 입력해 주세요.");
-      return;
-    }
-    if (onlyDigits(cardDraft.cardNumber).length < 12) {
-      Alert.alert("입력 확인", "카드번호를 정확히 입력해 주세요.");
-      return;
-    }
-
-    const nextCard: CardItem = {
-      id: `card-${Date.now()}`,
-      cardCompany: cardDraft.cardCompany.trim(),
-      cardNumber: onlyDigits(cardDraft.cardNumber),
-      holderName: cardDraft.holderName.trim(),
-      expiry: onlyDigits(cardDraft.expiry).slice(0, 4),
-      isDefault: cards.length === 0,
-    };
-    void persist([...cards, nextCard], refundAccounts);
-    setCardDraft({ cardCompany: "", cardNumber: "", holderName: "", expiry: "" });
-    setShowCardForm(false);
-  }, [cardDraft, cards, persist, refundAccounts]);
-
-  const saveAccount = React.useCallback(() => {
-    if (!accountDraft.bankName.trim() || !accountDraft.accountNumber.trim() || !accountDraft.holderName.trim()) {
-      Alert.alert("입력 확인", "은행명, 계좌번호, 예금주명을 입력해 주세요.");
-      return;
-    }
-
-    const nextAccount: RefundAccountItem = {
-      id: `account-${Date.now()}`,
-      bankName: accountDraft.bankName.trim(),
-      accountNumber: onlyDigits(accountDraft.accountNumber),
-      holderName: accountDraft.holderName.trim(),
-      isDefault: refundAccounts.length === 0,
-    };
-    void persist(cards, [...refundAccounts, nextAccount]);
-    setAccountDraft({ bankName: "", accountNumber: "", holderName: "" });
-    setShowAccountForm(false);
-  }, [accountDraft, cards, persist, refundAccounts]);
+      ]
+    );
+  }, [agreement, deactivating, executeDeactivate]);
 
   const s = React.useMemo(
     () =>
       StyleSheet.create({
         page: { flex: 1, backgroundColor: c.bg.canvas } as ViewStyle,
-        content: { padding: 20, paddingTop: 12, paddingBottom: 32, gap: 12 } as ViewStyle,
-        sectionHeader: {
-          marginTop: 8,
-          marginBottom: 2,
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-between",
+        content: {
+          padding: 20,
+          paddingTop: 12,
+          paddingBottom: 32,
+          gap: 14,
         } as ViewStyle,
-        sectionTitle: { fontSize: 14, fontWeight: "900", color: c.text.secondary } as TextStyle,
-        addBtn: {
-          height: 32,
-          borderRadius: 10,
-          paddingHorizontal: 10,
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 4,
+        heroCard: {
+          borderRadius: 22,
+          padding: 18,
+          gap: 14,
+          backgroundColor: c.bg.surface,
+          borderWidth: 1,
+          borderColor: c.border.default,
+        } as ViewStyle,
+        heroTop: {
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 12,
+        } as ViewStyle,
+        heroIcon: {
+          width: 52,
+          height: 52,
+          borderRadius: 18,
+          alignItems: 'center',
+          justifyContent: 'center',
           backgroundColor: withAlpha(c.brand.primary, 0.12),
         } as ViewStyle,
-        addBtnText: { fontSize: 12, fontWeight: "800", color: c.brand.primary } as TextStyle,
-        formCard: {
-          borderRadius: 16,
-          borderWidth: 1,
-          borderColor: c.border.default,
-          backgroundColor: c.bg.surface,
-          padding: 12,
-          gap: 8,
-        } as ViewStyle,
-        label: { fontSize: 12, fontWeight: "800", color: c.text.secondary } as TextStyle,
-        input: {
-          minHeight: 40,
-          borderRadius: 10,
-          borderWidth: 1,
-          borderColor: c.border.default,
-          backgroundColor: c.bg.surface,
-          paddingHorizontal: 10,
+        heroTitle: {
+          fontSize: 17,
+          fontWeight: '900',
           color: c.text.primary,
-          fontSize: 13,
-          fontWeight: "700",
         } as TextStyle,
-        row2: { flexDirection: "row", gap: 8 } as ViewStyle,
-        col: { flex: 1, gap: 6 } as ViewStyle,
-        formActions: { marginTop: 4, flexDirection: "row", justifyContent: "flex-end", gap: 8 } as ViewStyle,
-        card: {
+        heroDesc: {
+          marginTop: 4,
+          fontSize: 13,
+          fontWeight: '600',
+          lineHeight: 19,
+          color: c.text.secondary,
+        } as TextStyle,
+        heroFoot: {
           borderRadius: 16,
-          borderWidth: 1,
-          borderColor: c.border.default,
-          backgroundColor: c.bg.surface,
+          padding: 14,
+          gap: 6,
+          backgroundColor: withAlpha(c.brand.primary, 0.06),
+        } as ViewStyle,
+        heroFootTitle: {
+          fontSize: 13,
+          fontWeight: '800',
+          color: c.text.primary,
+        } as TextStyle,
+        heroFootDesc: {
+          fontSize: 12,
+          fontWeight: '600',
+          lineHeight: 18,
+          color: c.text.secondary,
+        } as TextStyle,
+        sectionTitle: {
+          marginTop: 2,
+          fontSize: 13,
+          fontWeight: '900',
+          color: c.text.secondary,
+        } as TextStyle,
+        errorCard: {
+          borderRadius: 16,
           padding: 14,
           gap: 8,
-        } as ViewStyle,
-        titleRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" } as ViewStyle,
-        title: { fontSize: 15, fontWeight: "900", color: c.text.primary } as TextStyle,
-        defaultBadge: {
-          height: 22,
-          borderRadius: 11,
-          paddingHorizontal: 8,
-          alignItems: "center",
-          justifyContent: "center",
-          backgroundColor: withAlpha(c.brand.primary, 0.16),
-        } as ViewStyle,
-        defaultBadgeText: { fontSize: 11, fontWeight: "800", color: c.brand.primary } as TextStyle,
-        bodyText: { fontSize: 13, fontWeight: "700", color: c.text.primary } as TextStyle,
-        subText: { fontSize: 12, fontWeight: "600", color: c.text.secondary } as TextStyle,
-        actionRow: { marginTop: 4, flexDirection: "row", gap: 8 } as ViewStyle,
-        ghostBtn: {
-          height: 34,
-          borderRadius: 10,
           borderWidth: 1,
-          borderColor: c.border.default,
-          paddingHorizontal: 12,
-          alignItems: "center",
-          justifyContent: "center",
+          borderColor: withAlpha(c.status.danger, 0.24),
+          backgroundColor: withAlpha(c.status.danger, 0.08),
         } as ViewStyle,
-        ghostBtnText: { fontSize: 12, fontWeight: "700", color: c.text.secondary } as TextStyle,
-        dangerBtn: {
-          height: 34,
-          borderRadius: 10,
+        errorTitle: {
+          fontSize: 13,
+          fontWeight: '800',
+          color: c.status.danger,
+        } as TextStyle,
+        errorText: {
+          fontSize: 12,
+          fontWeight: '600',
+          lineHeight: 18,
+          color: c.text.secondary,
+        } as TextStyle,
+        statusCard: {
+          borderRadius: 20,
           borderWidth: 1,
-          borderColor: withAlpha(c.status?.danger ?? "#EF4444", 0.5),
-          paddingHorizontal: 12,
-          alignItems: "center",
-          justifyContent: "center",
-        } as ViewStyle,
-        dangerBtnText: { fontSize: 12, fontWeight: "700", color: c.status?.danger ?? "#EF4444" } as TextStyle,
-        emptyCard: {
-          borderRadius: 16,
-          borderWidth: 1,
-          borderStyle: "dashed",
           borderColor: c.border.default,
           backgroundColor: c.bg.surface,
           padding: 18,
-          alignItems: "center",
+          gap: 14,
+        } as ViewStyle,
+        statusTop: {
+          flexDirection: 'row',
+          alignItems: 'flex-start',
+          justifyContent: 'space-between',
+          gap: 10,
+        } as ViewStyle,
+        statusTitleWrap: {
+          flex: 1,
+          gap: 8,
+        } as ViewStyle,
+        statusTitle: {
+          fontSize: 18,
+          fontWeight: '900',
+          color: c.text.primary,
+        } as TextStyle,
+        statusDesc: {
+          fontSize: 13,
+          fontWeight: '600',
+          lineHeight: 19,
+          color: c.text.secondary,
+        } as TextStyle,
+        badge: {
+          height: 30,
+          borderRadius: 15,
+          paddingHorizontal: 12,
+          alignItems: 'center',
+          justifyContent: 'center',
+          borderWidth: 1,
+        } as ViewStyle,
+        badgeText: {
+          fontSize: 12,
+          fontWeight: '900',
+        } as TextStyle,
+        cardSummary: {
+          borderRadius: 16,
+          padding: 14,
+          gap: 6,
+          backgroundColor: c.bg.muted,
+        } as ViewStyle,
+        cardSummaryLabel: {
+          fontSize: 12,
+          fontWeight: '700',
+          color: c.text.secondary,
+        } as TextStyle,
+        cardSummaryValue: {
+          fontSize: 16,
+          fontWeight: '900',
+          color: c.text.primary,
+        } as TextStyle,
+        cardSummaryMeta: {
+          fontSize: 12,
+          fontWeight: '600',
+          color: c.text.secondary,
+        } as TextStyle,
+        divider: {
+          height: 1,
+          backgroundColor: withAlpha(c.border.default, 0.9),
+        } as ViewStyle,
+        detailGroup: {
+          gap: 10,
+        } as ViewStyle,
+        actionRow: {
+          flexDirection: 'row',
+          flexWrap: 'wrap',
+          gap: 10,
+        } as ViewStyle,
+        emptyCard: {
+          borderRadius: 20,
+          borderWidth: 1,
+          borderStyle: 'dashed',
+          borderColor: c.border.default,
+          backgroundColor: c.bg.surface,
+          padding: 22,
+          alignItems: 'center',
+          gap: 8,
+        } as ViewStyle,
+        emptyTitle: {
+          fontSize: 16,
+          fontWeight: '900',
+          color: c.text.primary,
+        } as TextStyle,
+        emptyDesc: {
+          fontSize: 13,
+          fontWeight: '600',
+          lineHeight: 19,
+          textAlign: 'center',
+          color: c.text.secondary,
+        } as TextStyle,
+        guideCard: {
+          borderRadius: 18,
+          borderWidth: 1,
+          borderColor: c.border.default,
+          backgroundColor: c.bg.surface,
+          padding: 16,
+          gap: 12,
+        } as ViewStyle,
+        guideRow: {
+          flexDirection: 'row',
+          alignItems: 'flex-start',
+          gap: 10,
+        } as ViewStyle,
+        guideIndex: {
+          width: 24,
+          height: 24,
+          borderRadius: 12,
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: withAlpha(c.brand.primary, 0.12),
+        } as ViewStyle,
+        guideIndexText: {
+          fontSize: 12,
+          fontWeight: '900',
+          color: c.brand.primary,
+        } as TextStyle,
+        guideTitle: {
+          fontSize: 13,
+          fontWeight: '800',
+          color: c.text.primary,
+        } as TextStyle,
+        guideDesc: {
+          marginTop: 3,
+          fontSize: 12,
+          fontWeight: '600',
+          lineHeight: 18,
+          color: c.text.secondary,
+        } as TextStyle,
+        loadingCard: {
+          borderRadius: 18,
+          padding: 20,
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: c.bg.surface,
+          borderWidth: 1,
+          borderColor: c.border.default,
+        } as ViewStyle,
+        loadingText: {
+          fontSize: 13,
+          fontWeight: '700',
+          color: c.text.secondary,
+        } as TextStyle,
+        subtleAction: {
+          alignSelf: 'flex-start',
+          flexDirection: 'row',
+          alignItems: 'center',
           gap: 6,
         } as ViewStyle,
-        emptyTitle: { fontSize: 14, fontWeight: "800", color: c.text.primary } as TextStyle,
-        emptyDesc: { fontSize: 12, fontWeight: "600", color: c.text.secondary } as TextStyle,
+        subtleActionText: {
+          fontSize: 13,
+          fontWeight: '800',
+          color: c.brand.primary,
+        } as TextStyle,
       }),
     [c]
   );
 
   return (
     <View style={s.page}>
-      <ShipperScreenHeader title="결제 수단 관리" onPressBack={goBack} />
+      <ShipperScreenHeader
+        title="결제 수단 관리"
+        subtitle="화주 자동청구용 billing agreement를 등록, 조회, 해지할 수 있습니다."
+        onPressBack={goBack}
+      />
+
       <ScrollView contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
-        <View style={s.sectionHeader}>
-          <Text style={s.sectionTitle}>카드 관리</Text>
-          <Pressable
-            style={s.addBtn}
-            onPress={() => {
-              setShowCardForm(true);
-              setShowAccountForm(false);
-            }}
-          >
-            <Ionicons name="add" size={14} color={c.brand.primary} />
-            <Text style={s.addBtnText}>카드 등록</Text>
-          </Pressable>
-        </View>
-
-        {showCardForm ? (
-          <View style={s.formCard}>
-            <Text style={s.label}>카드사</Text>
-            <TextInput
-              value={cardDraft.cardCompany}
-              onChangeText={(v) => setCardDraft((p) => ({ ...p, cardCompany: v }))}
-              style={s.input}
-              placeholder="예: 신한카드"
-              placeholderTextColor={c.text.secondary}
-            />
-            <Text style={s.label}>카드번호</Text>
-            <TextInput
-              value={cardDraft.cardNumber}
-              onChangeText={(v) => setCardDraft((p) => ({ ...p, cardNumber: onlyDigits(v) }))}
-              style={s.input}
-              keyboardType="number-pad"
-              maxLength={16}
-              placeholder="숫자만 입력"
-              placeholderTextColor={c.text.secondary}
-            />
-            <View style={s.row2}>
-              <View style={s.col}>
-                <Text style={s.label}>카드 소유자명</Text>
-                <TextInput
-                  value={cardDraft.holderName}
-                  onChangeText={(v) => setCardDraft((p) => ({ ...p, holderName: v }))}
-                  style={s.input}
-                  placeholder="예: 홍길동"
-                  placeholderTextColor={c.text.secondary}
-                />
-              </View>
-              <View style={s.col}>
-                <Text style={s.label}>유효기간(MMYY)</Text>
-                <TextInput
-                  value={cardDraft.expiry}
-                  onChangeText={(v) => setCardDraft((p) => ({ ...p, expiry: onlyDigits(v).slice(0, 4) }))}
-                  style={s.input}
-                  keyboardType="number-pad"
-                  maxLength={4}
-                  placeholder="예: 1228"
-                  placeholderTextColor={c.text.secondary}
-                />
-              </View>
+        <View style={s.heroCard}>
+          <View style={s.heroTop}>
+            <View style={s.heroIcon}>
+              <MaterialCommunityIcons
+                name="credit-card-check-outline"
+                size={26}
+                color={c.brand.primary}
+              />
             </View>
-            <View style={s.formActions}>
-              <Pressable style={s.ghostBtn} onPress={() => setShowCardForm(false)}>
-                <Text style={s.ghostBtnText}>취소</Text>
-              </Pressable>
-              <Pressable style={s.addBtn} onPress={saveCard}>
-                <Text style={s.addBtnText}>저장</Text>
-              </Pressable>
-            </View>
-          </View>
-        ) : null}
-
-        {cards.length === 0 ? (
-          <View style={s.emptyCard}>
-            <Text style={s.emptyTitle}>등록된 카드가 없습니다</Text>
-            <Text style={s.emptyDesc}>카드 등록 버튼으로 결제 카드를 추가해 주세요.</Text>
-          </View>
-        ) : (
-          cards.map((card) => (
-            <View key={card.id} style={s.card}>
-              <View style={s.titleRow}>
-                <Text style={s.title}>{card.cardCompany}</Text>
-                {card.isDefault ? (
-                  <View style={s.defaultBadge}>
-                    <Text style={s.defaultBadgeText}>기본</Text>
-                  </View>
-                ) : null}
-              </View>
-              <Text style={s.bodyText}>{maskCardNumber(card.cardNumber)}</Text>
-              <Text style={s.subText}>
-                {card.holderName} · {formatExpiry(card.expiry) || "-"}
+            <View style={{ flex: 1 }}>
+              <Text style={s.heroTitle}>자동 결제 카드 등록</Text>
+              <Text style={s.heroDesc}>
+                월별 수수료 자동청구에 사용할 토스 billing agreement를 연결합니다.
               </Text>
-              <View style={s.actionRow}>
-                {!card.isDefault ? (
-                  <Pressable style={s.ghostBtn} onPress={() => setDefaultCard(card.id)}>
-                    <Text style={s.ghostBtnText}>기본카드 설정</Text>
-                  </Pressable>
-                ) : null}
-                <Pressable style={s.dangerBtn} onPress={() => removeCard(card.id)}>
-                  <Text style={s.dangerBtnText}>삭제</Text>
-                </Pressable>
-              </View>
             </View>
-          ))
-        )}
-
-        <View style={s.sectionHeader}>
-          <Text style={s.sectionTitle}>환불 계좌 관리</Text>
-          <Pressable
-            style={s.addBtn}
-            onPress={() => {
-              setShowAccountForm(true);
-              setShowCardForm(false);
-            }}
-          >
-            <Ionicons name="add" size={14} color={c.brand.primary} />
-            <Text style={s.addBtnText}>계좌 등록</Text>
-          </Pressable>
+          </View>
+          <View style={s.heroFoot}>
+            <Text style={s.heroFootTitle}>현재 표시 상태</Text>
+            <Text style={s.heroFootDesc}>
+              {paymentMethodLabel} · {statusLabel}
+            </Text>
+          </View>
         </View>
 
-        {showAccountForm ? (
-          <View style={s.formCard}>
-            <Text style={s.label}>은행명</Text>
-            <TextInput
-              value={accountDraft.bankName}
-              onChangeText={(v) => setAccountDraft((p) => ({ ...p, bankName: v }))}
-              style={s.input}
-              placeholder="예: 국민은행"
-              placeholderTextColor={c.text.secondary}
-            />
-            <Text style={s.label}>계좌번호</Text>
-            <TextInput
-              value={accountDraft.accountNumber}
-              onChangeText={(v) => setAccountDraft((p) => ({ ...p, accountNumber: onlyDigits(v) }))}
-              style={s.input}
-              keyboardType="number-pad"
-              placeholder="숫자만 입력"
-              placeholderTextColor={c.text.secondary}
-            />
-            <Text style={s.label}>예금주명</Text>
-            <TextInput
-              value={accountDraft.holderName}
-              onChangeText={(v) => setAccountDraft((p) => ({ ...p, holderName: v }))}
-              style={s.input}
-              placeholder="예: 홍길동"
-              placeholderTextColor={c.text.secondary}
-            />
-            <View style={s.formActions}>
-              <Pressable style={s.ghostBtn} onPress={() => setShowAccountForm(false)}>
-                <Text style={s.ghostBtnText}>취소</Text>
-              </Pressable>
-              <Pressable style={s.addBtn} onPress={saveAccount}>
-                <Text style={s.addBtnText}>저장</Text>
-              </Pressable>
-            </View>
+        {lastError ? (
+          <View style={s.errorCard}>
+            <Text style={s.errorTitle}>최근 실패 메시지</Text>
+            <Text style={s.errorText}>{lastError}</Text>
+            <Pressable
+              style={s.subtleAction}
+              onPress={() => {
+                void fetchAgreement('refresh');
+              }}
+            >
+              <Ionicons name="refresh" size={14} color={c.brand.primary} />
+              <Text style={s.subtleActionText}>다시 조회</Text>
+            </Pressable>
           </View>
         ) : null}
 
-        {refundAccounts.length === 0 ? (
-          <View style={s.emptyCard}>
-            <Text style={s.emptyTitle}>등록된 환불 계좌가 없습니다</Text>
-            <Text style={s.emptyDesc}>계좌 등록 버튼으로 환불 계좌를 추가해 주세요.</Text>
+        <Text style={s.sectionTitle}>billing agreement 상태</Text>
+        {loading ? (
+          <View style={s.loadingCard}>
+            <Text style={s.loadingText}>billing agreement 정보를 불러오는 중입니다.</Text>
           </View>
-        ) : (
-          refundAccounts.map((account) => (
-            <View key={account.id} style={s.card}>
-              <View style={s.titleRow}>
-                <Text style={s.title}>{account.bankName}</Text>
-                {account.isDefault ? (
-                  <View style={s.defaultBadge}>
-                    <Text style={s.defaultBadgeText}>기본</Text>
-                  </View>
-                ) : null}
+        ) : agreement ? (
+          <View style={s.statusCard}>
+            <View style={s.statusTop}>
+              <View style={s.statusTitleWrap}>
+                <Text style={s.statusTitle}>{statusLabel}</Text>
+                <Text style={s.statusDesc}>{getAgreementDescription(agreement)}</Text>
               </View>
-              <Text style={s.bodyText}>{maskAccountNumber(account.accountNumber)}</Text>
-              <Text style={s.subText}>{account.holderName}</Text>
-              <View style={s.actionRow}>
-                {!account.isDefault ? (
-                  <Pressable style={s.ghostBtn} onPress={() => setDefaultAccount(account.id)}>
-                    <Text style={s.ghostBtnText}>기본계좌 설정</Text>
-                  </Pressable>
-                ) : null}
-                <Pressable style={s.dangerBtn} onPress={() => removeAccount(account.id)}>
-                  <Text style={s.dangerBtnText}>삭제</Text>
-                </Pressable>
+              <View
+                style={[
+                  s.badge,
+                  {
+                    backgroundColor: statusColors.bg,
+                    borderColor: statusColors.border,
+                  },
+                ]}
+              >
+                <Text style={[s.badgeText, { color: statusColors.text }]}>
+                  {agreement.provider}
+                </Text>
               </View>
             </View>
-          ))
+
+            <View style={s.cardSummary}>
+              <Text style={s.cardSummaryLabel}>등록 카드</Text>
+              <Text style={s.cardSummaryValue}>{getCardSummary(agreement)}</Text>
+              <Text style={s.cardSummaryMeta}>
+                {[
+                  agreement.method,
+                  agreement.cardType || null,
+                  agreement.ownerType || null,
+                ]
+                  .filter(Boolean)
+                  .join(' · ') || '카드 세부 정보가 아직 없습니다.'}
+              </Text>
+            </View>
+
+            <View style={s.divider} />
+
+            <View style={s.detailGroup}>
+              <DetailRow label="고객 키" value={agreement.customerKey || '-'} />
+              <DetailRow label="billing key" value={agreement.billingKeyMasked || '-'} />
+              <DetailRow
+                label="최초 인증 시각"
+                value={formatBillingAgreementDate(agreement.authenticatedAt)}
+              />
+              <DetailRow
+                label="마지막 자동청구"
+                value={formatBillingAgreementDate(agreement.lastChargedAt)}
+              />
+              <DetailRow
+                label="해지 시각"
+                value={formatBillingAgreementDate(agreement.deactivatedAt)}
+              />
+              <DetailRow
+                label="해지 사유"
+                value={agreement.deactivationReason || '-'}
+              />
+            </View>
+
+            <View style={s.actionRow}>
+              <Button
+                title={refreshing ? '조회 중...' : '새로고침'}
+                variant="outline"
+                onPress={() => {
+                  void fetchAgreement('refresh');
+                }}
+                disabled={refreshing}
+                style={{ flexGrow: 1 }}
+              />
+              <Button
+                title={agreement.status === 'ACTIVE' ? '다시 등록' : '등록하기'}
+                onPress={onPressRegister}
+                style={{ flexGrow: 1 }}
+              />
+              {agreement.status === 'ACTIVE' ? (
+                <Button
+                  title={deactivating ? '해지 중...' : '해지'}
+                  variant="danger"
+                  onPress={onPressDeactivate}
+                  disabled={deactivating}
+                  style={{ flexGrow: 1 }}
+                />
+              ) : null}
+            </View>
+          </View>
+        ) : (
+          <View style={s.emptyCard}>
+            <MaterialCommunityIcons
+              name="credit-card-off-outline"
+              size={34}
+              color={c.text.secondary}
+            />
+            <Text style={s.emptyTitle}>등록된 billing agreement가 없습니다.</Text>
+            <Text style={s.emptyDesc}>
+              결제수단 등록을 시작하면 토스 카드 인증 후 자동청구용 agreement를 생성합니다.
+            </Text>
+            <View style={s.actionRow}>
+              <Button title="등록하기" onPress={onPressRegister} style={{ minWidth: 140 }} />
+              <Button
+                title={refreshing ? '조회 중...' : '새로고침'}
+                variant="outline"
+                onPress={() => {
+                  void fetchAgreement('refresh');
+                }}
+                disabled={refreshing}
+                style={{ minWidth: 120 }}
+              />
+            </View>
+          </View>
         )}
+
+        <Text style={s.sectionTitle}>진행 가이드</Text>
+        <View style={s.guideCard}>
+          <View style={s.guideRow}>
+            <View style={s.guideIndex}>
+              <Text style={s.guideIndexText}>1</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={s.guideTitle}>카드 등록 시작</Text>
+              <Text style={s.guideDesc}>
+                등록하기를 누르면 토스 billing 인증 WebView가 열리고 카드 인증을 진행합니다.
+              </Text>
+            </View>
+          </View>
+
+          <View style={s.guideRow}>
+            <View style={s.guideIndex}>
+              <Text style={s.guideIndexText}>2</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={s.guideTitle}>성공 시 agreement 발급</Text>
+              <Text style={s.guideDesc}>
+                인증 성공 후 앱이 `authKey`로 서버 발급 API를 호출하고 등록 상태를 갱신합니다.
+              </Text>
+            </View>
+          </View>
+
+          <View style={s.guideRow}>
+            <View style={s.guideIndex}>
+              <Text style={s.guideIndexText}>3</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={s.guideTitle}>실패 메시지 확인</Text>
+              <Text style={s.guideDesc}>
+                토스 인증 실패, 서버 발급 실패, 해지 실패는 모두 화면 상단 메시지와 토스트로 다시 확인할 수 있습니다.
+              </Text>
+            </View>
+          </View>
+        </View>
       </ScrollView>
     </View>
   );

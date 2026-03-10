@@ -14,6 +14,47 @@ function toFiniteNumber(value: unknown): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
+function pickFirstText(...values: unknown[]): string | undefined {
+  for (const value of values) {
+    const text = String(value ?? "").trim();
+    if (text) return text;
+  }
+  return undefined;
+}
+
+function extractProfileImageUrl(payload: unknown, depth = 0): string {
+  if (typeof payload === "string") return payload.trim();
+  if (!payload || typeof payload !== "object" || depth > 3) return "";
+
+  const record = payload as Record<string, unknown>;
+  const directCandidates = [
+    record.imageUrl,
+    record.profileImageUrl,
+    record.url,
+    record.fileUrl,
+  ];
+
+  for (const candidate of directCandidates) {
+    if (typeof candidate === "string" && candidate.trim()) {
+      return candidate.trim();
+    }
+  }
+
+  const nestedCandidates = [
+    record.data,
+    record.result,
+    record.image,
+    record.profileImage,
+  ];
+
+  for (const candidate of nestedCandidates) {
+    const resolved = extractProfileImageUrl(candidate, depth + 1);
+    if (resolved) return resolved;
+  }
+
+  return "";
+}
+
 export function buildDriverProfilePayload(data: DriverInfo): DriverInfo & Record<string, unknown> {
   const address = String(data.address ?? "").trim() || undefined;
   const lat = toFiniteNumber(data.lat);
@@ -71,6 +112,20 @@ export const UserService = {
         String(
           snapshot?.name ?? snapshot?.nickname ?? baseProfile.name,
         ).trim() || baseProfile.name,
+      phone:
+        pickFirstText(
+          baseProfile.phone,
+          baseProfile.phoneNumber,
+          baseProfile.phone_number,
+          baseProfile.mobile,
+          baseProfile.tel,
+          baseProfile.contact,
+          baseProfile.user?.phone,
+          baseProfile.user?.phoneNumber,
+          baseProfile.user?.phone_number,
+          baseProfile.user?.mobile,
+          snapshot?.phone
+        ) || "",
 
       DriverInfo: baseProfile.driverInfo || baseProfile.DriverInfo,
       ShipperInfo: baseProfile.shipperInfo || baseProfile.ShipperInfo,
@@ -168,21 +223,33 @@ export const UserService = {
     return res.data;
   },
 
-  /** * 8. 프로필 이미지 업로드 (POST /api/user/profile-image)
-   * 백엔드 UsersService.uploadProfileImage 로직 대응
+/** * 프로필 이미지 업로드 및 수정
+   * POST /api/user/me/image
    */
-  uploadProfileImage: async (file: File | any): Promise<void> => {
+  uploadProfileImage: async (file: any): Promise<string> => {
     const formData = new FormData();
-    formData.append("file", file);
+    // 백엔드 @RequestParam("image")에 맞춰 키값을 "image"로 설정
+    formData.append("image", file);
 
-    await apiClient.post("/api/user/profile-image", formData, {
+    const res = await apiClient.post("/api/user/me/image", formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
+    return extractProfileImageUrl(res.data);
   },
 
-  /** * 9. 프로필 이미지 삭제 (DELETE /api/user/profile-image) */
+  /** * 프로필 이미지 조회
+   * GET /api/user/me/image
+   */
+  getProfileImage: async (): Promise<string> => {
+    const res = await apiClient.get("/api/user/me/image");
+    return extractProfileImageUrl(res.data);
+  },
+
+  /** * 프로필 이미지 삭제
+   * DELETE /api/user/me/image
+   */
   deleteProfileImage: async (): Promise<void> => {
-    await apiClient.delete("/api/user/profile-image");
+    await apiClient.delete("/api/user/me/image");
   },
 
   /**
@@ -202,4 +269,12 @@ export const UserService = {
     });
     return res.data;
   },
+
+    /** * 8. 내 정보 수정 (PATCH /api/user/me)
+   * data 객체에는 변경할 필드만 포함 (예: { nickname: "새닉네임" })
+   */
+  updateMyInfo: async (data: Partial<UserProfile>): Promise<void> => {
+  await apiClient.patch("/api/user/me", data);
+  },
+  
 };

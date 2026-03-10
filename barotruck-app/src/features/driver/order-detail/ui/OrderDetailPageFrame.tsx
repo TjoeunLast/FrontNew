@@ -19,6 +19,11 @@ type OrderDetailPageFrameProps = {
   warningSoft: string;
   success: string;
   warning: string;
+  statusHeaderVisible?: boolean;
+  statusHeaderText?: string;
+  statusHeaderIcon?: React.ComponentProps<typeof Ionicons>["name"];
+  statusHeaderBackgroundColor?: string;
+  statusHeaderTextColor?: string;
   children: React.ReactNode;
 };
 
@@ -39,8 +44,26 @@ export default function OrderDetailPageFrame({
   warningSoft,
   success,
   warning,
+  statusHeaderVisible,
+  statusHeaderText,
+  statusHeaderIcon,
+  statusHeaderBackgroundColor,
+  statusHeaderTextColor,
   children,
 }: OrderDetailPageFrameProps) {
+  const shouldRenderStatusHeader = statusHeaderVisible ?? isCompleted;
+  const resolvedStatusHeaderBackgroundColor =
+    statusHeaderBackgroundColor ?? (isSettled ? successSoft : warningSoft);
+  const resolvedStatusHeaderTextColor =
+    statusHeaderTextColor ?? (isSettled ? success : warning);
+  const resolvedStatusHeaderIcon =
+    statusHeaderIcon ?? (isSettled ? "cash-outline" : "time-outline");
+  const resolvedStatusHeaderText =
+    statusHeaderText ??
+    (isSettled
+      ? "운송료 정산이 완료되었습니다."
+      : "운송은 완료되었고, 정산 대기 중입니다.");
+
   return (
     <>
       <View
@@ -73,28 +96,28 @@ export default function OrderDetailPageFrame({
         )}
       </View>
 
-      {isCompleted && (
+      {shouldRenderStatusHeader && (
         <View
           style={[
             s.statusHeader,
             {
-              backgroundColor: isSettled ? successSoft : warningSoft,
+              backgroundColor: resolvedStatusHeaderBackgroundColor,
             },
           ]}
         >
           <View style={s.statusHeaderRow}>
             <Ionicons
-              name={isSettled ? "cash-outline" : "time-outline"}
+              name={resolvedStatusHeaderIcon}
               size={18}
-              color={isSettled ? success : warning}
+              color={resolvedStatusHeaderTextColor}
             />
             <Text
               style={[
                 s.statusHeaderText,
-                { color: isSettled ? success : warning },
+                { color: resolvedStatusHeaderTextColor },
               ]}
             >
-              {isSettled ? "운송료 정산이 완료되었습니다." : "운송은 완료되었고, 정산 대기 중입니다."}
+              {resolvedStatusHeaderText}
             </Text>
           </View>
         </View>

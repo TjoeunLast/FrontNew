@@ -258,13 +258,7 @@ function mapOrderToSettlement(
   order: OrderResponse,
   pendingOrderIds?: Set<number>,
 ): SettlementItem | null {
-  if (
-    order.status === "CANCELLED" ||
-    order.status === "REQUESTED" ||
-    order.status === "PENDING" ||
-    order.status === "APPLIED"
-  )
-    return null;
+  if (order.status !== "COMPLETED") return null;
 
   const scheduledAt =
     parseDate(order.endSchedule) ||
@@ -292,15 +286,7 @@ function mapOrderToSettlement(
     baseStatus === "UNPAID" && pendingOrderIds?.has(Number(order.orderId))
       ? "PENDING"
       : baseStatus;
-  const isTransportCompleted = order.status === "COMPLETED";
-  if (__DEV__) {
-    console.log("[settlement-map]", {
-      orderId: order.orderId,
-      settlementStatus: order.settlementStatus,
-      payMethod: order.payMethod,
-      resolvedStatus: status,
-    });
-  }
+  const isTransportCompleted = true;
   const vehicleInfo =
     `${order.reqCarType || "차량"} ${order.reqTonnage || ""}`.trim();
 
@@ -1105,7 +1091,6 @@ export default function ShipperSettlementScreen() {
             {[
               ["ALL", "전체"],
               ["UNPAID", "미결제"],
-              ["TAX", "세금계산서"],
             ].map(([key, label]) => {
               const active = filter === key;
               return (

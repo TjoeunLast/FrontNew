@@ -7,6 +7,12 @@ import { ActivityIndicator, Alert, Linking, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import OrderDetailPageFrame from "@/features/driver/order-detail/ui/OrderDetailPageFrame";
+import {
+  getShipperOrderCancellationMessage,
+  isShipperOrderExpired,
+  parseShipperOrderSchedule,
+  resolveShipperOrderStatus,
+} from "@/features/shipper/order/lib/shipperOrderExpiry";
 import { OrderDetailModals } from "@/features/shipper/order/ui/OrderDetailModals";
 import { s } from "@/features/shipper/order/ui/OrderDetailScreen.styles";
 import {
@@ -35,11 +41,11 @@ import { OrderApi } from "@/shared/api/orderService";
 import { ProofService } from "@/shared/api/proofService";
 import { ReportService, ReviewService } from "@/shared/api/reviewService";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
+import { type ReportTypeCode } from "@/shared/models/review";
 import type { AssignedDriverInfoResponse, OrderResponse } from "@/shared/models/order";
 import type { ProofResponse } from "@/shared/models/proof";
 import { hasKakaoMapJsKey } from "@/shared/ui/business/RoutePreviewModal";
 
-type ReportType = "ACCIDENT" | "NO_SHOW" | "RUDE" | "ETC";
 type RoutePreviewBuildResult = {
   data: RoutePreviewData | null;
   usedFallbackLine: boolean;
@@ -99,7 +105,7 @@ export default function OrderDetailScreen() {
   const [routePreviewData, setRoutePreviewData] = useState<RoutePreviewData | null>(null);
   const [routeWebviewError, setRouteWebviewError] = useState<string>("");
   const [reportOpen, setReportOpen] = useState(false);
-  const [reportType, setReportType] = useState<ReportType>("ETC");
+  const [reportType, setReportType] = useState<ReportTypeCode>("ETC");
   const [reportDescription, setReportDescription] = useState("");
   const [reportLoading, setReportLoading] = useState(false);
   const [proof, setProof] = useState<ProofResponse | null>(null);
@@ -226,14 +232,6 @@ export default function OrderDetailScreen() {
     };
   }, [order?.orderId, order?.status, resolvedOrderId]);
 
-  const isWaiting = isWaitingStatus(order?.status);
-  const hasApplicants = useMemo(() => {
-    if (!isWaiting) return false;
-    if (applicantList.length > 0) return true;
-    const serverCount = Number(order?.applicantCount ?? 0);
-    return Math.max(serverCount, applicantsFromParam) > 0;
-  }, [applicantList.length, applicantsFromParam, isWaiting, order?.applicantCount]);
-
   const totalPrice = useMemo(() => {
     if (!order) return 0;
     return (
@@ -286,19 +284,61 @@ export default function OrderDetailScreen() {
         (order as any)?.cancelledBy
     );
   }, [order]);
-  const isCompleted = isCompletedStatus(order?.status);
-  const canCancelOrder = isWaitingStatus(order?.status) && !hasCancellationMeta;
-  const statusGroup = hasCancellationMeta ? "CANCELLED" : getOrderDetailStatusGroup(order?.status);
+  const isExpiredCancellation = useMemo(() => isShipperOrderExpired(order), [order]);
+  const displayOrder = useMemo(() => {
+    if (!order) return null;
+    const resolvedStatus = resolveShipperOrderStatus(order) ?? order.status;
+    if (resolvedStatus !== "CANCELLED" || hasCancellationMeta) {
+      return resolvedStatus === order.status ? order : { ...order, status: resolvedStatus };
+    }
+
+    const scheduledAt = parseShipperOrderSchedule(order.startSchedule);
+    return {
+      ...order,
+      status: "CANCELLED" as const,
+      cancellation: {
+        cancelReason: "상차 예정 시간이 지나 자동 취소 처리되었습니다.",
+        cancelledAt: scheduledAt?.toISOString() ?? new Date().toISOString(),
+        cancelledBy: "SYSTEM",
+      },
+    };
+  }, [hasCancellationMeta, order]);
+  const isWaiting = isWaitingStatus(displayOrder?.status);
+  const hasApplicants = useMemo(() => {
+    if (!isWaiting) return false;
+    if (applicantList.length > 0) return true;
+    const serverCount = Number(displayOrder?.applicantCount ?? 0);
+    return Math.max(serverCount, applicantsFromParam) > 0;
+  }, [applicantList.length, applicantsFromParam, displayOrder?.applicantCount, isWaiting]);
+  const isCompleted = isCompletedStatus(displayOrder?.status);
+  const canCancelOrder = isWaitingStatus(displayOrder?.status) && !hasCancellationMeta && !isExpiredCancellation;
+  const statusGroup =
+    hasCancellationMeta || isExpiredCancellation ? "CANCELLED" : getOrderDetailStatusGroup(displayOrder?.status);
   const isSettled = order?.settlementStatus === "COMPLETED";
-  const statusInfo = getOrderStatusInfo(hasCancellationMeta ? "CANCELLED" : order?.status);
+  const statusInfo = getOrderStatusInfo(displayOrder?.status);
+  const statusHeaderText = useMemo(() => {
+    if (statusGroup === "CANCELLED") {
+      return getShipperOrderCancellationMessage(displayOrder);
+    }
+    if (isCompleted) {
+      return isSettled
+        ? "운송료 정산이 완료되었습니다."
+        : "운송은 완료되었고, 정산 대기 중입니다.";
+    }
+    return undefined;
+  }, [displayOrder, isCompleted, isSettled, statusGroup]);
+  const statusHeaderVisible = statusGroup === "CANCELLED" || isCompleted;
+  const statusHeaderIcon = statusGroup === "CANCELLED" ? "close-circle-outline" : undefined;
+  const statusHeaderBackgroundColor = statusGroup === "CANCELLED" ? "#FEF2F2" : undefined;
+  const statusHeaderTextColor = statusGroup === "CANCELLED" ? "#DC2626" : undefined;
 
   const buttonConfig = useMemo<ActionButtonConfig | null>(() => {
     return getMainActionButtonConfig({
-      order,
+      order: displayOrder,
       reviewSubmitted,
       brandPrimary: c.brand.primary,
     });
-  }, [order, reviewSubmitted, c.brand.primary]);
+  }, [displayOrder, reviewSubmitted, c.brand.primary]);
 
   const loadApplicants = async (idOverride?: number) => {
     const idNum = idOverride ?? Number(order?.orderId);
@@ -541,6 +581,7 @@ export default function OrderDetailScreen() {
     setReportLoading(true);
     try {
       await ReportService.createReport({
+        type: "REPORT",
         orderId: id,
         reportType,
         description,
@@ -550,8 +591,14 @@ export default function OrderDetailScreen() {
       setReportDescription("");
       Alert.alert("완료", "신고가 접수되었습니다.");
     } catch (err) {
-      console.error("신고 접수 실패:", err);
-      Alert.alert("오류", "신고 접수에 실패했습니다. 다시 시도해주세요.");
+      const serverMessage =
+        typeof (err as any)?.response?.data?.message === "string"
+          ? (err as any).response.data.message
+          : typeof (err as any)?.response?.data === "string"
+            ? (err as any).response.data
+            : "";
+      console.error("신고 접수 실패:", (err as any)?.response?.data ?? err);
+      Alert.alert("오류", serverMessage || "신고 접수에 실패했습니다. 다시 시도해주세요.");
     } finally {
       setReportLoading(false);
     }
@@ -728,7 +775,7 @@ export default function OrderDetailScreen() {
   return (
     <View style={[s.container, { backgroundColor: c.bg.canvas }]}>
       <OrderDetailPageFrame
-        title={order ? `오더 #${order.orderId}` : "오더 상세"}
+        title={displayOrder ? `오더 #${displayOrder.orderId}` : "오더 상세"}
         onPressBack={() => {
           if (router.canGoBack()) {
             router.back();
@@ -750,19 +797,24 @@ export default function OrderDetailScreen() {
         warningSoft={c.status.warningSoft}
         success={c.status.success}
         warning={c.status.warning}
+        statusHeaderVisible={statusHeaderVisible}
+        statusHeaderText={statusHeaderText}
+        statusHeaderIcon={statusHeaderIcon}
+        statusHeaderBackgroundColor={statusHeaderBackgroundColor}
+        statusHeaderTextColor={statusHeaderTextColor}
       >
         {loading ? (
           <View style={s.loadingWrap}>
             <ActivityIndicator size="large" color={c.brand.primary} />
           </View>
-        ) : !order ? (
+        ) : !displayOrder ? (
           <View style={s.loadingWrap}>
             <Text style={{ color: c.text.primary, fontWeight: "800" }}>해당 오더를 찾을 수 없습니다.</Text>
           </View>
         ) : (
           <>
             <OrderDetailStatusContent
-              order={order}
+              order={displayOrder}
               statusGroup={statusGroup}
               insetsBottom={insets.bottom}
               isCompleted={isCompleted}

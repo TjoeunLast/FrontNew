@@ -18,13 +18,19 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AuthService } from "@/shared/api/authService";
+import apiClient from "@/shared/api/apiClient";
+import { fetchMyChatRooms } from "@/shared/api/chatApi";
+import { ReportService } from "@/shared/api/reviewService";
+import type { ChatRoomResponse } from "@/shared/models/chat";
 import { UserService } from "@/shared/api/userService";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import ShipperScreenHeader from "@/shared/ui/layout/ShipperScreenHeader";
+import { storeChatRoomTitle } from "@/shared/utils/chatOrderSummary";
 import { withAlpha } from "@/shared/utils/color";
-import { clearCurrentUserSnapshot } from "@/shared/utils/currentUserStorage";
+import { clearCurrentUserSnapshot, getCurrentUserSnapshot } from "@/shared/utils/currentUserStorage";
 
 const INQUIRY_TYPE_ITEMS = ["서비스 이용", "결제/정산", "계정/인증", "기타"] as const;
+const PROFILE_IMAGE_STORAGE_KEY_PREFIX = "baro_profile_image_url_v2:";
 const ACCOUNT_SCOPED_STORAGE_KEYS = [
   "baro_profile_image_url_v1",
   "baro_shipper_payment_methods_v1",
@@ -35,6 +41,88 @@ const ACCOUNT_SCOPED_STORAGE_KEYS = [
   "baro_shipper_reviewed_order_ids_v1",
   "baro_driver_extra_vehicles_v1",
 ] as const;
+const ADMIN_CHAT_KEYWORDS = ["관리자", "운영자", "admin", "support", "customer service", "cs"];
+
+function normalizeText(value: unknown) {
+  return String(value ?? "").trim();
+}
+
+function includesAdminKeyword(value: unknown) {
+  const text = normalizeText(value).toLowerCase();
+  return text ? ADMIN_CHAT_KEYWORDS.some((keyword) => text.includes(keyword.toLowerCase())) : false;
+}
+
+function findExistingAdminChatRoomId(rooms: ChatRoomResponse[]): number | null {
+  const room = findAdminChatRoom(rooms);
+  if (!room) return null;
+  const roomId = Number((room as any).roomId);
+  return Number.isFinite(roomId) && roomId > 0 ? roomId : null;
+}
+
+function toPositiveId(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  const id = Number(value);
+  return Number.isFinite(id) && id > 0 ? Math.trunc(id) : null;
+}
+
+function findAdminChatRoom(rooms: ChatRoomResponse[]): (ChatRoomResponse & Record<string, unknown>) | null {
+  for (const room of rooms) {
+    const row = room as ChatRoomResponse & Record<string, unknown>;
+    const hasAdminRole = [
+      row.otherUserRole,
+      row.partnerRole,
+      row.targetRole,
+      row.userRole,
+      row.opponentRole,
+      row.role,
+    ].some((value) => normalizeText(value).toUpperCase() === "ADMIN");
+
+    const hasAdminName = [
+      row.otherUserNickname,
+      row.partnerNickname,
+      row.targetNickname,
+      row.opponentNickname,
+      row.userNickname,
+      row.partnerName,
+      row.userName,
+      row.roomName,
+      row.name,
+    ].some(includesAdminKeyword);
+
+    if (hasAdminRole || hasAdminName) {
+      return row;
+    }
+  }
+
+  return null;
+}
+
+function resolveAdminTargetIdFromRoom(
+  room: (ChatRoomResponse & Record<string, unknown>) | null,
+  myUserId?: number | null,
+): number | null {
+  if (!room) return null;
+  const candidates = [
+    room.otherUserId,
+    room.partnerId,
+    room.targetId,
+    room.opponentId,
+    room.memberId,
+    room.userId,
+    (room.otherUser as any)?.userId,
+    (room.partner as any)?.userId,
+    (room.target as any)?.userId,
+    (room.opponent as any)?.userId,
+  ]
+    .map(toPositiveId)
+    .filter((value): value is number => value !== null);
+
+  for (const candidate of candidates) {
+    if (!myUserId || candidate !== myUserId) return candidate;
+  }
+
+  return null;
+}
 
 export default function AccountInquiryScreen() {
   const router = useRouter();
@@ -46,6 +134,8 @@ export default function AccountInquiryScreen() {
   const [title, setTitle] = React.useState("");
   const [content, setContent] = React.useState("");
   const [email, setEmail] = React.useState("");
+  const [adminChatLoading, setAdminChatLoading] = React.useState(false);
+  const [submitting, setSubmitting] = React.useState(false);
   const [withdrawing, setWithdrawing] = React.useState(false);
 
   const canSubmit = title.trim().length >= 2 && content.trim().length >= 10;
@@ -58,22 +148,129 @@ export default function AccountInquiryScreen() {
     router.replace("/(shipper)/(tabs)/my" as any);
   }, [router]);
 
-  const onSubmit = React.useCallback(() => {
+  const goAdminChat = React.useCallback(() => {
+    if (adminChatLoading) return;
+
+    void (async () => {
+      try {
+        setAdminChatLoading(true);
+
+        const rooms = await fetchMyChatRooms();
+        const adminRoom = findAdminChatRoom(rooms);
+        const existingRoomId = findExistingAdminChatRoomId(rooms);
+        if (existingRoomId) {
+          await storeChatRoomTitle(String(existingRoomId), "관리자");
+          router.push({
+            pathname: "/(chat)/[roomId]",
+            params: { roomId: String(existingRoomId) },
+          });
+          return;
+        }
+
+        const envAdminTargetId = toPositiveId(process.env.EXPO_PUBLIC_ADMIN_CHAT_TARGET_ID);
+        const me = await UserService.getMyInfo().catch(() => null as any);
+        const myUserId = toPositiveId(me?.userId);
+        const adminTargetId = envAdminTargetId ?? resolveAdminTargetIdFromRoom(adminRoom, myUserId);
+
+        if (!adminTargetId) {
+          Alert.alert("안내", "관리자 채팅 대상이 아직 설정되지 않았습니다.");
+          return;
+        }
+
+        const res = await apiClient.post<number>(`/api/chat/room/personal/${adminTargetId}`);
+        const roomId = Number(res.data);
+        if (!Number.isFinite(roomId) || roomId <= 0) {
+          Alert.alert("오류", "관리자 채팅방을 열 수 없습니다.");
+          return;
+        }
+
+        await storeChatRoomTitle(String(roomId), "관리자");
+        router.push({
+          pathname: "/(chat)/[roomId]",
+          params: { roomId: String(roomId) },
+        });
+      } catch (err) {
+        console.error("관리자 채팅 열기 실패:", (err as any)?.response?.data ?? err);
+        Alert.alert("오류", "관리자 채팅방을 열 수 없습니다.");
+      } finally {
+        setAdminChatLoading(false);
+      }
+    })();
+  }, [adminChatLoading, router]);
+
+  React.useEffect(() => {
+    let mounted = true;
+
+    void (async () => {
+      const snapshot = await getCurrentUserSnapshot().catch(() => null);
+      if (!mounted || !snapshot?.email) return;
+      setEmail((prev) => prev.trim() || snapshot.email);
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const onSubmit = React.useCallback(async () => {
+    if (submitting) return;
     if (!canSubmit) {
       Alert.alert("입력 확인", "문의 제목 2자 이상, 내용 10자 이상 입력해 주세요.");
       return;
     }
-    Alert.alert("접수 완료", "문의가 접수되었습니다. 영업일 기준 1~2일 내 답변드릴게요.", [
-      {
-        text: "확인",
-        onPress: goBack,
-      },
-    ]);
-  }, [canSubmit, goBack]);
+
+    const resolvedEmail = email.trim();
+    const resolvedTitle = title.trim();
+    const resolvedContent = content.trim();
+
+    if (!resolvedEmail) {
+      Alert.alert("입력 확인", "답변 받을 이메일을 입력해 주세요.");
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      console.log("[AccountInquiryScreen.onSubmit] inquiry form:", {
+        type: "DISCUSS",
+        inquiryType: type,
+        title: resolvedTitle,
+        description: resolvedContent,
+        email: resolvedEmail,
+        reportType: "ETC",
+      });
+      await ReportService.createInquiry({
+        reportType: "ETC",
+        title: `[${type}] ${resolvedTitle}`,
+        description: resolvedContent,
+        email: resolvedEmail,
+      });
+
+      Alert.alert("접수 완료", "문의가 접수되었습니다. 영업일 기준 1~2일 내 답변드릴게요.", [
+        {
+          text: "확인",
+          onPress: goBack,
+        },
+      ]);
+    } catch (err) {
+      const serverMessage =
+        typeof (err as any)?.response?.data?.message === "string"
+          ? (err as any).response.data.message
+          : typeof (err as any)?.response?.data === "string"
+            ? (err as any).response.data
+            : "";
+      console.error("1:1 문의 접수 실패:", (err as any)?.response?.data ?? err);
+      Alert.alert("오류", serverMessage || "문의 접수에 실패했습니다. 다시 시도해 주세요.");
+    } finally {
+      setSubmitting(false);
+    }
+  }, [canSubmit, content, email, goBack, submitting, title, type]);
 
   const clearLocalAccountData = React.useCallback(async () => {
+    const allKeys = await AsyncStorage.getAllKeys().catch(() => []);
+    const profileImageKeys = allKeys.filter((key) => key.startsWith(PROFILE_IMAGE_STORAGE_KEY_PREFIX));
     await Promise.allSettled([
       ...ACCOUNT_SCOPED_STORAGE_KEYS.map((key) => AsyncStorage.removeItem(key)),
+      ...profileImageKeys.map((key) => AsyncStorage.removeItem(key)),
       clearCurrentUserSnapshot(),
       AuthService.logout(),
     ]);
@@ -288,6 +485,16 @@ export default function AccountInquiryScreen() {
                 </View>
                 <Text style={s.rowValue}>평일 09:00 - 18:00</Text>
               </View>
+              <View style={s.divider} />
+              <Pressable style={s.row} onPress={goAdminChat}>
+                <View style={s.rowLeft}>
+                  <View style={[s.rowIconWrap, { backgroundColor: withAlpha(c.brand.primary, 0.12) }]}>
+                    <Ionicons name="chatbubble-ellipses-outline" size={17} color={c.brand.primary} />
+                  </View>
+                  <Text style={s.rowLabel}>관리자 채팅</Text>
+                </View>
+                <Text style={s.rowValue}>{adminChatLoading ? "연결 중..." : "바로가기"}</Text>
+              </Pressable>
             </View>
           </View>
 
@@ -351,8 +558,8 @@ export default function AccountInquiryScreen() {
       </KeyboardAvoidingView>
 
       <View style={[s.bottomActionBar, { paddingBottom: Math.max(10, insets.bottom + 6) }]}>
-        <Pressable style={s.submitBtn} onPress={onSubmit}>
-          <Text style={s.submitBtnText}>문의 접수하기</Text>
+        <Pressable style={s.submitBtn} onPress={() => void onSubmit()} disabled={!canSubmit || submitting}>
+          <Text style={s.submitBtnText}>{submitting ? "문의 접수 중..." : "문의 접수하기"}</Text>
         </Pressable>
       </View>
     </View>

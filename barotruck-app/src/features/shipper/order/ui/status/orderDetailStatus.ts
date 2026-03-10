@@ -64,6 +64,7 @@ export function getMainActionButtonConfig(params: {
 }): ActionButtonConfig | null {
   const { order, reviewSubmitted, brandPrimary } = params;
   if (!order) return null;
+  if (isCancelledStatus(order.status)) return null;
 
   if (isWaitingStatus(order.status)) {
     if (order.instant) {

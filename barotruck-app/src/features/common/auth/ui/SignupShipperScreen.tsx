@@ -24,11 +24,10 @@ import { Button } from "@/shared/ui/base/Button";
 import { TextField } from "@/shared/ui/form/TextField";
 import { withAlpha } from "@/shared/utils/color";
 import { saveCurrentUserSnapshot } from "@/shared/utils/currentUserStorage";
+import { buildProfileImageFileStem, buildProfileImageStorageKey } from "@/shared/utils/profileImageStorage";
 
 type ShipperType = "personal" | "business";
-const PROFILE_IMAGE_STORAGE_KEY = "baro_profile_image_url_v1";
-
-async function persistProfileImage(uri: string): Promise<string> {
+async function persistProfileImage(uri: string, identity?: string): Promise<string> {
   const docDir = FileSystem.documentDirectory;
   if (!docDir) return uri;
 
@@ -37,7 +36,7 @@ async function persistProfileImage(uri: string): Promise<string> {
     ? cleanUri.substring(cleanUri.lastIndexOf("."))
     : ".jpg";
   const safeExt = ext.length >= 2 && ext.length <= 5 ? ext : ".jpg";
-  const targetUri = `${docDir}profile-image${safeExt}`;
+  const targetUri = `${docDir}${buildProfileImageFileStem(identity)}${safeExt}`;
 
   const targetInfo = await FileSystem.getInfoAsync(targetUri);
   if (targetInfo.exists) {
@@ -127,6 +126,7 @@ export default function SignupShipperScreen() {
     profileImageUri?: string;
     gender?: "M" | "F";
     birthDate?: string;
+
   }>();
 
   const [shipperType, setShipperType] = useState<ShipperType>("business");
@@ -189,14 +189,17 @@ export default function SignupShipperScreen() {
         },
       };
 
+      
+
       await AuthService.register(payload);
       if (params.profileImageUri) {
         try {
           const persistedUri = await persistProfileImage(
             String(params.profileImageUri),
+            params.email,
           );
-          await UserService.uploadProfileImage(toUploadFile(persistedUri));
-          await AsyncStorage.setItem(PROFILE_IMAGE_STORAGE_KEY, persistedUri);
+          const uploadedImageUrl = await UserService.uploadProfileImage(toUploadFile(persistedUri));
+          await AsyncStorage.setItem(buildProfileImageStorageKey(params.email), uploadedImageUrl || persistedUri);
         } catch (imageError) {
           console.error("signup profile image upload failed", imageError);
         }
@@ -205,6 +208,7 @@ export default function SignupShipperScreen() {
         email: params.email,
         name: params.name,
         nickname: nickname.trim(),
+        phone: params.phone.trim(),
         role: "SHIPPER",
         shipperType: shipperType === "business" ? "Y" : "N",
         gender: params.gender,

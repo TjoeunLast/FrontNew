@@ -1,13 +1,13 @@
-﻿import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+﻿import { useRouter } from "expo-router";
 import React from "react";
-import { Alert, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Alert, ScrollView, Switch, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
   clearCreateOrderDraft,
   getCreateOrderDraft,
 } from "@/features/shipper/create-order/model/createOrderDraft";
+import { toPaymentMethodLabel } from "@/features/common/payment/lib/paymentMethods";
 import { PRESET_REQUEST_TAGS } from "@/features/shipper/create-order/ui/createOrderStep1.constants";
 import { OrderApi } from "@/shared/api/orderService";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
@@ -28,6 +28,7 @@ const LOAD_METHOD_OPTIONS: Array<{ value: "독차" | "혼적"; label: string }> 
   { value: "독차", label: "독차" },
   { value: "혼적", label: "혼적" },
 ];
+const WORK_TOOL_OPTIONS = ["수작업", "지게차", "크레인"] as const;
 
 function won(n: number) {
   const v = Math.max(0, Math.round(n));
@@ -80,7 +81,8 @@ export function ShipperCreateOrderStep2CargoScreen() {
   }, []);
 
   const [loadMethod, setLoadMethod] = React.useState<"독차" | "혼적">("독차");
-  const [workTool, setWorkTool] = React.useState<"수작업" | "지게차" | "크레인">("수작업");
+  const [isManualUnload, setIsManualUnload] = React.useState(true);
+  const [workTool, setWorkTool] = React.useState<(typeof WORK_TOOL_OPTIONS)[number]>("수작업");
   const [packaging, setPackaging] = React.useState<"미포장" | "포장">("미포장");
   const [selectedRequestTags, setSelectedRequestTags] = React.useState<string[]>(draft?.requestTags ?? []);
   const [memo, setMemo] = React.useState("");
@@ -88,10 +90,11 @@ export function ShipperCreateOrderStep2CargoScreen() {
 
   if (!draft) return null;
 
+  const resolvedWorkType = isManualUnload ? workTool : undefined;
   const unloadSurchargeRate =
-    workTool === "크레인"
+    resolvedWorkType === "크레인"
       ? CRANE_UNLOAD_SURCHARGE_RATE
-      : workTool === "지게차"
+      : resolvedWorkType === "지게차"
         ? FORKLIFT_UNLOAD_SURCHARGE_RATE
         : MANUAL_UNLOAD_SURCHARGE_RATE;
   const unloadSurcharge = Math.max(0, Math.round(draft.appliedFare * unloadSurchargeRate));
@@ -99,13 +102,12 @@ export function ShipperCreateOrderStep2CargoScreen() {
   const finalFare = draft.appliedFare + unloadSurcharge + packagingPrice;
   const fee = draft.pay === "card" ? Math.round(finalFare * 0.1) : 0;
   const totalPay = finalFare + fee;
-  const resolvedWorkType = workTool;
   const unloadHintText =
-    workTool === "크레인"
+    resolvedWorkType === "크레인"
       ? `크레인 +7% (${won(unloadSurcharge)})`
-      : workTool === "지게차"
+      : resolvedWorkType === "지게차"
         ? `지게차 +5% (${won(unloadSurcharge)})`
-        : "기본 선택";
+        : "추가요금 없음";
   const packagingHintText = packaging === "포장" ? `선택 시 +${won(packagingPrice)}` : "추가요금 없음";
   const toggleRequestTag = (tag: string) => {
     setSelectedRequestTags((prev) => (prev.includes(tag) ? prev.filter((x) => x !== tag) : [...prev, tag]));
@@ -142,7 +144,7 @@ export function ShipperCreateOrderStep2CargoScreen() {
         loadWeight: Number.parseFloat(draft.weightTon) || undefined,
         basePrice: draft.appliedFare,
         laborFee: unloadSurcharge || undefined,
-        payMethod: draft.pay,
+        payMethod: toPaymentMethodLabel(draft.pay),
         packagingPrice,
         instant: draft.dispatch === "instant",
         distance: draft.distanceKm,
@@ -231,18 +233,35 @@ export function ShipperCreateOrderStep2CargoScreen() {
               borderRadius: 14,
               paddingHorizontal: 14,
               paddingVertical: 12,
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 12,
             }}
           >
-            <Text style={{ fontSize: 13, fontWeight: "800", color: c.text.primary }}>수작업</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 13, fontWeight: "800", color: c.text.primary }}>수작업</Text>
+            </View>
+            <Switch
+              value={isManualUnload}
+              onValueChange={setIsManualUnload}
+              trackColor={{ false: "#D7DEE8", true: "#C7D2FE" }}
+              thumbColor={isManualUnload ? "#4E46E5" : "#FFFFFF"}
+              ios_backgroundColor="#D7DEE8"
+            />
           </View>
 
-          <View style={{ height: 14 }} />
-          <Text style={{ fontSize: 13, fontWeight: "800", color: c.text.primary, marginBottom: 8 }}>장비 선택</Text>
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-            {(["수작업", "지게차", "크레인"] as const).map((x) => (
-              <FormChip key={x} label={x} selected={workTool === x} onPress={() => setWorkTool(x)} />
-            ))}
-          </View>
+          {isManualUnload ? (
+            <>
+              <View style={{ height: 14 }} />
+              <Text style={{ fontSize: 13, fontWeight: "800", color: c.text.primary, marginBottom: 8 }}>작업 방식 선택</Text>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+                {WORK_TOOL_OPTIONS.map((x) => (
+                  <FormChip key={x} label={x} selected={workTool === x} onPress={() => setWorkTool(x)} />
+                ))}
+              </View>
+            </>
+          ) : null}
 
           <View style={{ height: 14 }} />
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 }}>

@@ -1,6 +1,6 @@
-﻿import AsyncStorage from "@react-native-async-storage/async-storage";
+﻿import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
-import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useMemo, useState } from "react";
 import {
@@ -10,6 +10,7 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   View,
   type ImageStyle,
@@ -17,8 +18,9 @@ import {
   type ViewStyle,
 } from "react-native";
 
-import { AuthService } from "@/shared/api/authService";
 import apiClient from "@/shared/api/apiClient";
+import { AuthService } from "@/shared/api/authService";
+import { PaymentService } from "@/shared/api/paymentService";
 import { UserService } from "@/shared/api/userService";
 import { USE_MOCK } from "@/shared/config/mock";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
@@ -29,9 +31,8 @@ import {
   getCurrentUserSnapshot,
   saveCurrentUserSnapshot,
 } from "@/shared/utils/currentUserStorage";
-
-const PROFILE_IMAGE_STORAGE_KEY = "baro_profile_image_url_v1";
-const SHIPPER_PAYMENT_METHODS_KEY = "baro_shipper_payment_methods_v1";
+import { getBillingAgreementMethodLabel } from "@/shared/utils/payment/billingAgreement";
+import { buildProfileImageStorageKey } from "@/shared/utils/profileImageStorage";
 
 type ProfileView = {
   email: string;
@@ -42,20 +43,6 @@ type ProfileView = {
   gender: string;
   ageLabel: string;
 };
-
-function readDefaultCardCompany(raw: string | null) {
-  if (!raw) return "미등록";
-  try {
-    const parsed = JSON.parse(raw) as { cards?: Array<{ cardCompany?: unknown; isDefault?: unknown }> };
-    const cards = Array.isArray(parsed?.cards) ? parsed.cards : [];
-    if (cards.length === 0) return "미등록";
-    const defaultCard = cards.find((card) => Boolean(card?.isDefault)) ?? cards[0];
-    const company = String(defaultCard?.cardCompany ?? "").trim();
-    return company || "등록 카드";
-  } catch {
-    return "미등록";
-  }
-}
 
 function roleToKorean(role: string) {
   if (role === "SHIPPER") return "화주";
@@ -193,16 +180,19 @@ export default function MyPageScreen() {
       let active = true;
 
       void (async () => {
-        const [localImageUrl, paymentStoreRaw] = await Promise.all([
-          AsyncStorage.getItem(PROFILE_IMAGE_STORAGE_KEY),
-          AsyncStorage.getItem(SHIPPER_PAYMENT_METHODS_KEY),
-        ]);
+        const agreement = await PaymentService.getMyBillingAgreement().catch(() => null);
         if (!active) return;
-        setPaymentMethodLabel(readDefaultCardCompany(paymentStoreRaw));
+        setPaymentMethodLabel(getBillingAgreementMethodLabel(agreement));
 
         try {
           const me = (await UserService.getMyInfo()) as any;
           const cached = await getCurrentUserSnapshot();
+          const storageKey = buildProfileImageStorageKey(me.email ?? cached?.email);
+          const [localImageUrl, remoteImageUrl] = await Promise.all([
+            AsyncStorage.getItem(storageKey).catch(() => ""),
+            UserService.getProfileImage().catch(() => ""),
+          ]);
+          const resolvedImageUrl = remoteImageUrl || (localImageUrl ?? "") || me.profileImageUrl || "";
           const shipperDetail = await fetchShipperDetailFromServer(me);
           const shipperType = resolveShipperType(
             me,
@@ -250,12 +240,17 @@ export default function MyPageScreen() {
           };
           if (!active) return;
           setProfile(next);
-          setProfileImageUrl((localImageUrl ?? "") || me.profileImageUrl || "");
+          setProfileImageUrl(resolvedImageUrl);
+          if (resolvedImageUrl && resolvedImageUrl !== (localImageUrl ?? "")) {
+            await AsyncStorage.setItem(storageKey, resolvedImageUrl);
+          }
           try {
             await saveCurrentUserSnapshot({
               email: me.email,
               nickname: me.nickname,
               name: me.name || cached?.name,
+              phone:
+                String(me.phone ?? shipperDetail?.phone ?? shipperDetail?.user?.phone ?? cached?.phone ?? "").trim() || undefined,
               role: me.role,
               shipperType: shipperDetail?.isCorporate ?? cached?.shipperType,
               gender: me.gender ?? me.sex ?? shipperDetail?.user?.gender ?? cached?.gender,
@@ -281,6 +276,7 @@ export default function MyPageScreen() {
         } catch {
           const cached = await getCurrentUserSnapshot();
           if (!active) return;
+          const localImageUrl = await AsyncStorage.getItem(buildProfileImageStorageKey(cached?.email));
           setProfileImageUrl(localImageUrl ?? "");
           if (!cached) return;
           setProfile({
@@ -386,27 +382,7 @@ export default function MyPageScreen() {
       settingLabelWrap: { flex: 1 } as ViewStyle,
       settingLabel: { fontSize: 15, fontWeight: "900", color: c.text.primary } as TextStyle,
       settingSub: { marginTop: 4, fontSize: 12, fontWeight: "700", color: c.text.secondary } as TextStyle,
-      settingActionButton: {
-        minWidth: 88,
-        height: 40,
-        borderRadius: 999,
-        alignItems: "center",
-        justifyContent: "center",
-        paddingHorizontal: 16,
-        borderWidth: 1.5,
-        backgroundColor: c.bg.surface,
-      } as ViewStyle,
-      settingActionButtonOn: {
-        borderColor: c.brand.primary,
-        backgroundColor: withAlpha(c.brand.primary, 0.1),
-      } as ViewStyle,
-      settingActionButtonOff: {
-        borderColor: c.border.default,
-        backgroundColor: c.bg.surface,
-      } as ViewStyle,
-      settingActionText: { fontSize: 14, fontWeight: "900" } as TextStyle,
-      settingActionTextOn: { color: c.brand.primary } as TextStyle,
-      settingActionTextOff: { color: c.text.secondary } as TextStyle,
+      settingActionWrap: { marginLeft: 12 } as ViewStyle,
       divider: { height: 1, backgroundColor: withAlpha(c.border.default, 0.9), marginLeft: 54 } as ViewStyle,
       logoutRow: { marginTop: 22, paddingVertical: 8 } as ViewStyle,
       logoutText: {
@@ -506,23 +482,15 @@ export default function MyPageScreen() {
               <Text style={s.settingLabel}>배차 알림</Text>
               <Text style={s.settingSub}>새 배차 요청 알림 수신</Text>
             </View>
-            <Pressable
-              onPress={() => setReceiveDispatchAlert((prev) => !prev)}
-              style={[
-                s.settingActionButton,
-                receiveDispatchAlert ? s.settingActionButtonOn : s.settingActionButtonOff,
-              ]}
-              hitSlop={8}
-            >
-              <Text
-                style={[
-                  s.settingActionText,
-                  receiveDispatchAlert ? s.settingActionTextOn : s.settingActionTextOff,
-                ]}
-              >
-                {receiveDispatchAlert ? "ON" : "OFF"}
-              </Text>
-            </Pressable>
+            <View style={s.settingActionWrap}>
+              <Switch
+                value={receiveDispatchAlert}
+                onValueChange={setReceiveDispatchAlert}
+                trackColor={{ false: "#D7DEE8", true: "#C7D2FE" }}
+                thumbColor={receiveDispatchAlert ? "#4E46E5" : "#FFFFFF"}
+                ios_backgroundColor="#D7DEE8"
+              />
+            </View>
           </View>
         </View>
 
@@ -545,13 +513,6 @@ export default function MyPageScreen() {
             <Ionicons name="chevron-forward" size={20} color={c.text.secondary} />
           </Pressable>
           <View style={s.divider} />
-          <Pressable style={s.row} onPress={() => router.push("/(common)/settings/shipper/business" as any)}>
-            <View style={[s.rowIconWrap, { backgroundColor: withAlpha(c.text.secondary, 0.16) }]}>
-              <Ionicons name="document-text-outline" size={18} color={c.text.secondary} />
-            </View>
-            <Text style={s.rowLabel}>세금계산서 관리</Text>
-            <Ionicons name="chevron-forward" size={20} color={c.text.secondary} />
-          </Pressable>
         </View>
 
         <Text style={s.sectionTitle}>고객 지원</Text>

@@ -8,6 +8,7 @@ export type CurrentUserSnapshot = {
   email: string;
   nickname: string;
   name?: string;
+  phone?: string;
   role: CurrentUserRole;
   shipperType?: "Y" | "N";
   gender?: "M" | "F";

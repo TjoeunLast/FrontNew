@@ -11,6 +11,10 @@ import {
 } from "react-native";
 
 import { s } from "@/features/shipper/order/ui/OrderDetailScreen.styles";
+import {
+  REPORT_TYPE_OPTIONS,
+  type ReportTypeCode,
+} from "@/shared/models/review";
 import type { RoutePreviewData } from "@/features/shipper/order/ui/orderDetailRoute";
 import type { AssignedDriverInfoResponse } from "@/shared/models/order";
 import { RoutePreviewModal } from "@/shared/ui/business/RoutePreviewModal";
@@ -23,8 +27,6 @@ type ModalColors = {
   textSecondary: string;
   brandPrimary: string;
 };
-
-type ReportType = "ACCIDENT" | "NO_SHOW" | "RUDE" | "ETC";
 
 export function OrderDetailModals({
   colors,
@@ -69,11 +71,11 @@ export function OrderDetailModals({
   onChangeRouteWebviewError: (value: string) => void;
   onCloseRoutePreview: () => void;
   reportOpen: boolean;
-  reportType: ReportType;
+  reportType: ReportTypeCode;
   reportDescription: string;
   reportLoading: boolean;
   onCloseReport: () => void;
-  onChangeReportType: (value: ReportType) => void;
+  onChangeReportType: (value: ReportTypeCode) => void;
   onChangeReportDescription: (value: string) => void;
   onSubmitReport: () => void;
   reviewOpen: boolean;
@@ -175,17 +177,12 @@ export function OrderDetailModals({
 
             <Text style={[s.reviewLabel, { color: colors.textPrimary }]}>신고 유형</Text>
             <View style={s.reportTypeWrap}>
-              {[
-                { key: "ACCIDENT" as ReportType, label: "사고" },
-                { key: "NO_SHOW" as ReportType, label: "노쇼" },
-                { key: "RUDE" as ReportType, label: "불친절" },
-                { key: "ETC" as ReportType, label: "기타" },
-              ].map((item) => {
-                const active = reportType === item.key;
+              {REPORT_TYPE_OPTIONS.map((item) => {
+                const active = reportType === item.value;
                 return (
                   <Pressable
-                    key={item.key}
-                    onPress={() => onChangeReportType(item.key)}
+                    key={item.value}
+                    onPress={() => onChangeReportType(item.value)}
                     style={[
                       s.reportTypeChip,
                       {

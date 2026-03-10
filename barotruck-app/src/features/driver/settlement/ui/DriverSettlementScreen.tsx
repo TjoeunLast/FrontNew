@@ -6,12 +6,12 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
   isCashPayment,
-  isShipperActivePaymentMethod,
   isTossPayment,
   toPaymentMethodLabel,
 } from "@/features/common/payment/lib/paymentMethods";
 import {
   calcOrderAmount,
+  isDriverSettlementEligibleOrder,
   statusText,
   toSettlementStatus,
   toWon,
@@ -21,6 +21,7 @@ import { OrderService } from "@/shared/api/orderService";
 import { PaymentService } from "@/shared/api/paymentService";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import type { OrderResponse } from "@/shared/models/order";
+import type { DriverPayoutItemStatusResponse } from "@/shared/models/payment";
 import ShipperScreenHeader from "@/shared/ui/layout/ShipperScreenHeader";
 
 type SettlementFilter = "ALL" | "PENDING" | "PAID";
@@ -39,6 +40,12 @@ type SettlementItem = {
   isToss: boolean;
   isPrepaid: boolean;
   confirmByDriver: boolean;
+};
+
+type PayoutState = {
+  loading: boolean;
+  data: DriverPayoutItemStatusResponse | null;
+  error: string | null;
 };
 
 function startOfMonth(d: Date) {
@@ -82,14 +89,69 @@ function toDateLabel(d: Date) {
   return `${d.getMonth() + 1}.${d.getDate()} (${w})`;
 }
 
-function mapOrderToSettlement(order: OrderResponse): SettlementItem | null {
-  if (order.status === "CANCELLED" || order.status === "REQUESTED" || order.status === "PENDING") {
-    return null;
+function isAwaitingDriverConfirm(paymentStatus?: string | null) {
+  return String(paymentStatus ?? "").toUpperCase() === "PAID";
+}
+
+function getApiErrorMessage(error: unknown, fallback: string) {
+  const candidate = error as {
+    message?: unknown;
+    response?: { status?: number; data?: { message?: unknown } | string };
+  };
+
+  const status = Number(candidate?.response?.status ?? 0);
+  if (status === 400 || status === 404) {
+    return "아직 지급 요청 전입니다.";
   }
 
-  // 차주 결제확인 액션 노출 대상 결제수단 판별.
-  const confirmByDriver = isTossPayment(order.payMethod) || isCashPayment(order.payMethod);
-  if (!isShipperActivePaymentMethod(order.payMethod) || !confirmByDriver) {
+  const responseData = candidate?.response?.data;
+  if (typeof responseData === "string" && responseData.trim()) {
+    return responseData;
+  }
+  if (
+    typeof responseData === "object" &&
+    responseData !== null &&
+    "message" in responseData &&
+    typeof responseData.message === "string" &&
+    responseData.message.trim()
+  ) {
+    return responseData.message;
+  }
+
+  return String(candidate?.message ?? fallback);
+}
+
+function getPayoutStatusLabel(status?: DriverPayoutItemStatusResponse["status"] | null) {
+  switch (status) {
+    case "READY":
+      return "지급 준비";
+    case "REQUESTED":
+      return "지급 요청";
+    case "COMPLETED":
+      return "지급 완료";
+    case "FAILED":
+      return "지급 실패";
+    case "RETRYING":
+      return "재시도 중";
+    default:
+      return "상태 없음";
+  }
+}
+
+function formatPayoutTime(value?: string | null) {
+  if (!value) return null;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleString("ko-KR", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function mapOrderToSettlement(order: OrderResponse): SettlementItem | null {
+  if (!isDriverSettlementEligibleOrder(order)) {
     return null;
   }
 
@@ -102,6 +164,9 @@ function mapOrderToSettlement(order: OrderResponse): SettlementItem | null {
   if (!scheduledAt) return null;
 
   const status = toSettlementStatus(order);
+  const confirmByDriver =
+    isAwaitingDriverConfirm(order.paymentStatus) &&
+    (isTossPayment(order.payMethod) || isCashPayment(order.payMethod));
 
   return {
     id: String(order.orderId),
@@ -119,7 +184,7 @@ function mapOrderToSettlement(order: OrderResponse): SettlementItem | null {
   };
 }
 
-type PaymentMethodFilter = "ALL" | "TOSS" | "DEFERRED";
+type PaymentMethodFilter = "ALL" | "TOSS" | "OTHER";
 
 export default function DriverSettlementScreen() {
   const { colors: c } = useAppTheme();
@@ -133,6 +198,9 @@ export default function DriverSettlementScreen() {
   const [items, setItems] = useState<SettlementItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [submittingOrderId, setSubmittingOrderId] = useState<number | null>(null);
+  const [payoutStateByOrder, setPayoutStateByOrder] = useState<
+    Record<number, PayoutState>
+  >({});
 
   const fetchItems = useCallback(async () => {
     const rows = await OrderService.getMyDrivingOrders();
@@ -222,6 +290,42 @@ export default function DriverSettlementScreen() {
       setSubmittingOrderId((prev) => (prev === item.orderId ? null : prev));
     }
   };
+
+  const loadPayoutStatus = useCallback(async (orderId: number) => {
+    setPayoutStateByOrder((prev) => ({
+      ...prev,
+      [orderId]: {
+        loading: true,
+        data: prev[orderId]?.data ?? null,
+        error: null,
+      },
+    }));
+
+    try {
+      const payout = await PaymentService.getMyPayoutStatus(orderId);
+      setPayoutStateByOrder((prev) => ({
+        ...prev,
+        [orderId]: {
+          loading: false,
+          data: payout,
+          error: null,
+        },
+      }));
+    } catch (error) {
+      const message = getApiErrorMessage(
+        error,
+        "지급 상태를 불러오지 못했습니다."
+      );
+      setPayoutStateByOrder((prev) => ({
+        ...prev,
+        [orderId]: {
+          loading: false,
+          data: null,
+          error: message,
+        },
+      }));
+    }
+  }, []);
 
   const s = StyleSheet.create({
     page: { flex: 1, backgroundColor: "#F5F6FA" },
@@ -316,7 +420,10 @@ export default function DriverSettlementScreen() {
     },
     actionRow: {
       marginTop: 10,
-      alignItems: "flex-end",
+      flexDirection: "row",
+      justifyContent: "flex-end",
+      flexWrap: "wrap",
+      gap: 8,
     },
     actionBtn: {
       height: 34,
@@ -332,6 +439,12 @@ export default function DriverSettlementScreen() {
     },
     actionText: { fontSize: 12, fontWeight: "800", color: "#FFFFFF" },
     actionTextDisabled: { color: "#64748B" },
+    payoutMetaText: {
+      marginTop: 6,
+      fontSize: 12,
+      fontWeight: "700",
+      color: c.text.secondary,
+    },
   });
 
   return (
@@ -381,11 +494,11 @@ export default function DriverSettlementScreen() {
           </View>
 
           <View style={s.paymentFilterRow}>
-            {[
-              ["ALL", "결제 전체"],
-              ["TOSS", "토스"],
-              ["DEFERRED", "착불"],
-            ].map(([key, label]) => {
+              {[
+                ["ALL", "결제 전체"],
+                ["TOSS", "토스"],
+                ["OTHER", "기타"],
+              ].map(([key, label]) => {
               const active = paymentFilter === key;
               return (
                 <Pressable
@@ -415,12 +528,23 @@ export default function DriverSettlementScreen() {
               {filtered.map((item) => {
                 const isPaid = item.status === "PAID";
                 const isSubmitting = submittingOrderId === item.orderId;
+                const payoutState = payoutStateByOrder[item.orderId];
                 const statusColor = isPaid ? "#E8F5E9" : item.status === "PENDING" ? "#FEF9C3" : "#FEE2E2";
                 const actionText = isPaid
                   ? "결제완료"
                   : item.isToss
                     ? "토스 결제확인"
                     : "착불 결제확인";
+                const payoutMeta = payoutState?.loading
+                  ? "지급 상태 확인 중..."
+                  : payoutState?.data
+                    ? `${getPayoutStatusLabel(payoutState.data.status)} · ${
+                        formatPayoutTime(
+                          payoutState.data.completedAt ??
+                            payoutState.data.requestedAt
+                        ) ?? "-"
+                      }`
+                    : payoutState?.error ?? null;
 
                 return (
                   <View key={item.id} style={s.itemCard}>
@@ -445,6 +569,9 @@ export default function DriverSettlementScreen() {
                       {item.from} <Text style={{ color: "#94A3B8" }}>→</Text> {item.to}
                     </Text>
                     <Text style={s.payMethodText}>결제 방식: {item.payMethodLabel}</Text>
+                    {payoutMeta ? (
+                      <Text style={s.payoutMetaText}>지급 상태: {payoutMeta}</Text>
+                    ) : null}
 
                     <View style={s.actionRow}>
                       {item.confirmByDriver ? (
@@ -463,6 +590,25 @@ export default function DriverSettlementScreen() {
                           </Text>
                         </Pressable>
                       ) : null}
+                      <Pressable
+                        style={[s.actionBtn, payoutState?.loading && s.actionBtnDisabled]}
+                        disabled={Boolean(payoutState?.loading)}
+                        onPress={() => void loadPayoutStatus(item.orderId)}
+                      >
+                        <MaterialCommunityIcons
+                          name="bank-transfer-out"
+                          size={14}
+                          color={payoutState?.loading ? "#64748B" : "#FFFFFF"}
+                        />
+                        <Text
+                          style={[
+                            s.actionText,
+                            payoutState?.loading && s.actionTextDisabled,
+                          ]}
+                        >
+                          {payoutState?.loading ? "확인중..." : "지급 상태"}
+                        </Text>
+                      </Pressable>
                     </View>
                   </View>
                 );

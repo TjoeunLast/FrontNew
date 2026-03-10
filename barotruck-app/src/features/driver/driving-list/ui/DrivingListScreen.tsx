@@ -18,6 +18,7 @@ import { ReceiptModal } from "@/features/driver/driving/ui/ReceiptModal";
 import { ActiveOrderCard } from "@/features/driver/shard/ui/ActiveOrderCard";
 import { DoneOrderCard } from "@/features/driver/shard/ui/DoneOrderCard";
 import { PendingOrderCard } from "@/features/driver/shard/ui/PendingOrderCard";
+import { isOrderSettlementPaid } from "@/features/common/settlement/lib/settlementHelpers";
 import ShipperScreenHeader from "@/shared/ui/layout/ShipperScreenHeader";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -74,10 +75,10 @@ export default function DrivingListScreen() {
 
     // 완료 탭 분리 (정산 완료 vs 정산 대기)
     const settled = completedOrders.filter(
-      (o) => o.settlementStatus === "COMPLETED",
+      (o) => isOrderSettlementPaid(o),
     ); // 정산 완료
     const waiting = completedOrders.filter(
-      (o) => o.settlementStatus !== "COMPLETED",
+      (o) => !isOrderSettlementPaid(o),
     ); // 정산 대기
 
     return { accepted, applied, settled, waiting };
