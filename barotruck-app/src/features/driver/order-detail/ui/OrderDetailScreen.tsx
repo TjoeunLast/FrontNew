@@ -26,6 +26,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ReceiptModal } from "@/features/driver/driving/ui/ReceiptModal";
+import { ArrivalPhotoModal } from "@/features/driver/driving/ui/ArrivalPhotoModal";
 import {
   type RoutePathPoint,
   type RoutePreviewData,
@@ -201,6 +202,10 @@ export default function OrderDetailScreen() {
     modalOpen,
     receiptOrderId,
     closeReceiptModal,
+    arrivalPhotoModalOpen,
+    arrivalPhotoOrderId,
+    closeArrivalPhotoModal,
+    handleArriveWithPhoto,
     myLocation,
     startType,
     endType,
@@ -1493,6 +1498,12 @@ export default function OrderDetailScreen() {
             </View>
           </View>
         </Modal>
+        <ArrivalPhotoModal
+          visible={arrivalPhotoModalOpen}
+          orderId={arrivalPhotoOrderId}
+          onClose={closeArrivalPhotoModal}
+          onSubmitted={handleArriveWithPhoto}
+        />
         <ReceiptModal
           visible={modalOpen}
           orderId={receiptOrderId}

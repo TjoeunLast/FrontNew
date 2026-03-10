@@ -90,12 +90,16 @@ export const useOrderDetail = () => {
 
   const {
     handleUpdateStatus,
+    handleArriveWithPhoto,
     handleCancelOrder,
     handleStartTransport,
     modalOpen,
     setModalOpen,
     receiptOrderId,
     closeReceiptModal,
+    arrivalPhotoModalOpen,
+    arrivalPhotoOrderId,
+    closeArrivalPhotoModal,
     handleAcceptOrder,
   } = useDrivingProcess(fetchDetail);
 
@@ -181,6 +185,10 @@ export const useOrderDetail = () => {
     setModalOpen,
     receiptOrderId,
     closeReceiptModal,
+    arrivalPhotoModalOpen,
+    arrivalPhotoOrderId,
+    closeArrivalPhotoModal,
+    handleArriveWithPhoto,
     myLocation,
 
     // 계산된 데이터

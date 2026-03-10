@@ -6,6 +6,8 @@ export const useDrivingProcess = (onRefresh?: () => void) => {
   // 인수증
   const [modalOpen, setModalOpen] = useState(false);
   const [receiptOrderId, setReceiptOrderId] = useState<number | null>(null);
+  const [arrivalPhotoModalOpen, setArrivalPhotoModalOpen] = useState(false);
+  const [arrivalPhotoOrderId, setArrivalPhotoOrderId] = useState<number | null>(null);
   // 서버 응답 시 중복 클릭 방지
   const [isLoading, setIsLoading] = useState(false);
 
@@ -14,8 +16,19 @@ export const useDrivingProcess = (onRefresh?: () => void) => {
     setReceiptOrderId(null);
   };
 
+  const closeArrivalPhotoModal = () => {
+    setArrivalPhotoModalOpen(false);
+    setArrivalPhotoOrderId(null);
+  };
+
   // 오더 상태 업데이트
   const handleUpdateStatus = async (orderId: number, nextStatus: string) => {
+    if (nextStatus === "UNLOADING") {
+      setArrivalPhotoOrderId(orderId);
+      setArrivalPhotoModalOpen(true);
+      return;
+    }
+
     try {
       setIsLoading(true); // 통신 시작
       await OrderService.updateStatus(orderId, nextStatus);
@@ -47,6 +60,21 @@ export const useDrivingProcess = (onRefresh?: () => void) => {
       if (onRefresh) onRefresh(); // 목록 새로고침
     } catch (error: any) {
       Alert.alert("오류", "운송 상태 변경에 실패했습니다.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleArriveWithPhoto = async (orderId: number) => {
+    try {
+      setIsLoading(true);
+      await OrderService.updateStatus(orderId, "UNLOADING");
+      if (onRefresh) await onRefresh();
+    } catch (error: any) {
+      const message =
+        error?.response?.data?.message || "하차지 도착 처리에 실패했습니다.";
+      Alert.alert("오류", message);
+      throw error;
     } finally {
       setIsLoading(false);
     }
@@ -126,8 +154,12 @@ export const useDrivingProcess = (onRefresh?: () => void) => {
     receiptOrderId,
     setReceiptOrderId,
     closeReceiptModal,
+    arrivalPhotoModalOpen,
+    arrivalPhotoOrderId,
+    closeArrivalPhotoModal,
     isLoading,
     handleUpdateStatus,
+    handleArriveWithPhoto,
     handleCancelOrder,
     handleStartTransport,
     handleAcceptOrder,

@@ -14,6 +14,7 @@ import {
 // [컴포넌트 및 로직 임포트]
 import { useDrivingList } from "@/features/driver/driving-list/model/useDrivingList";
 import { useDrivingProcess } from "@/features/driver/driving/model/useDrivingProcess";
+import { ArrivalPhotoModal } from "@/features/driver/driving/ui/ArrivalPhotoModal";
 import { ReceiptModal } from "@/features/driver/driving/ui/ReceiptModal";
 import { ActiveOrderCard } from "@/features/driver/shard/ui/ActiveOrderCard";
 import { DoneOrderCard } from "@/features/driver/shard/ui/DoneOrderCard";
@@ -46,9 +47,13 @@ export default function DrivingListScreen() {
     handleCancelOrder,
     handleStartTransport,
     handleUpdateStatus,
+    handleArriveWithPhoto,
     modalOpen,
     receiptOrderId,
     closeReceiptModal,
+    arrivalPhotoModalOpen,
+    arrivalPhotoOrderId,
+    closeArrivalPhotoModal,
   } = useDrivingProcess(refresh);
 
   // 외부 파라미터 수신 시 탭 자동 전환 로직
@@ -268,6 +273,12 @@ export default function DrivingListScreen() {
       )}
 
       {/* 모달 */}
+      <ArrivalPhotoModal
+        visible={arrivalPhotoModalOpen}
+        orderId={arrivalPhotoOrderId}
+        onClose={closeArrivalPhotoModal}
+        onSubmitted={handleArriveWithPhoto}
+      />
       <ReceiptModal
         visible={modalOpen}
         orderId={receiptOrderId}

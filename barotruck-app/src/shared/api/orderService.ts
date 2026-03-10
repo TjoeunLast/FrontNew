@@ -679,6 +679,21 @@ export const OrderService = {
     return extractOrderImageUrl(res.data);
   },
 
+  uploadArrivalPhoto: async (orderId: number, file: any): Promise<string> => {
+    const formData = new FormData();
+    formData.append("image", file);
+
+    const res = await apiClient.post(`/api/v1/orders/${orderId}/arrival-photo`, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    return extractOrderImageUrl(res.data);
+  },
+
+  getArrivalPhoto: async (orderId: number): Promise<string> => {
+    const res = await apiClient.get(`/api/v1/orders/${orderId}/arrival-photo`);
+    return extractOrderImageUrl(res.data);
+  },
+
   /** * 오더 이미지 조회 
    * GET /api/v1/orders/{orderId}/image
    */
