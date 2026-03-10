@@ -12,21 +12,16 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
 import { DrOrderCard } from "@/features/driver/shard/ui/DrOrderCard";
+import {
+  calcOrderAmount,
+  isDriverSettlementEligibleOrder,
+  isOrderSettlementPaid,
+} from "@/features/common/settlement/lib/settlementHelpers";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import { useDriverHome } from "@/features/driver/home/model/useDriverHome";
 import { fetchMyUnreadChatCount } from "@/shared/api/chatApi";
 import { OrderService } from "@/shared/api/orderService"; // 🚩 매출 데이터 호출용
 import { SalesSummaryCard } from "../../shard/ui/SalesSummaryCard";
-
-// 정산 로직을 위한 타입 및 유틸 함수 (정산 페이지와 동일)
-function getAmount(order: any) {
-  return (
-    Number(order.basePrice ?? 0) +
-    Number(order.laborFee ?? 0) +
-    Number(order.packagingPrice ?? 0) +
-    Number(order.insuranceFee ?? 0)
-  );
-}
 
 export default function DriverHomeScreen() {
   const t = useAppTheme();
@@ -60,24 +55,18 @@ export default function DriverHomeScreen() {
       const orders = Array.isArray(revenue?.orders) ? revenue.orders : [];
 
       let total = 0;
-      let settled = 0;
+        let settled = 0;
 
-      orders.forEach((o) => {
-        // 정산 페이지(SalesDashboard)와 완벽히 동일한 필터링 기준 적용
-        if (
-          o.status !== "CANCELLED" &&
-          o.status !== "REQUESTED" &&
-          o.status !== "PENDING"
-        ) {
-          const amt = getAmount(o);
-          total += amt;
+        orders.forEach((o) => {
+          if (isDriverSettlementEligibleOrder(o)) {
+            const amt = calcOrderAmount(o);
+            total += amt;
 
-          // settlementStatus가 COMPLETED일 때만 입금 완료 처리
-          if (String(o.settlementStatus ?? "").toUpperCase() === "COMPLETED") {
-            settled += amt;
+            if (isOrderSettlementPaid(o)) {
+              settled += amt;
+            }
           }
-        }
-      });
+        });
 
       setTotalAmount(total);
       setSettledAmount(settled);

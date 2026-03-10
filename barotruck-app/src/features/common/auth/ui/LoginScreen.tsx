@@ -57,6 +57,7 @@ export default function LoginScreen() {
       void saveCurrentUserSnapshot({
         email: me.email,
         nickname: me.nickname,
+        phone: String(me.phone ?? "").trim() || undefined,
         role: me.role,
         gender: me.gender ?? me.sex,
         age: Number.isFinite(Number(me.age)) ? Number(me.age) : undefined,
