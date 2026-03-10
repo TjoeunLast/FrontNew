@@ -20,6 +20,7 @@ import {
 
 import apiClient from "@/shared/api/apiClient";
 import { AuthService } from "@/shared/api/authService";
+import { PaymentService } from "@/shared/api/paymentService";
 import { UserService } from "@/shared/api/userService";
 import { USE_MOCK } from "@/shared/config/mock";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
@@ -30,9 +31,8 @@ import {
   getCurrentUserSnapshot,
   saveCurrentUserSnapshot,
 } from "@/shared/utils/currentUserStorage";
+import { getBillingAgreementMethodLabel } from "@/shared/utils/payment/billingAgreement";
 import { buildProfileImageStorageKey } from "@/shared/utils/profileImageStorage";
-
-const SHIPPER_PAYMENT_METHODS_KEY = "baro_shipper_payment_methods_v1";
 
 type ProfileView = {
   email: string;
@@ -43,20 +43,6 @@ type ProfileView = {
   gender: string;
   ageLabel: string;
 };
-
-function readDefaultCardCompany(raw: string | null) {
-  if (!raw) return "미등록";
-  try {
-    const parsed = JSON.parse(raw) as { cards?: Array<{ cardCompany?: unknown; isDefault?: unknown }> };
-    const cards = Array.isArray(parsed?.cards) ? parsed.cards : [];
-    if (cards.length === 0) return "미등록";
-    const defaultCard = cards.find((card) => Boolean(card?.isDefault)) ?? cards[0];
-    const company = String(defaultCard?.cardCompany ?? "").trim();
-    return company || "등록 카드";
-  } catch {
-    return "미등록";
-  }
-}
 
 function roleToKorean(role: string) {
   if (role === "SHIPPER") return "화주";
@@ -194,9 +180,9 @@ export default function MyPageScreen() {
       let active = true;
 
       void (async () => {
-        const paymentStoreRaw = await AsyncStorage.getItem(SHIPPER_PAYMENT_METHODS_KEY);
+        const agreement = await PaymentService.getMyBillingAgreement().catch(() => null);
         if (!active) return;
-        setPaymentMethodLabel(readDefaultCardCompany(paymentStoreRaw));
+        setPaymentMethodLabel(getBillingAgreementMethodLabel(agreement));
 
         try {
           const me = (await UserService.getMyInfo()) as any;

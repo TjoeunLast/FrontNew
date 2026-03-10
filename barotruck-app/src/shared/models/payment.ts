@@ -17,6 +17,20 @@ export type PayChannel = 'CARD' | 'APP_CARD' | 'TRANSFER';
 export type PaymentProvider = 'TOSS';
 export const DEFAULT_PAYMENT_PROVIDER: PaymentProvider = 'TOSS';
 
+/** PG 원장 상태 */
+export type GatewayTxStatus = 'PREPARED' | 'CONFIRMED' | 'FAILED' | 'CANCELED';
+
+/** billing agreement 상태 */
+export type BillingAgreementStatus = 'ACTIVE' | 'INACTIVE' | 'DELETED';
+
+/** 차주 지급 상태 */
+export type PayoutItemStatus =
+  | 'READY'
+  | 'REQUESTED'
+  | 'COMPLETED'
+  | 'FAILED'
+  | 'RETRYING';
+
 /** 결제 상태 */
 export type TransportPaymentStatus =
   | 'READY' // 결제 준비
@@ -94,6 +108,39 @@ export interface TossPrepareResponse {
   expiresAt: string;
 }
 
+/** billing 등록용 토스 컨텍스트 */
+export interface TossBillingContextResponse {
+  clientKey: string | null;
+  customerKey: string;
+  successUrl: string | null;
+  failUrl: string | null;
+}
+
+/** billing agreement 발급 요청 */
+export interface TossBillingIssueRequest {
+  authKey: string;
+  customerKey?: string;
+}
+
+/** 화주 billing agreement 응답 */
+export interface ShipperBillingAgreementResponse {
+  agreementId: number;
+  shipperUserId: number;
+  provider: PaymentProvider;
+  method: PaymentMethod;
+  status: BillingAgreementStatus;
+  customerKey: string;
+  billingKeyMasked: string | null;
+  cardCompany: string | null;
+  cardNumberMasked: string | null;
+  cardType: string | null;
+  ownerType: string | null;
+  authenticatedAt: string | null;
+  lastChargedAt: string | null;
+  deactivatedAt: string | null;
+  deactivationReason: string | null;
+}
+
 /** mark-paid 요청 DTO */
 export interface MarkPaidRequest {
   method?: PaymentMethod;
@@ -125,6 +172,82 @@ export interface TossConfirmRequest {
   paymentKey: string;
   pgOrderId?: string;
   amount?: number;
+}
+
+/** 관리자 취소 요청 DTO */
+export interface CancelTossPaymentRequest {
+  cancelReason?: string;
+  cancelAmount?: number;
+}
+
+/** PG 취소 이력 DTO */
+export interface TossPaymentLookupCancelHistory {
+  cancelAmount: number | null;
+  cancelReason: string | null;
+  canceledAt: string | null;
+  transactionKey: string | null;
+  cancelStatus: string | null;
+}
+
+/** PG 실조회 DTO */
+export interface TossPaymentLookupResponse {
+  paymentKey: string;
+  orderId: string;
+  status: string;
+  method: string | null;
+  easyPayProvider: string | null;
+  totalAmount: number | null;
+  suppliedAmount: number | null;
+  vat: number | null;
+  approvedAt: string | null;
+  lastTransactionAt: string | null;
+  cancels: TossPaymentLookupCancelHistory[];
+  rawPayload: string | null;
+}
+
+/** 내부 게이트웨이 원장 상태 DTO */
+export interface GatewayTransactionStatusResponse {
+  txId: number;
+  orderId: number;
+  provider: PaymentProvider;
+  status: GatewayTxStatus;
+  amount: number | null;
+  retryCount: number | null;
+  expiresAt: string | null;
+  approvedAt: string | null;
+  nextRetryAt: string | null;
+  failCode: string | null;
+  failMessage: string | null;
+}
+
+/** 내부 결제 vs Toss 비교 DTO */
+export interface TossPaymentComparisonResponse {
+  gatewayTransaction: GatewayTransactionStatusResponse | null;
+  transportPayment: TransportPaymentResponse | null;
+  gatewayLookup: TossPaymentLookupResponse | null;
+  mismatch: boolean;
+  mismatchReason: string | null;
+}
+
+/** 차주 지급 상태 DTO */
+export interface DriverPayoutItemStatusResponse {
+  itemId: number;
+  orderId: number;
+  batchId: number | null;
+  driverUserId: number;
+  status: PayoutItemStatus;
+  retryCount: number | null;
+  requestedAt: string | null;
+  completedAt: string | null;
+  failureReason: string | null;
+  payoutRef: string | null;
+  sellerId?: string | null;
+  sellerRef?: string | null;
+  sellerStatus?: string | null;
+  webhookStatus?: string | null;
+  lastWebhookReceivedAt?: string | null;
+  lastWebhookProcessedAt?: string | null;
+  webhookMatchesPayoutStatus?: boolean | null;
 }
 
 /** 토스 prepare 기본값 */
