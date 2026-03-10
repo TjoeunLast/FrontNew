@@ -270,5 +270,11 @@ export const UserService = {
     return res.data;
   },
 
+    /** * 8. 내 정보 수정 (PATCH /api/user/me)
+   * data 객체에는 변경할 필드만 포함 (예: { nickname: "새닉네임" })
+   */
+  updateMyInfo: async (data: Partial<UserProfile>): Promise<void> => {
+  await apiClient.patch("/api/user/me", data);
+  },
   
 };
