@@ -3,6 +3,40 @@ import apiClient from './apiClient';
 
 const API_BASE = '/api/v1/orders';
 
+function extractOrderImageUrl(payload: unknown, depth = 0): string {
+  if (typeof payload === 'string') return payload.trim();
+  if (!payload || typeof payload !== 'object' || depth > 3) return '';
+
+  const record = payload as Record<string, unknown>;
+  const directCandidates = [
+    record.imageUrl,
+    record.orderImageUrl,
+    record.profileImageUrl,
+    record.url,
+    record.fileUrl,
+  ];
+
+  for (const candidate of directCandidates) {
+    if (typeof candidate === 'string' && candidate.trim()) {
+      return candidate.trim();
+    }
+  }
+
+  const nestedCandidates = [
+    record.data,
+    record.result,
+    record.image,
+    record.orderImage,
+  ];
+
+  for (const candidate of nestedCandidates) {
+    const resolved = extractOrderImageUrl(candidate, depth + 1);
+    if (resolved) return resolved;
+  }
+
+  return '';
+}
+
 function normalizeStatus(raw: any): OrderStatus {
   const v = String(raw ?? '').toUpperCase();
   // 레거시 백엔드 상태값을 표준 주문 상태값으로 정규화
@@ -571,7 +605,7 @@ export const OrderService = {
     const res = await apiClient.post(`/api/v1/orders/${orderId}/image`, formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
-    return res.data;
+    return extractOrderImageUrl(res.data);
   },
 
   /** * 오더 이미지 조회 
@@ -579,7 +613,7 @@ export const OrderService = {
    */
   getOrderImage: async (orderId: number): Promise<string> => {
     const res = await apiClient.get(`/api/v1/orders/${orderId}/image`);
-    return res.data;
+    return extractOrderImageUrl(res.data);
   },
 
   /** * 오더 이미지 삭제 

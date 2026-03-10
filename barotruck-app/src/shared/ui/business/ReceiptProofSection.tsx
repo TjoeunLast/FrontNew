@@ -43,10 +43,10 @@ export function ReceiptProofSection({
       <View style={sectionStyles.header}>
         <View>
           <Text style={[sectionStyles.title, { color: colors.textPrimary }]}>
-            인수증
+            배송 완료
           </Text>
           <Text style={[sectionStyles.subtitle, { color: colors.textSecondary }]}>
-            운송 완료 후 등록된 인수증 사진입니다.
+            운송 완료 후 등록된 배송 완료 인증 사진입니다.
           </Text>
         </View>
         <View
@@ -78,7 +78,7 @@ export function ReceiptProofSection({
         >
           <ActivityIndicator color="#64748B" />
           <Text style={[sectionStyles.emptyText, { color: colors.textSecondary }]}>
-            인수증을 불러오는 중입니다.
+            배송 완료 인증 사진을 불러오는 중입니다.
           </Text>
         </View>
       ) : hasReceiptImage ? (
@@ -124,7 +124,7 @@ export function ReceiptProofSection({
         >
           <Ionicons name="image-outline" size={24} color="#94A3B8" />
           <Text style={[sectionStyles.emptyText, { color: colors.textSecondary }]}>
-            등록된 인수증 사진이 없습니다.
+            등록된 배송 완료 인증 사진이 없습니다.
           </Text>
         </Pressable>
       )}

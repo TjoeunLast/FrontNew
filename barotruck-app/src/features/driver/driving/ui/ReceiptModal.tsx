@@ -72,7 +72,7 @@ export const ReceiptModal = ({
 
     const trimmedRecipientName = recipientName.trim();
     if (!receiptUri) {
-      Alert.alert("확인", "인수증 사진을 먼저 촬영해 주세요.");
+      Alert.alert("확인", "배송 완료 인증 사진을 먼저 촬영해 주세요.");
       return;
     }
 
@@ -95,7 +95,7 @@ export const ReceiptModal = ({
         } as any,
       });
 
-      Alert.alert("등록 완료", "인수증이 등록되었습니다.", [
+      Alert.alert("등록 완료", "배송 완료 인증이 등록되었습니다.", [
         {
           text: "확인",
           onPress: () => {
@@ -106,7 +106,7 @@ export const ReceiptModal = ({
       ]);
     } catch (error: any) {
       const message =
-        error?.response?.data?.message || "인수증 등록에 실패했습니다. 다시 시도해 주세요.";
+        error?.response?.data?.message || "배송 완료 인증 등록에 실패했습니다. 다시 시도해 주세요.";
       Alert.alert("등록 실패", message);
     } finally {
       setSubmitting(false);
@@ -123,7 +123,7 @@ export const ReceiptModal = ({
       <View style={s.overlay}>
         <View style={s.container}>
           <View style={s.header}>
-            <Text style={s.title}>인수증 등록</Text>
+            <Text style={s.title}>배송 완료 등록</Text>
             <Pressable disabled={submitting} onPress={onClose}>
               <Ionicons name="close" size={24} color="#64748B" />
             </Pressable>
@@ -131,7 +131,7 @@ export const ReceiptModal = ({
 
           <View style={s.content}>
             <Text style={s.description}>
-              운송이 완료되었습니다.{"\n"}인수증을 촬영하고 수령인 정보를 입력해 주세요.
+              운송이 완료되었습니다.{"\n"}배송 완료 인증 사진을 촬영하고 수령인 정보를 입력해 주세요.
             </Text>
 
             <TouchableOpacity
@@ -151,7 +151,7 @@ export const ReceiptModal = ({
               ) : (
                 <>
                   <Ionicons name="camera" size={40} color="#CBD5E1" />
-                  <Text style={s.photoText}>인수증 사진 촬영</Text>
+                  <Text style={s.photoText}>배송 완료 인증 사진 촬영</Text>
                 </>
               )}
             </TouchableOpacity>
