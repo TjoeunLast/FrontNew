@@ -604,6 +604,11 @@ export const OrderApi = {
 };
 
 export const OrderService = {
+  getOrderDetail: async (orderId: number): Promise<OrderResponse> => {
+    const res = await apiClient.get(`${API_BASE}/${orderId}`);
+    return res.data;
+  },
+
   getRecommendedOrders: async (): Promise<OrderResponse[]> => {
     const res = await apiClient.get(`${API_BASE}/recommended`);
     return res.data;

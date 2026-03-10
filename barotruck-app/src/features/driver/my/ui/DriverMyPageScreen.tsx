@@ -73,57 +73,11 @@ function normalizeAgeLabel(input?: unknown) {
   return `${Math.floor(age)}세`;
 }
 
-function toOptionalBoolean(value: unknown) {
-  if (typeof value === "boolean") return value;
-  if (typeof value === "number") return value === 1 ? true : value === 0 ? false : undefined;
-  if (typeof value === "string") {
-    const normalized = value.trim().toLowerCase();
-    if (["true", "1", "y", "yes", "on", "enabled", "active"].includes(normalized)) return true;
-    if (["false", "0", "n", "no", "off", "disabled", "inactive"].includes(normalized)) return false;
-  }
-  return undefined;
-}
-
-function resolveInstantDispatchEnabled(detail?: any, cached?: Awaited<ReturnType<typeof getCurrentUserSnapshot>>) {
-  const values = [
-    detail?.instantDispatchEnabled,
-    detail?.isInstantDispatchEnabled,
-    detail?.quickDispatchEnabled,
-    detail?.isQuickDispatchEnabled,
-    detail?.immediateDispatchEnabled,
-    detail?.isImmediateDispatchEnabled,
-    detail?.adminDispatchEnabled,
-    detail?.isAdminDispatchEnabled,
-    detail?.autoAssignEnabled,
-    detail?.isAutoAssignEnabled,
-    detail?.driver?.instantDispatchEnabled,
-    detail?.driver?.isInstantDispatchEnabled,
-    detail?.driver?.quickDispatchEnabled,
-    detail?.driver?.isQuickDispatchEnabled,
-    detail?.driver?.immediateDispatchEnabled,
-    detail?.driver?.isImmediateDispatchEnabled,
-    detail?.driver?.adminDispatchEnabled,
-    detail?.driver?.isAdminDispatchEnabled,
-    detail?.driver?.autoAssignEnabled,
-    detail?.driver?.isAutoAssignEnabled,
-    cached?.instantDispatchEnabled,
-  ];
-
-  for (const value of values) {
-    const normalized = toOptionalBoolean(value);
-    if (normalized !== undefined) return normalized;
-  }
-
-  return false;
-}
-
 export default function DriverMyPageScreen() {
   const router = useRouter();
 
   const [loggingOut, setLoggingOut] = React.useState(false);
   const [receiveOrderAlarm, setReceiveOrderAlarm] = React.useState(true);
-  const [instantDispatchEnabled, setInstantDispatchEnabled] = React.useState(false);
-  const [updatingInstantDispatch, setUpdatingInstantDispatch] = React.useState(false);
   const [adminForceAllocateBlocked, setAdminForceAllocateBlocked] = React.useState(false);
   const [savingAdminForceAllocateBlocked, setSavingAdminForceAllocateBlocked] = React.useState(false);
   const [profile, setProfile] = React.useState<DriverProfileView>({
@@ -164,7 +118,6 @@ export default function DriverMyPageScreen() {
             await AsyncStorage.setItem(storageKey, resolvedImageUrl);
           }
           setAdminForceAllocateBlocked(Boolean(me?.adminForceAllocateBlocked));
-          setInstantDispatchEnabled(resolveInstantDispatchEnabled(detail, cached));
           setProfile({
             nickname: toText(me?.nickname ?? cached?.nickname, "차주"),
             gender: normalizeGenderLabel(me?.gender ?? me?.sex ?? detail?.gender ?? detail?.user?.gender ?? cached?.gender),
@@ -179,7 +132,6 @@ export default function DriverMyPageScreen() {
           const localImageUrl = await AsyncStorage.getItem(buildProfileImageStorageKey(cached?.email));
           setProfileImageUrl(localImageUrl ?? "");
           setAdminForceAllocateBlocked(false);
-          setInstantDispatchEnabled(Boolean(cached?.instantDispatchEnabled));
           setProfile({
             nickname: toText(cached?.nickname, "차주"),
             gender: normalizeGenderLabel(cached?.gender),
@@ -235,32 +187,9 @@ export default function DriverMyPageScreen() {
       await UserService.updateAdminForceAllocateBlocked(nextValue);
     } catch {
       setAdminForceAllocateBlocked(previousValue);
-      Alert.alert("저장 실패", "강제배차 설정을 저장하지 못했습니다.");
-    } finally {
-      setSavingAdminForceAllocateBlocked(false);
-    }
-  };
-
-  const onToggleInstantDispatch = async () => {
-    if (updatingInstantDispatch) return;
-    const previousValue = instantDispatchEnabled;
-    const nextValue = !previousValue;
-    setInstantDispatchEnabled(nextValue);
-    try {
-      setUpdatingInstantDispatch(true);
-      await UserService.updateInstantDispatchEnabled(nextValue);
-      const cached = await getCurrentUserSnapshot();
-      if (cached?.email && cached?.nickname && cached?.role) {
-        await upsertCurrentUserSnapshot({
-          ...cached,
-          instantDispatchEnabled: nextValue,
-        });
-      }
-    } catch {
-      setInstantDispatchEnabled(previousValue);
       Alert.alert("저장 실패", "직접 배차 설정을 저장하지 못했습니다.");
     } finally {
-      setUpdatingInstantDispatch(false);
+      setSavingAdminForceAllocateBlocked(false);
     }
   };
 
@@ -421,15 +350,22 @@ export default function DriverMyPageScreen() {
             </View>
             <View style={s.settingLabelWrap}>
               <Text style={s.settingLabel}>직접 배차</Text>
-              <Text style={s.settingSub}>관리자 강제 배정 사용</Text>
+              <Text style={s.settingSub}>직접 배차 사용 여부</Text>
             </View>
-            <View style={[s.settingActionWrap, updatingInstantDispatch && s.settingActionDisabled]}>
+            <View
+              style={[
+                s.settingActionWrap,
+                savingAdminForceAllocateBlocked && s.settingActionDisabled,
+              ]}
+            >
               <Switch
-                value={instantDispatchEnabled}
-                onValueChange={() => void onToggleInstantDispatch()}
-                disabled={updatingInstantDispatch}
+                value={!adminForceAllocateBlocked}
+                onValueChange={(nextValue) =>
+                  void onToggleAdminForceAllocateBlocked(!nextValue)
+                }
+                disabled={savingAdminForceAllocateBlocked}
                 trackColor={{ false: "#D7DEE8", true: "#FECACA" }}
-                thumbColor={instantDispatchEnabled ? "#DC2626" : "#FFFFFF"}
+                thumbColor={!adminForceAllocateBlocked ? "#DC2626" : "#FFFFFF"}
                 ios_backgroundColor="#D7DEE8"
               />
             </View>

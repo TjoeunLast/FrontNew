@@ -71,8 +71,17 @@ export const ReceiptModal = ({
     }
 
     const trimmedRecipientName = recipientName.trim();
+
     if (!receiptUri) {
-      Alert.alert("확인", "배송 완료 인증 사진을 먼저 촬영해 주세요.");
+      Alert.alert("완료", "배송 완료 처리되었습니다.", [
+        {
+          text: "확인",
+          onPress: () => {
+            onSubmitted?.();
+            onClose();
+          },
+        },
+      ]);
       return;
     }
 

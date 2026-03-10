@@ -23,12 +23,6 @@ export const useDrivingProcess = (onRefresh?: () => void) => {
 
   // 오더 상태 업데이트
   const handleUpdateStatus = async (orderId: number, nextStatus: string) => {
-    if (nextStatus === "UNLOADING") {
-      setArrivalPhotoOrderId(orderId);
-      setArrivalPhotoModalOpen(true);
-      return;
-    }
-
     try {
       setIsLoading(true); // 통신 시작
       await OrderService.updateStatus(orderId, nextStatus);

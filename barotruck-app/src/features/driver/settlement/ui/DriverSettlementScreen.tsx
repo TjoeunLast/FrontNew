@@ -138,6 +138,21 @@ function getPayoutStatusLabel(status?: DriverPayoutItemStatusResponse["status"] 
   }
 }
 
+function getPayoutStatusPalette(status?: DriverPayoutItemStatusResponse["status"] | null) {
+  switch (status) {
+    case "COMPLETED":
+      return { backgroundColor: "#E8F5E9", textColor: "#15803D" };
+    case "FAILED":
+      return { backgroundColor: "#FEE2E2", textColor: "#BE123C" };
+    case "REQUESTED":
+    case "RETRYING":
+      return { backgroundColor: "#E0F2FE", textColor: "#0369A1" };
+    case "READY":
+    default:
+      return { backgroundColor: "#FEF3C7", textColor: "#B45309" };
+  }
+}
+
 function formatPayoutTime(value?: string | null) {
   if (!value) return null;
   const parsed = new Date(value);
@@ -445,6 +460,74 @@ export default function DriverSettlementScreen() {
       fontWeight: "700",
       color: c.text.secondary,
     },
+    flowGuideCard: {
+      marginTop: 12,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: "#D9E2F2",
+      backgroundColor: "#FFFFFF",
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+    },
+    flowGuideTitle: {
+      fontSize: 13,
+      fontWeight: "900",
+      color: "#0F172A",
+    },
+    flowGuideText: {
+      marginTop: 6,
+      fontSize: 12,
+      fontWeight: "700",
+      lineHeight: 18,
+      color: "#64748B",
+    },
+    flowHintText: {
+      marginTop: 6,
+      fontSize: 11,
+      fontWeight: "700",
+      color: "#64748B",
+    },
+    payoutDetailCard: {
+      marginTop: 10,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: "#E2E8F0",
+      backgroundColor: "#F8FAFC",
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+    },
+    payoutDetailHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: 6,
+    },
+    payoutDetailTitle: {
+      fontSize: 12,
+      fontWeight: "800",
+      color: "#0F172A",
+    },
+    payoutDetailRow: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: "#475569",
+      marginTop: 3,
+    },
+    payoutDetailError: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: "#BE123C",
+      marginTop: 3,
+    },
+    payoutStatusBadge: {
+      borderRadius: 999,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+    },
+    payoutStatusBadgeText: {
+      fontSize: 11,
+      fontWeight: "800",
+    },
   });
 
   return (
@@ -472,6 +555,16 @@ export default function DriverSettlementScreen() {
           pendingAmount={summaryPending}
           style={{ marginTop: 14, marginHorizontal: 16 }}
         />
+
+        <View style={s.flowGuideCard}>
+          <Text style={s.flowGuideTitle}>정산 테스트 순서</Text>
+          <Text style={s.flowGuideText}>
+            1. 화주 앱에서 결제를 완료합니다.{"\n"}
+            2. 차주 앱에서 `토스 결제확인` 또는 `착불 결제확인`을 누릅니다.{"\n"}
+            3. 관리자에서 지급 요청을 실행합니다.{"\n"}
+            4. 이 화면에서 `지급 상태`를 눌러 요청/완료/실패를 확인합니다.
+          </Text>
+        </View>
 
         <View style={s.contentWrap}>
           <View style={s.filterRow}>
@@ -529,6 +622,12 @@ export default function DriverSettlementScreen() {
                 const isPaid = item.status === "PAID";
                 const isSubmitting = submittingOrderId === item.orderId;
                 const payoutState = payoutStateByOrder[item.orderId];
+                const needsDriverConfirm = item.confirmByDriver && !isPaid;
+                const showPayoutAction =
+                  isPaid ||
+                  Boolean(payoutState?.loading) ||
+                  Boolean(payoutState?.data) ||
+                  Boolean(payoutState?.error);
                 const statusColor = isPaid ? "#E8F5E9" : item.status === "PENDING" ? "#FEF9C3" : "#FEE2E2";
                 const actionText = isPaid
                   ? "결제완료"
@@ -572,9 +671,66 @@ export default function DriverSettlementScreen() {
                     {payoutMeta ? (
                       <Text style={s.payoutMetaText}>지급 상태: {payoutMeta}</Text>
                     ) : null}
+                    <Text style={s.flowHintText}>
+                      {needsDriverConfirm
+                        ? "먼저 차주 결제확인을 완료해야 이후 지급 상태를 확인할 수 있습니다."
+                        : "결제확인 완료 후 관리자 지급요청이 들어오면 이 영역이 `지급 요청` 또는 `지급 완료`로 바뀝니다."}
+                    </Text>
+
+                    {payoutState?.data ? (
+                      <View style={s.payoutDetailCard}>
+                        <View style={s.payoutDetailHeader}>
+                          <Text style={s.payoutDetailTitle}>지급 상세</Text>
+                          <View
+                            style={[
+                              s.payoutStatusBadge,
+                              {
+                                backgroundColor: getPayoutStatusPalette(
+                                  payoutState.data.status,
+                                ).backgroundColor,
+                              },
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                s.payoutStatusBadgeText,
+                                {
+                                  color: getPayoutStatusPalette(payoutState.data.status)
+                                    .textColor,
+                                },
+                              ]}
+                            >
+                              {getPayoutStatusLabel(payoutState.data.status)}
+                            </Text>
+                          </View>
+                        </View>
+                        <Text style={s.payoutDetailRow}>
+                          payoutRef: {payoutState.data.payoutRef || "-"}
+                        </Text>
+                        <Text style={s.payoutDetailRow}>
+                          요청시각: {formatPayoutTime(payoutState.data.requestedAt) || "-"}
+                        </Text>
+                        <Text style={s.payoutDetailRow}>
+                          완료시각: {formatPayoutTime(payoutState.data.completedAt) || "-"}
+                        </Text>
+                        <Text style={s.payoutDetailRow}>
+                          webhook 상태: {payoutState.data.webhookStatus || "-"}
+                        </Text>
+                        {payoutState.data.failureReason ? (
+                          <Text style={s.payoutDetailError}>
+                            실패 사유: {payoutState.data.failureReason}
+                          </Text>
+                        ) : null}
+                      </View>
+                    ) : payoutState?.error ? (
+                      <View style={s.payoutDetailCard}>
+                        <Text style={s.payoutDetailTitle}>지급 상세</Text>
+                        <Text style={s.payoutDetailError}>{payoutState.error}</Text>
+                      </View>
+                    ) : null}
 
                     <View style={s.actionRow}>
-                      {item.confirmByDriver ? (
+                      {needsDriverConfirm ? (
                         <Pressable
                           style={[s.actionBtn, (isPaid || isSubmitting) && s.actionBtnDisabled]}
                           disabled={isPaid || isSubmitting}
@@ -590,25 +746,27 @@ export default function DriverSettlementScreen() {
                           </Text>
                         </Pressable>
                       ) : null}
-                      <Pressable
-                        style={[s.actionBtn, payoutState?.loading && s.actionBtnDisabled]}
-                        disabled={Boolean(payoutState?.loading)}
-                        onPress={() => void loadPayoutStatus(item.orderId)}
-                      >
-                        <MaterialCommunityIcons
-                          name="bank-transfer-out"
-                          size={14}
-                          color={payoutState?.loading ? "#64748B" : "#FFFFFF"}
-                        />
-                        <Text
-                          style={[
-                            s.actionText,
-                            payoutState?.loading && s.actionTextDisabled,
-                          ]}
+                      {showPayoutAction ? (
+                        <Pressable
+                          style={[s.actionBtn, payoutState?.loading && s.actionBtnDisabled]}
+                          disabled={Boolean(payoutState?.loading)}
+                          onPress={() => void loadPayoutStatus(item.orderId)}
                         >
-                          {payoutState?.loading ? "확인중..." : "지급 상태"}
-                        </Text>
-                      </Pressable>
+                          <MaterialCommunityIcons
+                            name="bank-transfer-out"
+                            size={14}
+                            color={payoutState?.loading ? "#64748B" : "#FFFFFF"}
+                          />
+                          <Text
+                            style={[
+                              s.actionText,
+                              payoutState?.loading && s.actionTextDisabled,
+                            ]}
+                          >
+                            {payoutState?.loading ? "확인중..." : "지급 상태"}
+                          </Text>
+                        </Pressable>
+                      ) : null}
                     </View>
                   </View>
                 );
