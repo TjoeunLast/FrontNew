@@ -1,6 +1,6 @@
-﻿import AsyncStorage from "@react-native-async-storage/async-storage";
+﻿import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
-import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useMemo, useState } from "react";
 import {
@@ -18,8 +18,8 @@ import {
   type ViewStyle,
 } from "react-native";
 
-import { AuthService } from "@/shared/api/authService";
 import apiClient from "@/shared/api/apiClient";
+import { AuthService } from "@/shared/api/authService";
 import { UserService } from "@/shared/api/userService";
 import { USE_MOCK } from "@/shared/config/mock";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
@@ -519,13 +519,6 @@ export default function MyPageScreen() {
             <Ionicons name="chevron-forward" size={20} color={c.text.secondary} />
           </Pressable>
           <View style={s.divider} />
-          <Pressable style={s.row} onPress={() => router.push("/(common)/settings/shipper/business" as any)}>
-            <View style={[s.rowIconWrap, { backgroundColor: withAlpha(c.text.secondary, 0.16) }]}>
-              <Ionicons name="document-text-outline" size={18} color={c.text.secondary} />
-            </View>
-            <Text style={s.rowLabel}>세금계산서 관리</Text>
-            <Ionicons name="chevron-forward" size={20} color={c.text.secondary} />
-          </Pressable>
         </View>
 
         <Text style={s.sectionTitle}>고객 지원</Text>
