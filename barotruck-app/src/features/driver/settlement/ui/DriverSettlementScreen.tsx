@@ -82,13 +82,14 @@ function toDateLabel(d: Date) {
   return `${d.getMonth() + 1}.${d.getDate()} (${w})`;
 }
 
+function isAwaitingDriverConfirm(paymentStatus?: string | null) {
+  return String(paymentStatus ?? "").toUpperCase() === "PAID";
+}
+
 function mapOrderToSettlement(order: OrderResponse): SettlementItem | null {
   if (!isDriverSettlementEligibleOrder(order)) {
     return null;
   }
-
-  // 목록에는 완료 주문을 모두 노출하고, 차주 확인이 필요한 결제수단만 액션을 노출한다.
-  const confirmByDriver = isTossPayment(order.payMethod) || isCashPayment(order.payMethod);
 
   const scheduledAt =
     parseDate(order.endSchedule) ||
@@ -99,6 +100,9 @@ function mapOrderToSettlement(order: OrderResponse): SettlementItem | null {
   if (!scheduledAt) return null;
 
   const status = toSettlementStatus(order);
+  const confirmByDriver =
+    isAwaitingDriverConfirm(order.paymentStatus) &&
+    (isTossPayment(order.payMethod) || isCashPayment(order.payMethod));
 
   return {
     id: String(order.orderId),
