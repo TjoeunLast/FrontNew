@@ -6,6 +6,7 @@ import apiClient from "@/shared/api/apiClient";
 import { UserService } from "@/shared/api/userService";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import ShipperScreenHeader from "@/shared/ui/layout/ShipperScreenHeader";
+import { getCurrentUserSnapshot, upsertCurrentUserSnapshot } from "@/shared/utils/currentUserStorage";
 
 type AccountState = {
   bankName: string;
@@ -45,10 +46,29 @@ export default function DriverSettlementAccountScreen() {
         if (!active) return;
 
         const driver = driverRes?.data ?? null;
+        const cached = await getCurrentUserSnapshot();
         const next: AccountState = {
-          bankName: String(driver?.bankName ?? driver?.driver?.bankName ?? meRes?.DriverInfo?.bankName ?? "").trim(),
+          bankName: String(
+            driver?.bankName ??
+              driver?.driver?.bankName ??
+              driver?.bank_name ??
+              driver?.driver?.bank_name ??
+              meRes?.DriverInfo?.bankName ??
+              (meRes as any)?.DriverInfo?.bank_name ??
+              cached?.driverBankName ??
+              ""
+          ).trim(),
           accountNumber: onlyDigits(
-            String(driver?.accountNum ?? driver?.driver?.accountNum ?? meRes?.DriverInfo?.accountNum ?? "")
+            String(
+              driver?.accountNum ??
+                driver?.driver?.accountNum ??
+                driver?.account_num ??
+                driver?.driver?.account_num ??
+                meRes?.DriverInfo?.accountNum ??
+                (meRes as any)?.DriverInfo?.account_num ??
+                cached?.driverAccountNum ??
+                ""
+            )
           ),
         };
         setSaved(next);
@@ -103,6 +123,21 @@ export default function DriverSettlementAccountScreen() {
         lng: driver?.lng ?? driver?.driver?.lng ?? driverInfo?.lng,
         nbhId: driver?.nbhId ?? driver?.driver?.nbhId ?? driverInfo?.nbhId,
       });
+
+      const cached = await getCurrentUserSnapshot();
+      const email = String(meRes?.email ?? cached?.email ?? "").trim();
+      const nickname = String(meRes?.nickname ?? cached?.nickname ?? "").trim();
+      const role = (String(meRes?.role ?? cached?.role ?? "DRIVER").trim().toUpperCase() || "DRIVER") as any;
+      if (email && nickname) {
+        await upsertCurrentUserSnapshot({
+          email,
+          nickname,
+          role,
+          driverBankName: next.bankName,
+          driverAccountNum: next.accountNumber,
+        });
+      }
+
       setSaved(next);
       Alert.alert("저장 완료", "정산 계좌가 저장되었습니다.");
     } catch (error: any) {

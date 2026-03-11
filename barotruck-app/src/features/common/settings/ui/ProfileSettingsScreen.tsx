@@ -22,7 +22,8 @@ import { ReviewService } from "@/shared/api/reviewService";
 import { UserService } from "@/shared/api/userService";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import ShipperScreenHeader from "@/shared/ui/layout/ShipperScreenHeader";
-import { getCurrentUserSnapshot } from "@/shared/utils/currentUserStorage";
+import AddressSearch from "@/shared/utils/AddressSearch";
+import { getCurrentUserSnapshot, upsertCurrentUserSnapshot } from "@/shared/utils/currentUserStorage";
 import { buildProfileImageStorageKey } from "@/shared/utils/profileImageStorage";
 
 type ProfileState = {
@@ -354,6 +355,10 @@ export default function ProfileSettingsScreen() {
     activityAddress: "-",
   });
   const [draftImageUri, setDraftImageUri] = React.useState("");
+  const [draftActivityAddress, setDraftActivityAddress] = React.useState("-");
+  const [draftActivityLat, setDraftActivityLat] = React.useState<number | undefined>(undefined);
+  const [draftActivityLng, setDraftActivityLng] = React.useState<number | undefined>(undefined);
+  const [addressSearchVisible, setAddressSearchVisible] = React.useState(false);
   const [loadingImage, setLoadingImage] = React.useState(false);
   const [savingProfile, setSavingProfile] = React.useState(false);
 
@@ -453,6 +458,9 @@ export default function ProfileSettingsScreen() {
           if (!active) return;
           setProfile(next);
           setDraftImageUri(next.imageUrl);
+          setDraftActivityAddress(next.activityAddress);
+          setDraftActivityLat(next.activityLat);
+          setDraftActivityLng(next.activityLng);
           return;
         } catch {
           if (!active) return;
@@ -480,6 +488,9 @@ export default function ProfileSettingsScreen() {
           };
           setProfile(next);
           setDraftImageUri(next.imageUrl);
+          setDraftActivityAddress(next.activityAddress);
+          setDraftActivityLat(next.activityLat);
+          setDraftActivityLng(next.activityLng);
         }
       })();
 
@@ -561,7 +572,12 @@ export default function ProfileSettingsScreen() {
   };
 
   const hasImageChange = draftImageUri !== profile.imageUrl;
-  const hasPendingChanges = hasImageChange;
+  const hasActivityAddressChange =
+    profile.role === "DRIVER" &&
+    (draftActivityAddress !== profile.activityAddress ||
+      draftActivityLat !== profile.activityLat ||
+      draftActivityLng !== profile.activityLng);
+  const hasPendingChanges = hasImageChange || hasActivityAddressChange;
   const isBusy = loadingImage || savingProfile;
 
   const saveImageChange = async () => {
@@ -583,12 +599,86 @@ export default function ProfileSettingsScreen() {
     return "saved" as const;
   };
 
+  const saveDriverActivityAddress = async () => {
+    if (!hasActivityAddressChange || profile.role !== "DRIVER") return false;
+
+    const nextAddress = String(draftActivityAddress ?? "").trim();
+    if (!nextAddress || nextAddress === "-") {
+      throw new Error("활동 지역을 선택해 주세요.");
+    }
+
+    const [meRes, driverRes] = await Promise.all([
+      UserService.getMyInfo(),
+      apiClient.get("/api/v1/drivers/me"),
+    ]);
+
+    const driver = driverRes?.data ?? {};
+    const driverInfo = (meRes as any)?.DriverInfo ?? {};
+
+    await UserService.saveDriverProfile({
+      carNum: String(driver?.carNum ?? driver?.driver?.carNum ?? driverInfo?.carNum ?? "").trim(),
+      carType:
+        String(driver?.carType ?? driver?.driver?.carType ?? driverInfo?.carType ?? "CARGO").trim() ||
+        "CARGO",
+      tonnage: Number(driver?.tonnage ?? driver?.driver?.tonnage ?? driverInfo?.tonnage ?? 0) || 0,
+      career: Number(driver?.career ?? driver?.driver?.career ?? driverInfo?.career ?? 0) || 0,
+      bankName: String(driver?.bankName ?? driver?.driver?.bankName ?? driverInfo?.bankName ?? "").trim(),
+      accountNum: String(
+        driver?.accountNum ?? driver?.driver?.accountNum ?? driverInfo?.accountNum ?? ""
+      ).trim(),
+      type: String(driver?.type ?? driver?.driver?.type ?? driverInfo?.type ?? "").trim() || undefined,
+      address: nextAddress,
+      lat: draftActivityLat,
+      lng: draftActivityLng,
+      nbhId: driver?.nbhId ?? driver?.driver?.nbhId ?? driverInfo?.nbhId,
+    });
+
+    setProfile((prev) => ({
+      ...prev,
+      activityAddress: nextAddress,
+      activityLat: draftActivityLat,
+      activityLng: draftActivityLng,
+    }));
+
+    if (
+      profile.email &&
+      profile.email !== "-" &&
+      profile.nickname &&
+      profile.nickname !== "-" &&
+      profile.role
+    ) {
+      try {
+        await upsertCurrentUserSnapshot({
+          email: profile.email,
+          nickname: profile.nickname,
+          role: profile.role as any,
+          activityAddress: nextAddress,
+          activityLat: draftActivityLat,
+          activityLng: draftActivityLng,
+        });
+      } catch {
+        // ignore snapshot update failure
+      }
+    }
+
+    return true;
+  };
+
   const onSaveProfile = async () => {
     if (!hasPendingChanges || isBusy) return;
     setSavingProfile(true);
     try {
+      const addressSaved = await saveDriverActivityAddress();
       const imageResult = await saveImageChange();
 
+      if (addressSaved && (imageResult === "saved" || imageResult === "reset")) {
+        Alert.alert("수정 완료", "활동 지역과 프로필 사진이 저장되었습니다.");
+        return;
+      }
+      if (addressSaved) {
+        Alert.alert("수정 완료", "활동 지역이 저장되었습니다.");
+        return;
+      }
       if (imageResult === "reset") {
         Alert.alert("수정 완료", "프로필 사진이 기본 이미지로 변경되었습니다.");
         return;
@@ -605,6 +695,11 @@ export default function ProfileSettingsScreen() {
     } finally {
       setSavingProfile(false);
     }
+  };
+
+  const onPressActivityAddress = () => {
+    if (profile.role !== "DRIVER" || isBusy) return;
+    setAddressSearchVisible(true);
   };
 
   const s = React.useMemo(
@@ -694,9 +789,19 @@ export default function ProfileSettingsScreen() {
           justifyContent: "space-between",
           backgroundColor: c.bg.surface,
         } as ViewStyle,
+        rowPressable: {
+          minHeight: 48,
+          paddingHorizontal: 14,
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          backgroundColor: c.bg.surface,
+        } as ViewStyle,
         rowDivider: { height: 1, backgroundColor: c.border.default } as ViewStyle,
         label: { color: c.text.secondary, fontSize: 13, fontWeight: "700" } as TextStyle,
         value: { color: c.text.primary, fontSize: 14, fontWeight: "800" } as TextStyle,
+        valueWrap: { flexDirection: "row", alignItems: "center", gap: 6, maxWidth: "65%" } as ViewStyle,
+        valueCompact: { color: c.text.primary, fontSize: 14, fontWeight: "800", textAlign: "right" } as TextStyle,
         valueRating: { color: "#B45309" } as TextStyle,
       }),
     [c, hasPendingChanges, isBusy]
@@ -704,6 +809,15 @@ export default function ProfileSettingsScreen() {
 
   return (
     <View style={s.page}>
+      <AddressSearch
+        visible={addressSearchVisible}
+        onClose={() => setAddressSearchVisible(false)}
+        onComplete={({ address, lat, lng }) => {
+          setDraftActivityAddress(address);
+          setDraftActivityLat(typeof lat === "number" ? lat : undefined);
+          setDraftActivityLng(typeof lng === "number" ? lng : undefined);
+        }}
+      />
       <ShipperScreenHeader
         title="프로필 설정"
         onPressBack={() => {
@@ -756,10 +870,22 @@ export default function ProfileSettingsScreen() {
               <Text style={s.value}>{profile.gender}</Text>
             </View>
             <View style={s.rowDivider} />
-            <View style={s.row}>
-              <Text style={s.label}>활동 지역</Text>
-              <Text style={s.value}>{profile.activityAddress}</Text>
-            </View>
+            {profile.role === "DRIVER" ? (
+              <Pressable style={s.rowPressable} onPress={onPressActivityAddress} disabled={isBusy}>
+                <Text style={s.label}>활동 지역</Text>
+                <View style={s.valueWrap}>
+                  <Text style={s.valueCompact} numberOfLines={1}>
+                    {draftActivityAddress}
+                  </Text>
+                  <Ionicons name="chevron-forward" size={16} color={c.text.secondary} />
+                </View>
+              </Pressable>
+            ) : (
+              <View style={s.row}>
+                <Text style={s.label}>활동 지역</Text>
+                <Text style={s.value}>{profile.activityAddress}</Text>
+              </View>
+            )}
             {profile.role !== "DRIVER" ? (
               <>
                 <View style={s.rowDivider} />
