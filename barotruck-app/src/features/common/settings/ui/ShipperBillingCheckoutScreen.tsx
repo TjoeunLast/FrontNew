@@ -3,7 +3,6 @@ import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
-  Linking,
   Pressable,
   StyleSheet,
   Text,
@@ -18,6 +17,11 @@ import { PaymentService } from '@/shared/api/paymentService';
 import { useAppTheme } from '@/shared/hooks/useAppTheme';
 import { Button } from '@/shared/ui/base';
 import { withAlpha } from '@/shared/utils/color';
+import {
+  APP_DEEP_LINK_PREFIX,
+  isWebViewInternalUrl,
+  openExternalCheckoutUrl,
+} from '@/shared/utils/payment/externalCheckoutLinking';
 
 type BillingCheckoutSession = {
   customerKey: string;
@@ -26,8 +30,8 @@ type BillingCheckoutSession = {
   html: string;
 };
 
-const DEFAULT_BILLING_SUCCESS_URL = 'barotruck://billing/success';
-const DEFAULT_BILLING_FAIL_URL = 'barotruck://billing/fail';
+const DEFAULT_BILLING_SUCCESS_URL = `${APP_DEEP_LINK_PREFIX}billing/success`;
+const DEFAULT_BILLING_FAIL_URL = `${APP_DEEP_LINK_PREFIX}billing/fail`;
 
 function escapeHtmlValue(value: string) {
   return value
@@ -53,16 +57,6 @@ function parseQueryValue(url: string, key: string) {
 function isUrlMatched(targetUrl: string, expectedBaseUrl: string) {
   if (!targetUrl || !expectedBaseUrl) return false;
   return targetUrl.startsWith(expectedBaseUrl);
-}
-
-function isWebViewInternalUrl(url: string) {
-  const lower = String(url || '').toLowerCase();
-  return (
-    lower.startsWith('http://') ||
-    lower.startsWith('https://') ||
-    lower.startsWith('about:blank') ||
-    lower.startsWith('data:')
-  );
 }
 
 function getApiErrorMessage(error: unknown, fallback: string) {
@@ -152,6 +146,7 @@ function buildBillingCheckoutHtml(input: {
             method: "CARD",
             successUrl: "${successUrl}",
             failUrl: "${failUrl}",
+            appScheme: "${APP_DEEP_LINK_PREFIX}",
             windowTarget: "self"
           }).catch(function (error) {
             post("REQUEST_ERROR", String(error && error.message ? error.message : error));
@@ -331,11 +326,13 @@ export default function ShipperBillingCheckoutScreen() {
       if (handled) return false;
 
       if (!isWebViewInternalUrl(url)) {
-        void Linking.openURL(url).catch(() => {
-          const message =
-            '외부 카드 앱을 열 수 없습니다. 카드사 앱 설치 여부를 확인해 주세요.';
-          setLoadError(message);
-          Alert.alert('등록 안내', message);
+        void openExternalCheckoutUrl(url).then((opened) => {
+          if (!opened) {
+            const message =
+              '외부 카드 앱을 열 수 없습니다. 카드사 앱 설치 여부를 확인해 주세요.';
+            setLoadError(message);
+            Alert.alert('등록 안내', message);
+          }
         });
         return false;
       }
