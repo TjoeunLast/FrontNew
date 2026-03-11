@@ -1,4 +1,4 @@
-﻿import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
 import { useRouter } from "expo-router";
@@ -35,6 +35,7 @@ import {
   openExternalCheckoutUrl,
 } from "@/shared/utils/payment/externalCheckoutLinking";
 import ShipperScreenHeader from "@/shared/ui/layout/ShipperScreenHeader";
+import { SalesSummaryCard } from "@/features/driver/shard/ui/SalesSummaryCard";
 
 type SettlementFilter = "ALL" | "UNPAID" | "PENDING" | "PAID";
 type SettlementStatus = "UNPAID" | "PENDING" | "PAID" | "ISSUE" | "TAX_INVOICE";
@@ -455,17 +456,16 @@ export default function ShipperSettlementScreen() {
     () => monthItems.reduce((acc, cur) => acc + cur.amount, 0),
     [monthItems],
   );
-  const summaryNeedPaymentCount = useMemo(
-    () => monthItems.filter((x) => x.status === "UNPAID").length,
+  const summaryCompletedAmount = useMemo(
+    () =>
+      monthItems
+        .filter((x) => x.status === "PAID")
+        .reduce((acc, cur) => acc + cur.amount, 0),
     [monthItems],
   );
-  const summaryPendingCount = useMemo(
-    () => monthItems.filter((x) => x.status === "PENDING").length,
-    [monthItems],
-  );
-  const summaryCompletedCount = useMemo(
-    () => monthItems.filter((x) => x.status === "PAID").length,
-    [monthItems],
+  const summaryNeedPaymentAmount = useMemo(
+    () => Math.max(0, summaryTotal - summaryCompletedAmount),
+    [summaryCompletedAmount, summaryTotal],
   );
 
   const closeTossCheckout = useCallback(() => {
@@ -778,10 +778,6 @@ export default function ShipperSettlementScreen() {
         summaryCard: {
           marginTop: 14,
           marginHorizontal: 16,
-          borderRadius: 18,
-          paddingHorizontal: 18,
-          paddingVertical: 16,
-          backgroundColor: "#4E46E5",
         } as ViewStyle,
         summaryCaption: {
           fontSize: 12,
@@ -1106,26 +1102,16 @@ export default function ShipperSettlementScreen() {
           </Pressable>
         </View>
 
-        <View style={s.summaryCard}>
-          <Text style={s.summaryCaption}>{viewMonthNumber}월 결제/정산 현황</Text>
-          <Text style={s.summaryAmount}>{toWon(summaryTotal)}</Text>
-          <View style={s.summaryDivider} />
-          <View style={s.summaryBottomRow}>
-            <View style={s.summaryCol}>
-              <Text style={s.summaryBig}>{summaryNeedPaymentCount}건</Text>
-              <Text style={s.summarySmall}>결제 필요</Text>
-            </View>
-            <View style={s.summaryColDivider} />
-            <View style={s.summaryCol}>
-              <Text style={[s.summaryBig, s.summaryBigRight]}>
-                {summaryPendingCount}건 / {summaryCompletedCount}건
-              </Text>
-              <Text style={[s.summarySmall, s.summarySmallRight]}>
-                확인 대기 / 완료
-              </Text>
-            </View>
-          </View>
-        </View>
+        <SalesSummaryCard
+          title={`${viewMonthNumber}월 결제/정산 현황`}
+          totalAmount={summaryTotal}
+          settledAmount={summaryCompletedAmount}
+          pendingAmount={summaryNeedPaymentAmount}
+          settledLabel="결제 완료"
+          pendingLabel="결제 필요"
+          size="small"
+          style={s.summaryCard}
+        />
 
         <View style={s.section}>
           <View style={s.filterRow}>

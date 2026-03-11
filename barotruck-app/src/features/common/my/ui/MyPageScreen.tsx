@@ -391,9 +391,16 @@ export default function MyPageScreen() {
         textAlign: "center",
         color: c.status.danger,
       } as TextStyle,
-      versionText: {
-        marginTop: 10,
+      withdrawRow: { marginTop: 1, paddingVertical: 1 } as ViewStyle,
+      withdrawText: {
         fontSize: 12,
+        fontWeight: "800",
+        textAlign: "center",
+        color: c.text.secondary,
+      } as TextStyle,
+      versionText: {
+        marginTop: 1,
+        fontSize: 11,
         fontWeight: "700",
         textAlign: "center",
         color: c.text.secondary,
@@ -552,6 +559,9 @@ export default function MyPageScreen() {
 
         <Pressable style={s.logoutRow} onPress={onLogout} disabled={loading}>
           <Text style={s.logoutText}>{loading ? "로그아웃 중..." : "로그아웃"}</Text>
+        </Pressable>
+        <Pressable style={s.withdrawRow} onPress={() => router.push("/(common)/settings/account" as any)}>
+          <Text style={s.withdrawText}>회원 탈퇴</Text>
         </Pressable>
         <Text style={s.versionText}>현재 버전 1.0.2</Text>
       </ScrollView>

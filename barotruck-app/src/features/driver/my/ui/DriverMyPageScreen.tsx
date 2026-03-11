@@ -34,7 +34,7 @@ type DriverProfileView = {
   gender: string;
   ageLabel: string;
   carNum: string;
-  bankName: string;
+  bankLabel: string;
   activityAddress: string;
 };
 
@@ -73,13 +73,22 @@ function normalizeAgeLabel(input?: unknown) {
   return `${Math.floor(age)}세`;
 }
 
+function onlyDigits(v: unknown) {
+  return String(v ?? "").replace(/\D/g, "");
+}
+
+function maskAccount(v: unknown) {
+  const digits = onlyDigits(v);
+  if (!digits) return "";
+  if (digits.length <= 6) return digits;
+  return `${digits.slice(0, 3)}*****${digits.slice(-3)}`;
+}
+
 export default function DriverMyPageScreen() {
   const router = useRouter();
 
   const [loggingOut, setLoggingOut] = React.useState(false);
   const [receiveOrderAlarm, setReceiveOrderAlarm] = React.useState(true);
-  const [autoDispatchEnabled, setAutoDispatchEnabled] = React.useState(true);
-  const [savingAutoDispatchEnabled, setSavingAutoDispatchEnabled] = React.useState(false);
   const [adminForceAllocateBlocked, setAdminForceAllocateBlocked] = React.useState(false);
   const [savingAdminForceAllocateBlocked, setSavingAdminForceAllocateBlocked] = React.useState(false);
   const [profile, setProfile] = React.useState<DriverProfileView>({
@@ -87,7 +96,7 @@ export default function DriverMyPageScreen() {
     gender: "-",
     ageLabel: "-",
     carNum: "-",
-    bankName: "-",
+    bankLabel: "-",
     activityAddress: "-",
   });
   const [profileImageUrl, setProfileImageUrl] = React.useState("");
@@ -120,13 +129,32 @@ export default function DriverMyPageScreen() {
             await AsyncStorage.setItem(storageKey, resolvedImageUrl);
           }
           setAdminForceAllocateBlocked(Boolean(me?.adminForceAllocateBlocked));
-          setAutoDispatchEnabled(me?.autoDispatchEnabled !== false);
+          const bankName = pickFirstText(
+            detail?.bankName,
+            detail?.driver?.bankName,
+            detail?.bank_name,
+            detail?.driver?.bank_name,
+            me?.DriverInfo?.bankName,
+            (me as any)?.DriverInfo?.bank_name,
+            cached?.driverBankName
+          );
+          const accountNum = pickFirstText(
+            detail?.accountNum,
+            detail?.driver?.accountNum,
+            detail?.account_num,
+            detail?.driver?.account_num,
+            me?.DriverInfo?.accountNum,
+            (me as any)?.DriverInfo?.account_num,
+            cached?.driverAccountNum
+          );
+          const maskedAccount = maskAccount(accountNum);
+          const bankLabel = bankName ? (maskedAccount ? `${bankName} ${maskedAccount}` : bankName) : "-";
           setProfile({
             nickname: toText(me?.nickname ?? cached?.nickname, "차주"),
             gender: normalizeGenderLabel(me?.gender ?? me?.sex ?? detail?.gender ?? detail?.user?.gender ?? cached?.gender),
             ageLabel: normalizeAgeLabel(me?.age ?? detail?.age ?? detail?.user?.age ?? cached?.age),
             carNum: toText(pickFirstText(detail?.carNum, detail?.driver?.carNum, cached?.driverCarNum)),
-            bankName: toText(detail?.bankName ?? detail?.driver?.bankName),
+            bankLabel: toText(bankLabel),
             activityAddress: toText(pickFirstText(detail?.address, detail?.driver?.address, cached?.activityAddress)),
           });
         } catch {
@@ -135,13 +163,18 @@ export default function DriverMyPageScreen() {
           const localImageUrl = await AsyncStorage.getItem(buildProfileImageStorageKey(cached?.email));
           setProfileImageUrl(localImageUrl ?? "");
           setAdminForceAllocateBlocked(false);
-          setAutoDispatchEnabled(true);
           setProfile({
             nickname: toText(cached?.nickname, "차주"),
             gender: normalizeGenderLabel(cached?.gender),
             ageLabel: normalizeAgeLabel(cached?.age),
             carNum: toText(cached?.driverCarNum),
-            bankName: "-",
+            bankLabel: toText(
+              cached?.driverBankName
+                ? cached?.driverAccountNum
+                  ? `${cached.driverBankName} ${maskAccount(cached.driverAccountNum)}`
+                  : cached?.driverBankName
+                : "-"
+            ),
             activityAddress: toText(cached?.activityAddress),
           });
         }
@@ -194,21 +227,6 @@ export default function DriverMyPageScreen() {
       Alert.alert("저장 실패", "직접 배차 설정을 저장하지 못했습니다.");
     } finally {
       setSavingAdminForceAllocateBlocked(false);
-    }
-  };
-
-  const onToggleAutoDispatchEnabled = async (nextValue: boolean) => {
-    if (savingAutoDispatchEnabled) return;
-    const previousValue = autoDispatchEnabled;
-    setAutoDispatchEnabled(nextValue);
-    try {
-      setSavingAutoDispatchEnabled(true);
-      await UserService.updateAutoDispatchEnabled(nextValue);
-    } catch {
-      setAutoDispatchEnabled(previousValue);
-      Alert.alert("저장 실패", "자동배차 허용 설정을 저장하지 못했습니다.");
-    } finally {
-      setSavingAutoDispatchEnabled(false);
     }
   };
 
@@ -305,7 +323,9 @@ export default function DriverMyPageScreen() {
         settingActionDisabled: { opacity: 0.55 } as ViewStyle,
         logoutWrap: { marginTop: 22, paddingVertical: 8 } as ViewStyle,
         logoutText: { textAlign: "center", fontSize: 16, fontWeight: "900", color: "#E14B42" } as TextStyle,
-        versionText: { marginTop: 8, textAlign: "center", fontSize: 13, fontWeight: "700", color: "#A0ABBB" } as TextStyle,
+        withdrawWrap: { marginTop: 1, paddingVertical: 1 } as ViewStyle,
+        withdrawText: { textAlign: "center", fontSize: 12, fontWeight: "800", color: "#7B8794" } as TextStyle,
+        versionText: { marginTop: 1, textAlign: "center", fontSize: 11, fontWeight: "700", color: "#A0ABBB" } as TextStyle,
       }),
     []
   );
@@ -365,33 +385,6 @@ export default function DriverMyPageScreen() {
           <View style={s.divider} />
           <View style={s.settingRow}>
             <View style={s.iconWrap}>
-              <Ionicons name="flash" size={22} color="#2563EB" />
-            </View>
-            <View style={s.settingLabelWrap}>
-              <Text style={s.settingLabel}>자동배차 허용</Text>
-              <Text style={s.settingSub}>자동배차 후보 탐색과 배차 제안 수신</Text>
-            </View>
-            <View
-              style={[
-                s.settingActionWrap,
-                savingAutoDispatchEnabled && s.settingActionDisabled,
-              ]}
-            >
-              <Switch
-                value={autoDispatchEnabled}
-                onValueChange={(nextValue) =>
-                  void onToggleAutoDispatchEnabled(nextValue)
-                }
-                disabled={savingAutoDispatchEnabled}
-                trackColor={{ false: "#D7DEE8", true: "#BFDBFE" }}
-                thumbColor={autoDispatchEnabled ? "#2563EB" : "#FFFFFF"}
-                ios_backgroundColor="#D7DEE8"
-              />
-            </View>
-          </View>
-          <View style={s.divider} />
-          <View style={s.settingRow}>
-            <View style={s.iconWrap}>
               <Ionicons name="flash-outline" size={22} color="#DC2626" />
             </View>
             <View style={s.settingLabelWrap}>
@@ -410,8 +403,8 @@ export default function DriverMyPageScreen() {
                   void onToggleAdminForceAllocateBlocked(!nextValue)
                 }
                 disabled={savingAdminForceAllocateBlocked}
-                trackColor={{ false: "#D7DEE8", true: "#FECACA" }}
-                thumbColor={!adminForceAllocateBlocked ? "#DC2626" : "#FFFFFF"}
+                trackColor={{ false: "#D7DEE8", true: "#C7D2FE" }}
+                thumbColor={!adminForceAllocateBlocked ? "#4E46E5" : "#FFFFFF"}
                 ios_backgroundColor="#D7DEE8"
               />
             </View>
@@ -445,7 +438,9 @@ export default function DriverMyPageScreen() {
               <Ionicons name="business-outline" size={22} color="#7EA85B" />
             </View>
             <Text style={s.rowLabel}>정산 계좌 관리</Text>
-            <Text style={[s.rowValue, s.rowValuePrimary]}>{profile.bankName}</Text>
+            <Text style={[s.rowValue, s.rowValuePrimary]} numberOfLines={1}>
+              {profile.bankLabel}
+            </Text>
             <Ionicons name="chevron-forward" size={20} color="#9BA7B7" />
           </Pressable>
           <View style={s.divider} />
@@ -495,6 +490,9 @@ export default function DriverMyPageScreen() {
 
         <Pressable style={s.logoutWrap} onPress={onLogout} disabled={loggingOut}>
           <Text style={s.logoutText}>{loggingOut ? "로그아웃 중..." : "로그아웃"}</Text>
+        </Pressable>
+        <Pressable style={s.withdrawWrap} onPress={() => router.push("/(common)/settings/account" as any)}>
+          <Text style={s.withdrawText}>회원 탈퇴</Text>
         </Pressable>
         <Text style={s.versionText}>현재 버전 1.0.2</Text>
       </ScrollView>

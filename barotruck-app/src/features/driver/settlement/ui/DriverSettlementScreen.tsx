@@ -14,23 +14,26 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { toPaymentMethodLabel } from "@/features/common/payment/lib/paymentMethods";
-import { normalizePaymentMethod } from "@/features/common/payment/lib/paymentMethods";
+import { normalizePaymentMethod, toPaymentMethodLabel } from "@/features/common/payment/lib/paymentMethods";
 import {
   calcOrderAmount,
   isDriverSettlementEligibleOrder,
   toWon,
 } from "@/features/common/settlement/lib/settlementHelpers";
+import { SalesSummaryCard } from "@/features/driver/shard/ui/SalesSummaryCard";
+import apiClient from "@/shared/api/apiClient";
 import { OrderService } from "@/shared/api/orderService";
 import { PaymentService } from "@/shared/api/paymentService";
 import { SettlementService } from "@/shared/api/settlementService";
+import { UserService } from "@/shared/api/userService";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import type { OrderResponse } from "@/shared/models/order";
 import type { SettlementResponse } from "@/shared/models/Settlement";
 import ShipperScreenHeader from "@/shared/ui/layout/ShipperScreenHeader";
+import { getCurrentUserSnapshot } from "@/shared/utils/currentUserStorage";
 
-type SettlementFilter = "ALL" | "UNPAID" | "AWAITING_CONFIRM" | "PAID";
-type PaymentMethodFilter = "ALL" | "TOSS" | "DEFERRED";
+type SettlementFilter = "UNPAID" | "AWAITING_CONFIRM" | "PAID";
+type PaymentMethodFilter = "TOSS" | "DEFERRED";
 type DriverSettlementStatus = "UNPAID" | "AWAITING_CONFIRM" | "PAID";
 
 type DriverSettlementItem = {
@@ -60,6 +63,11 @@ type DriverSettlementItem = {
   feeCompleteDate?: string | null;
   payoutRequestedAt?: string | null;
   payoutCompletedAt?: string | null;
+  bankName?: string | null;
+  accountNum?: string | null;
+};
+
+type SettlementAccountSnapshot = {
   bankName?: string | null;
   accountNum?: string | null;
 };
@@ -133,6 +141,18 @@ function formatDateTime(value?: string | Date | null) {
 function toFiniteNumber(value: unknown) {
   const num = Number(value);
   return Number.isFinite(num) ? num : null;
+}
+
+function pickFirstText(...values: unknown[]) {
+  for (const value of values) {
+    const text = String(value ?? "").trim();
+    if (text) return text;
+  }
+  return "";
+}
+
+function onlyDigits(value: unknown) {
+  return String(value ?? "").replace(/\D/g, "");
 }
 
 function maskAccount(v?: string | null) {
@@ -348,11 +368,13 @@ export default function DriverSettlementScreen() {
   const insets = useSafeAreaInsets();
   const currentMonth = startOfMonth(new Date());
 
-  const [filter, setFilter] = React.useState<SettlementFilter>("ALL");
+  const [filter, setFilter] = React.useState<SettlementFilter>("UNPAID");
+  const [statusDropdownOpen, setStatusDropdownOpen] = React.useState(false);
   const [paymentFilter, setPaymentFilter] =
-    React.useState<PaymentMethodFilter>("ALL");
+    React.useState<PaymentMethodFilter>("TOSS");
   const [viewMonth, setViewMonth] = React.useState<Date>(currentMonth);
   const [items, setItems] = React.useState<DriverSettlementItem[]>([]);
+  const [driverAccount, setDriverAccount] = React.useState<SettlementAccountSnapshot | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [submittingOrderId, setSubmittingOrderId] = React.useState<number | null>(null);
   const [expandedOrderId, setExpandedOrderId] = React.useState<number | null>(null);
@@ -382,6 +404,42 @@ export default function DriverSettlementScreen() {
       .sort((a, b) => b.scheduledAt.getTime() - a.scheduledAt.getTime());
   }, []);
 
+  const fetchDriverAccount = React.useCallback(async (): Promise<SettlementAccountSnapshot | null> => {
+    const [meRes, driverRes, cached] = await Promise.all([
+      UserService.getMyInfo().catch(() => null),
+      apiClient.get("/api/v1/drivers/me").catch(() => null),
+      getCurrentUserSnapshot().catch(() => null),
+    ]);
+
+    const driver = driverRes?.data ?? null;
+    const bankName = pickFirstText(
+      driver?.bankName,
+      driver?.driver?.bankName,
+      driver?.bank_name,
+      driver?.driver?.bank_name,
+      meRes?.DriverInfo?.bankName,
+      (meRes as any)?.DriverInfo?.bank_name,
+      cached?.driverBankName,
+    );
+    const accountNum = onlyDigits(
+      pickFirstText(
+        driver?.accountNum,
+        driver?.driver?.accountNum,
+        driver?.account_num,
+        driver?.driver?.account_num,
+        meRes?.DriverInfo?.accountNum,
+        (meRes as any)?.DriverInfo?.account_num,
+        cached?.driverAccountNum,
+      ),
+    );
+
+    if (!bankName && !accountNum) return null;
+    return {
+      bankName: bankName || null,
+      accountNum: accountNum || null,
+    };
+  }, []);
+
   useFocusEffect(
     React.useCallback(() => {
       let active = true;
@@ -389,12 +447,19 @@ export default function DriverSettlementScreen() {
 
       void (async () => {
         try {
-          const next = await fetchItems();
+          const [next, account] = await Promise.all([
+            fetchItems(),
+            fetchDriverAccount(),
+          ]);
           if (!active) return;
           setItems(next);
+          setDriverAccount(account);
         } catch (error) {
           console.warn("차주 정산 내역 조회 실패:", error);
-          if (active) setItems([]);
+          if (active) {
+            setItems([]);
+            setDriverAccount(null);
+          }
         } finally {
           if (active) setLoading(false);
         }
@@ -403,7 +468,7 @@ export default function DriverSettlementScreen() {
       return () => {
         active = false;
       };
-    }, [fetchItems]),
+    }, [fetchDriverAccount, fetchItems]),
   );
 
   const isNextDisabled = compareMonth(viewMonth, currentMonth) >= 0;
@@ -416,16 +481,12 @@ export default function DriverSettlementScreen() {
   );
 
   const filtered = React.useMemo(() => {
-    const paymentFiltered =
-      paymentFilter === "ALL"
-        ? monthItems
-        : monthItems.filter((item) =>
-            paymentFilter === "TOSS"
-              ? item.paymentMethodCode === "card"
-              : item.paymentMethodCode === "prepaid",
-          );
+    const paymentFiltered = monthItems.filter((item) =>
+      paymentFilter === "TOSS"
+        ? item.paymentMethodCode === "card"
+        : item.paymentMethodCode === "prepaid",
+    );
 
-    if (filter === "ALL") return paymentFiltered;
     if (filter === "UNPAID") {
       return paymentFiltered.filter(
         (item) => item.status !== "PAID" && !isDriverConfirmPending(item),
@@ -438,16 +499,22 @@ export default function DriverSettlementScreen() {
     }
     return paymentFiltered.filter((item) => item.status === "PAID");
   }, [filter, monthItems, paymentFilter]);
+  const statusDropdownOptions = React.useMemo(
+    () =>
+      [
+        ["UNPAID", "미결제"],
+        ["AWAITING_CONFIRM", "결제 대기"],
+        ["PAID", "완료"],
+      ] as [SettlementFilter, string][],
+    [],
+  );
+  const statusDropdownLabel = React.useMemo(() => {
+    const found = statusDropdownOptions.find(([key]) => key === filter);
+    return found?.[1] ?? "미결제";
+  }, [filter, statusDropdownOptions]);
 
   const summaryExpectedAmount = React.useMemo(
     () => monthItems.reduce((acc, item) => acc + item.driverPayoutAmount, 0),
-    [monthItems],
-  );
-  const summaryCompletedAmount = React.useMemo(
-    () =>
-      monthItems
-        .filter((item) => item.status === "PAID")
-        .reduce((acc, item) => acc + item.driverPayoutAmount, 0),
     [monthItems],
   );
   const summaryPayoutCompletedAmount = React.useMemo(
@@ -456,6 +523,10 @@ export default function DriverSettlementScreen() {
         .filter((item) => String(item.payoutStatus ?? "").toUpperCase() === "COMPLETED")
         .reduce((acc, item) => acc + item.driverPayoutAmount, 0),
     [monthItems],
+  );
+  const summaryPendingAmount = React.useMemo(
+    () => Math.max(0, summaryExpectedAmount - summaryPayoutCompletedAmount),
+    [summaryExpectedAmount, summaryPayoutCompletedAmount],
   );
   const hasBreakdownGap = React.useMemo(
     () =>
@@ -466,10 +537,28 @@ export default function DriverSettlementScreen() {
   );
 
   const accountSnapshot = React.useMemo(
-    () =>
-      items.find((item) => String(item.bankName ?? "").trim() || String(item.accountNum ?? "").trim()) ??
-      null,
-    [items],
+    () => {
+      if (driverAccount && (String(driverAccount.bankName ?? "").trim() || String(driverAccount.accountNum ?? "").trim())) {
+        return driverAccount;
+      }
+      return (
+        items.find((item) => String(item.bankName ?? "").trim() || String(item.accountNum ?? "").trim()) ??
+        null
+      );
+    },
+    [driverAccount, items],
+  );
+  const accountSummaryText = React.useMemo(() => {
+    const bankName = String(accountSnapshot?.bankName ?? "").trim();
+    const masked = maskAccount(accountSnapshot?.accountNum ?? null);
+    if (bankName && masked !== "-") return `${bankName} ${masked}`;
+    if (bankName) return bankName;
+    if (masked !== "-") return masked;
+    return "";
+  }, [accountSnapshot]);
+  const hasSettlementAccount = React.useMemo(
+    () => String(accountSummaryText).trim().length > 0,
+    [accountSummaryText],
   );
 
   const onPressConfirm = React.useCallback(
@@ -529,11 +618,6 @@ export default function DriverSettlementScreen() {
         summaryCard: {
           marginTop: 14,
           marginHorizontal: 16,
-          borderRadius: 24,
-          backgroundColor: c.brand.primary,
-          paddingHorizontal: 18,
-          paddingVertical: 18,
-          overflow: "hidden",
         } as ViewStyle,
         summaryCaption: {
           fontSize: 13,
@@ -610,6 +694,39 @@ export default function DriverSettlementScreen() {
           borderWidth: 1,
           borderColor: "#FED7AA",
         } as ViewStyle,
+        missingAccountNotice: {
+          borderRadius: 16,
+          paddingHorizontal: 14,
+          paddingVertical: 13,
+          backgroundColor: "#FEF2F2",
+        } as ViewStyle,
+        missingAccountRow: {
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 10,
+        } as ViewStyle,
+        missingAccountText: {
+          flex: 1,
+          fontSize: 14,
+          lineHeight: 20,
+          fontWeight: "700",
+          color: "#DC2626",
+        } as TextStyle,
+        missingAccountBtn: {
+          marginTop: 10,
+          alignSelf: "flex-end",
+          minWidth: 80,
+          height: 30,
+          borderRadius: 9,
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: "#FEE2E2",
+        } as ViewStyle,
+        missingAccountBtnText: {
+          fontSize: 12,
+          fontWeight: "900",
+          color: "#B91C1C",
+        } as TextStyle,
         noticeTitle: { fontSize: 14, fontWeight: "900", color: "#C2410C" } as TextStyle,
         noticeText: {
           marginTop: 6,
@@ -624,8 +741,17 @@ export default function DriverSettlementScreen() {
           paddingTop: 12,
           gap: 10,
         } as ViewStyle,
-        filterRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 } as ViewStyle,
-        paymentFilterRow: { flexDirection: "row", gap: 8 } as ViewStyle,
+        filterRow: {
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          zIndex: 20,
+        } as ViewStyle,
+        paymentFilterInlineRow: {
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 14,
+        } as ViewStyle,
         filterBtn: {
           borderRadius: 18,
           paddingHorizontal: 14,
@@ -638,18 +764,86 @@ export default function DriverSettlementScreen() {
         filterBtnActive: { backgroundColor: "#0F172A", borderColor: "#0F172A" } as ViewStyle,
         filterText: { fontSize: 13, fontWeight: "800", color: "#667085" } as TextStyle,
         filterTextActive: { color: "#FFFFFF" } as TextStyle,
-        paymentBtn: {
-          borderRadius: 16,
+        dropdownWrap: {
+          width: 170,
+          position: "relative",
+        } as ViewStyle,
+        dropdownTrigger: {
+          height: 36,
+          borderRadius: 18,
+          borderWidth: 1,
+          borderColor: "#D4D9E3",
+          backgroundColor: "#FFFFFF",
           paddingHorizontal: 12,
-          height: 32,
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 8,
+        } as ViewStyle,
+        dropdownTriggerActive: {
+          borderColor: c.brand.primary,
+          backgroundColor: "#FFFFFF",
+        } as ViewStyle,
+        dropdownTriggerText: {
+          flex: 1,
+          fontSize: 13,
+          fontWeight: "800",
+          color: "#667085",
+        } as TextStyle,
+        dropdownTriggerTextActive: {
+          color: c.brand.primary,
+        } as TextStyle,
+        dropdownMenu: {
+          position: "absolute",
+          top: 40,
+          left: 0,
+          right: 0,
+          borderRadius: 12,
+          borderWidth: 1,
+          borderColor: "#DDE3F3",
+          backgroundColor: "#FFFFFF",
+          overflow: "hidden",
+          shadowColor: "#0F172A",
+          shadowOpacity: 0.04,
+          shadowRadius: 4,
+          shadowOffset: { width: 0, height: 2 },
+          elevation: 2,
+        } as ViewStyle,
+        dropdownItem: {
+          minHeight: 38,
+          paddingHorizontal: 12,
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          borderBottomWidth: 1,
+          borderBottomColor: "#EEF2F7",
+        } as ViewStyle,
+        dropdownItemLast: {
+          borderBottomWidth: 0,
+        } as ViewStyle,
+        dropdownItemText: {
+          fontSize: 13,
+          fontWeight: "700",
+          color: "#334155",
+        } as TextStyle,
+        dropdownItemTextActive: {
+          color: c.brand.primary,
+          fontWeight: "900",
+        } as TextStyle,
+        paymentTextBtn: {
+          minHeight: 32,
+          paddingHorizontal: 4,
           justifyContent: "center",
-          backgroundColor: "#F1F5F9",
         } as ViewStyle,
-        paymentBtnActive: {
-          backgroundColor: "#0F172A",
-        } as ViewStyle,
-        paymentBtnText: { fontSize: 12, fontWeight: "700", color: "#94A3B8" } as TextStyle,
-        paymentBtnTextActive: { color: "#FFFFFF" } as TextStyle,
+        paymentText: {
+          fontSize: 13,
+          fontWeight: "700",
+          color: c.text.secondary,
+        } as TextStyle,
+        paymentTextActive: {
+          color: c.brand.primary,
+          fontWeight: "900",
+        } as TextStyle,
         emptyCard: {
           marginTop: 8,
           borderRadius: 14,
@@ -776,42 +970,32 @@ export default function DriverSettlementScreen() {
           </Pressable>
         </View>
 
-        <View style={s.summaryCard}>
-          <Text style={s.summaryCaption}>{viewMonthNumber}월 최종 수령 예정 금액</Text>
-          <Text style={s.summaryAmount}>{toWon(summaryExpectedAmount)}</Text>
-          <View style={s.summaryDivider} />
-          <View style={s.summaryBottomRow}>
-            <View style={s.summaryCol}>
-              <Text style={s.summarySmall}>정산 완료</Text>
-              <Text style={s.summaryValue}>{toWon(summaryCompletedAmount)}</Text>
-            </View>
-            <View style={s.summaryColDivider} />
-            <View style={s.summaryCol}>
-              <Text style={[s.summarySmall, s.summarySmallRight]}>입금 완료</Text>
-              <Text style={[s.summaryValue, s.summaryValueRight]}>
-                {toWon(summaryPayoutCompletedAmount)}
-              </Text>
-            </View>
-          </View>
-        </View>
+        <SalesSummaryCard
+          title={`${viewMonthNumber}월 최종 수령 예정 금액`}
+          totalAmount={summaryExpectedAmount}
+          settledAmount={summaryPayoutCompletedAmount}
+          pendingAmount={summaryPendingAmount}
+          size="small"
+          style={s.summaryCard}
+        />
 
         <View style={s.contentWrap}>
-          <View style={s.topCard}>
-            <Text style={s.topCardTitle}>정산 계좌</Text>
-            <View style={s.accountRow}>
-              <Text style={s.accountValue}>
-                {accountSnapshot?.bankName
-                  ? `${accountSnapshot.bankName} ${maskAccount(accountSnapshot.accountNum)}`
-                  : "등록된 정산 계좌가 없습니다."}
-              </Text>
+          {!hasSettlementAccount ? (
+            <View style={s.missingAccountNotice}>
+              <View style={s.missingAccountRow}>
+                <Ionicons name="close-circle-outline" size={18} color="#DC2626" />
+                <Text style={s.missingAccountText}>
+                  정산 계좌가 등록되지 않았습니다. 계좌 관리에서 등록해 주세요.
+                </Text>
+              </View>
               <Pressable
-                style={s.accountBtn}
+                style={s.missingAccountBtn}
                 onPress={() => router.push("/(common)/settings/driver/account" as any)}
               >
-                <Text style={s.accountBtnText}>계좌 관리</Text>
+                <Text style={s.missingAccountBtnText}>계좌 등록</Text>
               </Pressable>
             </View>
-          </View>
+          ) : null}
 
           {hasBreakdownGap ? (
             <View style={s.noticeCard}>
@@ -825,44 +1009,85 @@ export default function DriverSettlementScreen() {
 
           <View style={s.filterSection}>
             <View style={s.filterRow}>
-              {[
-                ["ALL", "전체"],
-                ["UNPAID", "미결제"],
-                ["AWAITING_CONFIRM", "결제 확인 대기"],
-                ["PAID", "완료"],
-              ].map(([key, label]) => {
-                const active = filter === key;
-                return (
-                  <Pressable
-                    key={key}
-                    style={[s.filterBtn, active && s.filterBtnActive]}
-                    onPress={() => setFilter(key as SettlementFilter)}
-                  >
-                    <Text style={[s.filterText, active && s.filterTextActive]}>{label}</Text>
-                  </Pressable>
-                );
-              })}
-            </View>
+              <View style={s.paymentFilterInlineRow}>
+                {[
+                  ["TOSS", "토스"],
+                  ["DEFERRED", "착불"],
+                ].map(([key, label]) => {
+                  const active = paymentFilter === key;
+                  return (
+                    <Pressable
+                      key={key}
+                      style={s.paymentTextBtn}
+                      onPress={() => setPaymentFilter(key as PaymentMethodFilter)}
+                    >
+                      <Text style={[s.paymentText, active && s.paymentTextActive]}>
+                        {label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
 
-            <View style={s.paymentFilterRow}>
-              {[
-                ["ALL", "결제 전체"],
-                ["TOSS", "토스"],
-                ["DEFERRED", "착불"],
-              ].map(([key, label]) => {
-                const active = paymentFilter === key;
-                return (
-                  <Pressable
-                    key={key}
-                    style={[s.paymentBtn, active && s.paymentBtnActive]}
-                    onPress={() => setPaymentFilter(key as PaymentMethodFilter)}
+              <View style={s.dropdownWrap}>
+                <Pressable
+                  style={[
+                    s.dropdownTrigger,
+                    s.dropdownTriggerActive,
+                  ]}
+                  onPress={() => setStatusDropdownOpen((prev) => !prev)}
+                >
+                  <Text
+                    style={[
+                      s.dropdownTriggerText,
+                      s.dropdownTriggerTextActive,
+                    ]}
+                    numberOfLines={1}
                   >
-                    <Text style={[s.paymentBtnText, active && s.paymentBtnTextActive]}>
-                      {label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
+                    {statusDropdownLabel}
+                  </Text>
+                  <Ionicons
+                    name={statusDropdownOpen ? "chevron-up" : "chevron-down"}
+                    size={16}
+                    color={c.brand.primary}
+                  />
+                </Pressable>
+
+                {statusDropdownOpen ? (
+                  <View style={s.dropdownMenu}>
+                    {statusDropdownOptions.map(([key, label], idx) => {
+                      const active = filter === key;
+                      const isLast = idx === statusDropdownOptions.length - 1;
+                      return (
+                        <Pressable
+                          key={key}
+                          style={[s.dropdownItem, isLast && s.dropdownItemLast]}
+                          onPress={() => {
+                            setFilter(key);
+                            setStatusDropdownOpen(false);
+                          }}
+                        >
+                          <Text
+                            style={[
+                              s.dropdownItemText,
+                              active && s.dropdownItemTextActive,
+                            ]}
+                          >
+                            {label}
+                          </Text>
+                          {active ? (
+                            <Ionicons
+                              name="checkmark"
+                              size={14}
+                              color={c.brand.primary}
+                            />
+                          ) : null}
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                ) : null}
+              </View>
             </View>
           </View>
 

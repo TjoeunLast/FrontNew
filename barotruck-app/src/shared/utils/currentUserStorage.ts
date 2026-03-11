@@ -22,6 +22,8 @@ export type CurrentUserSnapshot = {
   driverType?: string;
   driverTonnage?: number;
   driverCareer?: number;
+  driverBankName?: string;
+  driverAccountNum?: string;
   instantDispatchEnabled?: boolean;
 };
 
