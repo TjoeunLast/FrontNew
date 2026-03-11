@@ -10,6 +10,7 @@ import {
 import { toPaymentMethodLabel } from "@/features/common/payment/lib/paymentMethods";
 import { PRESET_REQUEST_TAGS } from "@/features/shipper/create-order/ui/createOrderStep1.constants";
 import { OrderApi } from "@/shared/api/orderService";
+import { useShipperOrderFeePreview } from "@/shared/hooks/useShipperOrderFeePreview";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import type { OrderRequest } from "@/shared/models/order";
 import { Button } from "@/shared/ui/base/Button";
@@ -99,9 +100,42 @@ export function ShipperCreateOrderStep2CargoScreen() {
         : MANUAL_UNLOAD_SURCHARGE_RATE;
   const unloadSurcharge = Math.max(0, Math.round(draft.appliedFare * unloadSurchargeRate));
   const packagingPrice = packaging === "포장" ? PACKAGING_FEE_WON : 0;
-  const finalFare = draft.appliedFare + unloadSurcharge + packagingPrice;
-  const fee = draft.pay === "card" ? Math.round(finalFare * 0.1) : 0;
-  const totalPay = finalFare + fee;
+  const {
+    preview: shipperFeePreview,
+    isFallback: isFeePreviewFallback,
+    isLoading: isFeePreviewLoading,
+  } = useShipperOrderFeePreview({
+    baseFare: draft.appliedFare,
+    laborFee: unloadSurcharge,
+    packagingPrice,
+    payMethod: draft.pay,
+    userLevel: draft.userLevel,
+    loadMethod,
+    workType: resolvedWorkType,
+  });
+  const fee = shipperFeePreview.feeAmount;
+  const totalPay = shipperFeePreview.chargedTotal;
+  const shipperFeeLabel =
+    draft.pay === "card" && shipperFeePreview.appliedRateText !== "0%"
+      ? `shipper side fee 배분액 (${shipperFeePreview.appliedRateText})`
+      : "shipper side fee";
+  const promoStatusText =
+    draft.pay !== "card"
+      ? "해당 없음"
+      : shipperFeePreview.promoApplied === null
+        ? isFeePreviewLoading
+          ? "확인 중"
+          : "서버 확인 필요"
+        : shipperFeePreview.promoApplied
+          ? "적용"
+          : "미적용";
+  const feePreviewNotice = isFeePreviewLoading
+    ? "서버 preview를 확인 중입니다. 현재 금액은 임시 예상치로 표시됩니다."
+    : isFeePreviewFallback
+      ? "서버 preview를 불러오지 못했습니다. 현재 금액은 임시 예상치입니다."
+      : draft.pay === "card"
+        ? `Toss 10% 선차감 후 남은 ${won(shipperFeePreview.postTossBaseAmount)} 기준으로 shipper side fee가 계산됩니다.`
+        : "최종 결제금액 안에서 shipper side fee가 내부 배분 기준으로 계산됩니다.";
   const unloadHintText =
     resolvedWorkType === "크레인"
       ? `크레인 +7% (${won(unloadSurcharge)})`
@@ -340,29 +374,37 @@ export function ShipperCreateOrderStep2CargoScreen() {
           }}
         >
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-            <Text style={{ color: c.text.secondary, fontWeight: "900" }}>최종 결제 금액</Text>
+            <Text style={{ color: c.text.secondary, fontWeight: "900" }}>최종 화주 청구 금액</Text>
             <Text style={{ color: c.text.primary, fontWeight: "900", fontSize: 18 }}>{won(totalPay)}</Text>
           </View>
           <View style={{ marginTop: 6, flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-            <Text style={{ color: c.text.secondary, fontWeight: "800" }}>기본 운임 {won(draft.appliedFare)}</Text>
-            <Text style={{ color: c.text.secondary, fontWeight: "800" }}>적재 방식 추가 0원</Text>
+            <Text style={{ color: c.text.secondary, fontWeight: "800" }}>기본 운임</Text>
+            <Text style={{ color: c.text.secondary, fontWeight: "800" }}>{won(shipperFeePreview.baseFare)}</Text>
           </View>
           <View style={{ marginTop: 4, flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-            <Text style={{ color: c.text.secondary, fontWeight: "800" }}>적재 방식 {loadMethod}</Text>
-            <Text style={{ color: c.text.secondary, fontWeight: "800" }}>
-              하차 추가 {unloadSurcharge > 0 ? `+${won(unloadSurcharge)}` : "0원"}
+            <Text style={{ color: c.text.secondary, fontWeight: "800" }}>추가 작업비</Text>
+            <Text style={{ color: c.text.secondary, fontWeight: "800" }}>+{won(shipperFeePreview.surcharge)}</Text>
+          </View>
+          <View style={{ marginTop: 4, flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+            <Text style={{ color: c.text.secondary, fontWeight: "800" }}>{shipperFeeLabel}</Text>
+            <Text style={{ color: c.text.secondary, fontWeight: "800" }}>+{won(fee)}</Text>
+          </View>
+          <View style={{ marginTop: 4, flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+            <Text style={{ color: c.text.secondary, fontWeight: "800" }}>shipper promo</Text>
+            <Text style={{ color: c.text.secondary, fontWeight: "800" }}>{promoStatusText}</Text>
+          </View>
+          <View style={{ marginTop: 10 }}>
+            <Text style={{ color: c.text.secondary, fontSize: 12, fontWeight: "700" }}>
+              선택 작업: 하차 {resolvedWorkType ?? "없음"} / {unloadHintText}, 포장 {packagingHintText}
             </Text>
-          </View>
-          <View style={{ marginTop: 4, flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-            <Text style={{ color: c.text.secondary, fontWeight: "800" }}>작업 방식 {resolvedWorkType}</Text>
-            <Text style={{ color: c.text.secondary, fontWeight: "800" }}>
-              포장비 {packaging === "포장" ? `+${won(packagingPrice)}` : "0원"}
+            <Text style={{ color: c.text.secondary, fontSize: 12, fontWeight: "700", marginTop: 4 }}>
+              {feePreviewNotice}
             </Text>
-          </View>
-          <View style={{ marginTop: 4, flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-            <Text style={{ color: c.text.secondary, fontWeight: "800" }}>결제 수수료</Text>
-            <Text style={{ color: c.text.secondary, fontWeight: "800" }}>
-              {draft.pay === "card" ? `+${won(fee)}` : "0원"}
+            <Text style={{ color: c.text.secondary, fontSize: 12, fontWeight: "700", marginTop: 6 }}>
+              차주 side fee는 별도 정산에서 차감됩니다.
+            </Text>
+            <Text style={{ color: c.text.secondary, fontSize: 12, fontWeight: "700", marginTop: 4 }}>
+              Toss 10%를 먼저 제외한 뒤 남은 금액에서 shipper/driver side fee가 계산됩니다.
             </Text>
           </View>
         </View>

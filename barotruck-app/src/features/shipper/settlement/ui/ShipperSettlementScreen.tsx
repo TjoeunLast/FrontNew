@@ -45,6 +45,8 @@ type SettlementItem = {
   from: string;
   to: string;
   amount: number;
+  billedSubtotal: number;
+  shipperFeeAmount: number;
   actionLabel: string;
   vehicleInfo: string;
   payMethodLabel: string;
@@ -137,6 +139,11 @@ function formatDateTime(value?: string | Date | null) {
   const date = value instanceof Date ? value : parseDate(value);
   if (!date) return "-";
   return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")} ${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+}
+
+function toAmount(value?: number | null) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return 0;
+  return Math.max(0, Math.round(value));
 }
 
 function escapeHtmlValue(v: string) {
@@ -339,7 +346,11 @@ function mapOrderToSettlement(
 
   if (!isShipperActivePaymentMethod(order.payMethod)) return null;
 
-  const amount = calcOrderAmount(order);
+  const billedSubtotal = toAmount(settlement?.totalPrice) || calcOrderAmount(order);
+  const chargedTotal = toAmount(settlement?.paymentAmount) || billedSubtotal;
+  const shipperFeeAmount =
+    toAmount(settlement?.paymentFeeAmount) ||
+    Math.max(0, chargedTotal - billedSubtotal);
   const status = resolveItemStatus(order, settlement);
   const isTransportCompleted = true;
   const vehicleInfo =
@@ -354,7 +365,9 @@ function mapOrderToSettlement(
     isTransportCompleted,
     from: toShortPlace(order.startAddr || order.startPlace),
     to: toShortPlace(order.endAddr || order.endPlace),
-    amount,
+    amount: chargedTotal,
+    billedSubtotal,
+    shipperFeeAmount,
     actionLabel: toActionLabel(status, isTransportCompleted),
     vehicleInfo: vehicleInfo || "-",
     payMethodLabel: toPaymentMethodLabel(order.payMethod),
@@ -1174,6 +1187,12 @@ export default function ShipperSettlementScreen() {
             4. 상태가 정산 완료로 바뀝니다.{"\n"}
             5. 관리자에서 지급 요청을 실행합니다.
           </Text>
+          <Text style={[s.flowGuideText, { marginTop: 10 }]}>
+            차주 side fee는 별도 정산에서 차감됩니다.
+          </Text>
+          <Text style={[s.flowGuideText, { marginTop: 4 }]}>
+            Toss 수수료는 플랫폼 최종 정산 단계에서 마지막에 반영됩니다.
+          </Text>
         </View>
 
         <View style={s.section}>
@@ -1294,6 +1313,10 @@ export default function ShipperSettlementScreen() {
                     </Text>
                     <Text style={s.payMethodText}>
                       결제 방식: {item.payMethodLabel}
+                    </Text>
+                    <Text style={s.payMethodText}>
+                      기본 운임+작업비 {toWon(item.billedSubtotal)} / shipper side fee{" "}
+                      {toWon(item.shipperFeeAmount)}
                     </Text>
                     <Text style={s.flowHintText}>
                       {getStatusHint(item.status)}
@@ -1416,7 +1439,7 @@ export default function ShipperSettlementScreen() {
         <Pressable style={s.modalBackdrop} onPress={() => setReceiptItem(null)}>
           <Pressable style={s.modalSheet} onPress={(e) => e.stopPropagation()}>
             <View style={s.modalHeader}>
-              <Text style={s.modalTitle}>운송 영수증</Text>
+              <Text style={s.modalTitle}>화주 결제 상세</Text>
               <Pressable onPress={() => setReceiptItem(null)}>
                 <Ionicons name="close" size={28} color={c.text.primary} />
               </Pressable>
@@ -1424,7 +1447,7 @@ export default function ShipperSettlementScreen() {
 
             <View style={s.receiptCard}>
               <Text style={s.receiptAmount}>
-                {receiptItem ? receiptItem.amount.toLocaleString("ko-KR") : "0"}
+                {receiptItem ? toWon(receiptItem.amount) : "0원"}
               </Text>
               <Text style={s.receiptPaid}>
                 {receiptItem ? getStatusLabel(receiptItem.status) : "-"}
@@ -1474,17 +1497,35 @@ export default function ShipperSettlementScreen() {
               <View style={s.receiptBlockGap} />
 
               <View style={s.receiptRow}>
-                <Text style={s.receiptKey}>공급가액</Text>
+                <Text style={s.receiptKey}>기본 운임+작업비</Text>
                 <Text style={s.receiptVal}>
-                  {receiptItem
-                    ? receiptItem.amount.toLocaleString("ko-KR")
-                    : "0"}
+                  {receiptItem ? toWon(receiptItem.billedSubtotal) : "0원"}
                 </Text>
               </View>
               <View style={s.receiptRow}>
-                <Text style={s.receiptKey}>세액</Text>
-                <Text style={s.receiptVal}>0원</Text>
+                <Text style={s.receiptKey}>shipper side fee</Text>
+                <Text style={s.receiptVal}>
+                  {receiptItem ? toWon(receiptItem.shipperFeeAmount) : "0원"}
+                </Text>
               </View>
+              <View style={s.receiptRow}>
+                <Text style={s.receiptKey}>shipper promo</Text>
+                <Text style={s.receiptVal}>
+                  {receiptItem?.isToss ? "정산 스냅샷 미제공" : "해당 없음"}
+                </Text>
+              </View>
+              <View style={s.receiptRow}>
+                <Text style={s.receiptKey}>최종 화주 청구 금액</Text>
+                <Text style={s.receiptVal}>
+                  {receiptItem ? toWon(receiptItem.amount) : "0원"}
+                </Text>
+              </View>
+              <Text style={[s.receiptPaid, { marginTop: 10 }]}>
+                차주 side fee는 별도 정산에서 차감됩니다.
+              </Text>
+              <Text style={s.receiptPaid}>
+                Toss 수수료는 플랫폼 최종 정산 단계에서 마지막에 반영됩니다.
+              </Text>
             </View>
           </Pressable>
         </Pressable>

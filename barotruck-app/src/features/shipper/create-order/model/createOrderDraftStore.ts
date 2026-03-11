@@ -25,6 +25,7 @@ export type CreateOrderDraft = {
   autoDispatchLocked: boolean;
   tripType: "oneWay" | "roundTrip";
   pay: EnabledShipperPaymentMethod;
+  userLevel?: number;
 
   distanceKm: number;
   appliedFare: number;

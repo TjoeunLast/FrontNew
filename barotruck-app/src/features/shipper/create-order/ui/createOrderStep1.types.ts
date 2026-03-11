@@ -17,6 +17,6 @@ export const TRIP_OPTIONS: { value: TripType; label: string }[] = [
 ];
 
 export const PAYMENT_OPTIONS: { value: PayType; title: string; desc: string }[] = [
-  { value: "card", title: "토스 결제", desc: "수수료 10%" },
+  { value: "card", title: "토스 결제", desc: "레벨별 수수료 적용" },
   { value: "prepaid", title: "착불 결제", desc: "운송 완료 후 지급" },
 ];

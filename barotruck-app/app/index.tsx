@@ -3,7 +3,7 @@ import {
   clearStoredAuthSession,
   validateStoredSession,
 } from "@/shared/utils/authSession";
-import { useRouter } from "expo-router";
+import { useRootNavigationState, useRouter } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect, useState } from "react";
 // import { useFCM } from '@/shared/hooks/useFCM';
@@ -13,11 +13,16 @@ SplashScreen.preventAutoHideAsync();
 
 export default function Index() {
   const router = useRouter();
+  const rootNavigationState = useRootNavigationState();
   const [isAppReady, setIsAppReady] = useState(false);
 
   // useFCM(); // FCM 훅 실행 필요 시 주석 해제
 
   useEffect(() => {
+    if (!rootNavigationState?.key) {
+      return;
+    }
+
     let active = true;
 
     async function prepareApp() {
@@ -71,7 +76,7 @@ export default function Index() {
     return () => {
       active = false;
     };
-  }, [router]);
+  }, [rootNavigationState?.key, router]);
 
   // 4. 앱이 준비되는 동안(자동 로그인 검사 중)
   if (!isAppReady) {

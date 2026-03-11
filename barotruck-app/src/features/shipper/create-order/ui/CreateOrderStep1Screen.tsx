@@ -22,6 +22,8 @@ import {
 } from "@/features/shipper/create-order/model/createOrderDraft";
 import { AddressApi } from "@/shared/api/addressService";
 import { RouteApi } from "@/shared/api/routeService";
+import { UserService } from "@/shared/api/userService";
+import { useShipperOrderFeePreview } from "@/shared/hooks/useShipperOrderFeePreview";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import { Button } from "@/shared/ui/base/Button";
 import { Card } from "@/shared/ui/base/Card";
@@ -301,6 +303,9 @@ export function ShipperCreateOrderStep1Screen() {
   const [distanceKm, setDistanceKm] = useState(
     initialDraft?.distanceKm ?? fallbackDistanceKm,
   );
+  const [userLevel, setUserLevel] = useState<number | undefined>(
+    initialDraft?.userLevel,
+  );
   const [estimatedDurationMin, setEstimatedDurationMin] = useState<
     number | undefined
   >(initialDraft?.estimatedDurationMin);
@@ -323,12 +328,73 @@ export function ShipperCreateOrderStep1Screen() {
     [appliedBaseFare, tripType],
   );
 
-  const fee = useMemo(() => {
-    if (pay === "card") return Math.round(appliedFare * 0.1);
-    return 0;
-  }, [appliedFare, pay]);
+  React.useEffect(() => {
+    let active = true;
+    if (initialDraft?.userLevel !== undefined) {
+      setUserLevel(initialDraft.userLevel);
+      return () => {
+        active = false;
+      };
+    }
 
-  const totalPay = useMemo(() => appliedFare + fee, [appliedFare, fee]);
+    void UserService.getMyInfo()
+      .then((me) => {
+        if (!active) return;
+        setUserLevel(me.userLevel);
+      })
+      .catch(() => {
+        if (!active) return;
+        setUserLevel(undefined);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [initialDraft?.userLevel]);
+
+  const {
+    preview: shipperFeePreview,
+    isFallback: isFeePreviewFallback,
+    isLoading: isFeePreviewLoading,
+  } = useShipperOrderFeePreview({
+    baseFare: appliedFare,
+    payMethod: pay,
+    userLevel,
+  });
+  const feePreviewBannerText = isFeePreviewLoading
+    ? "서버 preview를 확인 중입니다. 현재 금액은 임시 예상치로 표시됩니다."
+    : isFeePreviewFallback
+      ? "서버 preview를 불러오지 못했습니다. 현재 금액은 임시 예상치입니다."
+      : pay === "card"
+        ? `Toss 10% 선차감 후 남은 ${won(shipperFeePreview.postTossBaseAmount)} 기준으로 shipper side fee ${shipperFeePreview.appliedRateText}가 계산됩니다.${shipperFeePreview.promoApplied ? " shipper promo가 적용되었습니다." : ""}${shipperFeePreview.minFeeApplied ? " 최소 수수료가 반영되었습니다." : ""}`
+        : "최종 결제금액 안에서 shipper side fee가 내부 배분 기준으로 계산됩니다.";
+  const shipperFeeLabel =
+    pay === "card" && shipperFeePreview.appliedRateText !== "0%"
+      ? `shipper side fee 배분액 (${shipperFeePreview.appliedRateText})`
+      : "shipper side fee";
+  const promoStatusText =
+    pay !== "card"
+      ? "해당 없음"
+      : shipperFeePreview.promoApplied === null
+        ? isFeePreviewLoading
+          ? "확인 중"
+          : "서버 확인 필요"
+        : shipperFeePreview.promoApplied
+          ? "적용"
+          : "미적용";
+  const fee = shipperFeePreview.feeAmount;
+  const totalPay = shipperFeePreview.chargedTotal;
+  const feePreviewBannerColor = isFeePreviewFallback || isFeePreviewLoading
+    ? c.status.warning
+    : c.brand.primary;
+  const feePreviewBannerBackground = isFeePreviewFallback || isFeePreviewLoading
+    ? c.status.warningSoft
+    : c.brand.primarySoft;
+  const feePreviewBannerIcon = isFeePreviewFallback
+    ? "alert-circle-outline"
+    : isFeePreviewLoading
+      ? "time-outline"
+      : "checkmark-circle-outline";
   const vehicleTonnage = useMemo(() => parseOptionTonnage(ton), [ton]);
   const startTimePickerValue = useMemo(
     () => getTimePickerValue(loadDate, startTimeHHmm, "09:00"),
@@ -603,6 +669,7 @@ export function ShipperCreateOrderStep1Screen() {
       autoDispatchLocked,
       tripType,
       pay,
+      userLevel,
       distanceKm,
       estimatedDurationMin,
       appliedFare,
@@ -1299,8 +1366,8 @@ export function ShipperCreateOrderStep1Screen() {
             style={{
               marginTop: 10,
               borderWidth: 1,
-              borderColor: pay === "card" ? c.status.danger : c.border.default,
-              backgroundColor: c.bg.surface,
+              borderColor: feePreviewBannerColor,
+              backgroundColor: feePreviewBannerBackground,
               borderRadius: 12,
               paddingHorizontal: 12,
               paddingVertical: 10,
@@ -1310,52 +1377,62 @@ export function ShipperCreateOrderStep1Screen() {
             }}
           >
             <Ionicons
-              name={
-                pay === "card"
-                  ? "alert-circle-outline"
-                  : "checkmark-circle-outline"
-              }
+              name={feePreviewBannerIcon as any}
               size={16}
-              color={pay === "card" ? c.status.danger : c.brand.primary}
+              color={feePreviewBannerColor}
             />
             <Text
               style={{
                 flex: 1,
                 fontSize: 12,
                 fontWeight: "800",
-                color: pay === "card" ? c.status.danger : c.text.secondary,
+                color: feePreviewBannerColor,
               }}
             >
-              {pay === "card"
-                ? "토스 결제 선택 시 수수료 10%가 추가됩니다."
-                : "선택한 결제 방식은 별도 수수료가 없습니다."}
+              {feePreviewBannerText}
             </Text>
           </View>
 
           <Card padding={14} style={{ marginTop: 14 }}>
             <View style={s.feeRow}>
               <Text style={[s.feeLabel, { color: c.text.secondary }]}>
-                희망 운임
+                기본 운임
               </Text>
               <Text style={[s.feeValue, { color: c.text.primary }]}>
-                {won(appliedFare)}
+                {won(shipperFeePreview.baseFare)}
               </Text>
             </View>
             <View style={s.feeRow}>
               <Text style={[s.feeLabel, { color: c.text.secondary }]}>
-                수수료 (토스 10%)
+                {shipperFeeLabel}
               </Text>
               <Text style={[s.feeValue, { color: c.text.primary }]}>
                 + {won(fee)}
               </Text>
             </View>
+            <View style={s.feeRow}>
+              <Text style={[s.feeLabel, { color: c.text.secondary }]}>
+                shipper promo
+              </Text>
+              <Text style={[s.feeValue, { color: c.text.primary }]}>
+                {promoStatusText}
+              </Text>
+            </View>
             <View style={[s.hr, { backgroundColor: c.border.default }]} />
             <View style={s.feeRow}>
               <Text style={[s.feeTotalLabel, { color: c.text.primary }]}>
-                최종 결제 금액
+                최종 화주 청구 금액
               </Text>
               <Text style={[s.feeTotalValue, { color: c.text.primary }]}>
                 {won(totalPay)}
+              </Text>
+            </View>
+            <View style={{ marginTop: 10, gap: 4 }}>
+              <Text style={[s.hint, { color: c.text.secondary }]}>
+                차주 side fee는 별도 정산에서 차감됩니다.
+              </Text>
+              <Text style={[s.hint, { color: c.text.secondary }]}>
+                Toss 10%를 먼저 제외한 뒤 남은 금액에서 shipper/driver side fee가 계산됩니다.
               </Text>
             </View>
           </Card>
@@ -1404,7 +1481,7 @@ export function ShipperCreateOrderStep1Screen() {
         >
           <View style={s.stickyRow}>
             <Text style={[s.stickyLabel, { color: c.text.secondary }]}>
-              최종 결제 금액
+              최종 화주 청구 금액
             </Text>
             <Text style={[s.stickyTotal, { color: c.text.primary }]}>
               {won(totalPay)}
@@ -1413,12 +1490,17 @@ export function ShipperCreateOrderStep1Screen() {
 
           <View style={s.stickySubRow}>
             <Text style={[s.stickySub, { color: c.text.secondary }]}>
-              희망 운임 {won(appliedFare)}
+              기본 운임 {won(shipperFeePreview.baseFare)}
             </Text>
             <Text style={[s.stickySub, { color: c.text.secondary }]}>
-              {pay === "card" ? `수수료 +${won(fee)}` : "수수료 0원"}
+              {shipperFeeLabel} +{won(fee)}
             </Text>
           </View>
+          <Text style={[s.stickySub, { color: c.text.secondary, marginTop: 4 }]}>
+            {isFeePreviewFallback || isFeePreviewLoading
+              ? "서버 preview 재확인 중"
+              : "서버 preview 기준"}
+          </Text>
         </View>
 
         <Button

@@ -12,6 +12,7 @@ export interface UserProfile {
   ratingAvg: number;
   gender?: string;
   age?: number;
+  userLevel?: number;
   adminForceAllocateBlocked?: boolean;
   autoDispatchEnabled?: boolean;
   DriverInfo?: DriverInfo; // 차주 상세 정보 (차주인 경우)
