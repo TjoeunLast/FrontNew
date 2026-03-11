@@ -1,5 +1,6 @@
 ﻿import { useRouter } from "expo-router";
 import React from "react";
+import { useRootNavigationState } from "expo-router";
 import { Alert, ScrollView, Switch, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -70,16 +71,17 @@ function parseTonnage(label: string, value: string) {
 export function ShipperCreateOrderStep2CargoScreen() {
   const { colors: c } = useAppTheme();
   const router = useRouter();
+  const rootNavigationState = useRootNavigationState();
   const insets = useSafeAreaInsets();
 
   const draft = getCreateOrderDraft();
+  const isNavigationReady = Boolean(rootNavigationState?.key);
 
   React.useEffect(() => {
-    if (!draft) {
+    if (!draft && isNavigationReady) {
       router.replace("/(shipper)/create-order/step1-route");
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [draft, isNavigationReady, router]);
 
   const [loadMethod, setLoadMethod] = React.useState<"독차" | "혼적">("독차");
   const [isManualUnload, setIsManualUnload] = React.useState(true);
@@ -89,8 +91,6 @@ export function ShipperCreateOrderStep2CargoScreen() {
   const [memo, setMemo] = React.useState("");
   const [loading, setLoading] = React.useState(false);
 
-  if (!draft) return null;
-
   const resolvedWorkType = isManualUnload ? workTool : undefined;
   const unloadSurchargeRate =
     resolvedWorkType === "크레인"
@@ -98,44 +98,43 @@ export function ShipperCreateOrderStep2CargoScreen() {
       : resolvedWorkType === "지게차"
         ? FORKLIFT_UNLOAD_SURCHARGE_RATE
         : MANUAL_UNLOAD_SURCHARGE_RATE;
-  const unloadSurcharge = Math.max(0, Math.round(draft.appliedFare * unloadSurchargeRate));
+  const baseFare = draft?.appliedFare ?? 0;
+  const unloadSurcharge = Math.max(0, Math.round(baseFare * unloadSurchargeRate));
   const packagingPrice = packaging === "포장" ? PACKAGING_FEE_WON : 0;
   const {
     preview: shipperFeePreview,
     isFallback: isFeePreviewFallback,
     isLoading: isFeePreviewLoading,
   } = useShipperOrderFeePreview({
-    baseFare: draft.appliedFare,
+    baseFare,
     laborFee: unloadSurcharge,
     packagingPrice,
-    payMethod: draft.pay,
-    userLevel: draft.userLevel,
+    payMethod: draft?.pay ?? "prepaid",
+    userLevel: draft?.userLevel,
     loadMethod,
     workType: resolvedWorkType,
   });
+  if (!draft) return null;
   const fee = shipperFeePreview.feeAmount;
   const totalPay = shipperFeePreview.chargedTotal;
   const shipperFeeLabel =
     draft.pay === "card" && shipperFeePreview.appliedRateText !== "0%"
-      ? `shipper side fee 배분액 (${shipperFeePreview.appliedRateText})`
-      : "shipper side fee";
+      ? `화주 수수료 배분액 (${shipperFeePreview.appliedRateText})`
+      : "화주 수수료";
   const promoStatusText =
     draft.pay !== "card"
       ? "해당 없음"
       : shipperFeePreview.promoApplied === null
-        ? isFeePreviewLoading
-          ? "확인 중"
-          : "서버 확인 필요"
+        ? "서버 확인 필요"
         : shipperFeePreview.promoApplied
           ? "적용"
           : "미적용";
-  const feePreviewNotice = isFeePreviewLoading
-    ? "서버 preview를 확인 중입니다. 현재 금액은 임시 예상치로 표시됩니다."
-    : isFeePreviewFallback
+  const isFeePreviewError = isFeePreviewFallback && !isFeePreviewLoading;
+  const feePreviewNotice = isFeePreviewError
       ? "서버 preview를 불러오지 못했습니다. 현재 금액은 임시 예상치입니다."
       : draft.pay === "card"
-        ? `Toss 10% 선차감 후 남은 ${won(shipperFeePreview.postTossBaseAmount)} 기준으로 shipper side fee가 계산됩니다.`
-        : "최종 결제금액 안에서 shipper side fee가 내부 배분 기준으로 계산됩니다.";
+        ? `Toss 수수료 10% 선차감 후 남은 ${won(shipperFeePreview.postTossBaseAmount)} 기준으로 화주 수수료가 계산됩니다.`
+        : "최종 결제금액 안에서 화주 수수료가 내부 배분 기준으로 계산됩니다.";
   const unloadHintText =
     resolvedWorkType === "크레인"
       ? `크레인 +7% (${won(unloadSurcharge)})`
@@ -390,7 +389,7 @@ export function ShipperCreateOrderStep2CargoScreen() {
             <Text style={{ color: c.text.secondary, fontWeight: "800" }}>+{won(fee)}</Text>
           </View>
           <View style={{ marginTop: 4, flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-            <Text style={{ color: c.text.secondary, fontWeight: "800" }}>shipper promo</Text>
+            <Text style={{ color: c.text.secondary, fontWeight: "800" }}>화주 프로모션</Text>
             <Text style={{ color: c.text.secondary, fontWeight: "800" }}>{promoStatusText}</Text>
           </View>
           <View style={{ marginTop: 10 }}>
@@ -401,10 +400,10 @@ export function ShipperCreateOrderStep2CargoScreen() {
               {feePreviewNotice}
             </Text>
             <Text style={{ color: c.text.secondary, fontSize: 12, fontWeight: "700", marginTop: 6 }}>
-              차주 side fee는 별도 정산에서 차감됩니다.
+              차주 수수료는 별도 정산에서 차감됩니다.
             </Text>
             <Text style={{ color: c.text.secondary, fontSize: 12, fontWeight: "700", marginTop: 4 }}>
-              Toss 10%를 먼저 제외한 뒤 남은 금액에서 shipper/driver side fee가 계산됩니다.
+              Toss 수수료 10%를 먼저 제외한 뒤 남은 금액에서 화주/차주 수수료가 계산됩니다.
             </Text>
           </View>
         </View>

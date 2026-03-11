@@ -594,7 +594,7 @@ export default function PaymentE2ELabScreen() {
               onPress={() => void refreshEnvironment()}
             />
             <Button
-              title={serverStatus.state === "checking" ? "서버 확인 중..." : "서버 확인"}
+              title={serverStatus.state === "checking" ? "" : ""}
               loading={serverStatus.state === "checking"}
               onPress={() => void runServerCheck()}
             />

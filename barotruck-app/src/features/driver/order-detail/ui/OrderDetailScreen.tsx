@@ -169,6 +169,12 @@ function toFiniteNumber(value: unknown): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function formatWon(value: unknown): string {
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) return "0원";
+  return `${amount.toLocaleString()}원`;
+}
+
 export default function OrderDetailScreen() {
   const { colors: c } = useAppTheme();
   const router = useRouter();
@@ -439,7 +445,7 @@ export default function OrderDetailScreen() {
     const cargoText = [vehicleText, order.cargoContent || "일반화물"]
       .filter(Boolean)
       .join(" · ");
-    const priceText = `${totalPrice.toLocaleString()}원`;
+    const priceText = formatWon(totalPrice);
 
     try {
       const res = await apiClient.post<number>(
@@ -807,7 +813,7 @@ export default function OrderDetailScreen() {
                   { color: isSettled ? c.status.success : c.text.primary },
                 ]}
               >
-                {totalPrice.toLocaleString()}원
+                {formatWon(totalPrice)}
               </Text>
             </View>
 
@@ -822,7 +828,7 @@ export default function OrderDetailScreen() {
                 <Text
                   style={[styles.breakdownValue, { color: c.text.primary }]}
                 >
-                  {(order?.basePrice || 0).toLocaleString()}원
+                  {formatWon(order?.basePrice)}
                 </Text>
               </View>
 
@@ -835,7 +841,7 @@ export default function OrderDetailScreen() {
                 <Text
                   style={[styles.breakdownValue, { color: c.text.primary }]}
                 >
-                  {order!.laborFee.toLocaleString()}원
+                  {formatWon(order?.laborFee)}
                 </Text>
               </View>
 
@@ -848,7 +854,7 @@ export default function OrderDetailScreen() {
                 <Text
                   style={[styles.breakdownValue, { color: c.text.primary }]}
                 >
-                  {order!.packagingPrice.toLocaleString()}원
+                  {formatWon(order?.packagingPrice)}
                 </Text>
               </View>
             </View>

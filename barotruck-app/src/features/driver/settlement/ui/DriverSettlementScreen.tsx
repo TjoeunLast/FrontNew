@@ -15,6 +15,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { toPaymentMethodLabel } from "@/features/common/payment/lib/paymentMethods";
+import { normalizePaymentMethod } from "@/features/common/payment/lib/paymentMethods";
 import {
   calcOrderAmount,
   isDriverSettlementEligibleOrder,
@@ -29,6 +30,7 @@ import type { SettlementResponse } from "@/shared/models/Settlement";
 import ShipperScreenHeader from "@/shared/ui/layout/ShipperScreenHeader";
 
 type SettlementFilter = "ALL" | "UNPAID" | "AWAITING_CONFIRM" | "PAID";
+type PaymentMethodFilter = "ALL" | "TOSS" | "DEFERRED";
 type DriverSettlementStatus = "UNPAID" | "AWAITING_CONFIRM" | "PAID";
 
 type DriverSettlementItem = {
@@ -40,6 +42,7 @@ type DriverSettlementItem = {
   from: string;
   to: string;
   paymentMethodLabel: string;
+  paymentMethodCode?: string | null;
   baseAmount: number;
   driverFeeAmount: number;
   driverFeeRate: number | null;
@@ -60,6 +63,22 @@ type DriverSettlementItem = {
   bankName?: string | null;
   accountNum?: string | null;
 };
+
+function isDriverConfirmPending(item: Pick<DriverSettlementItem, "paymentStatus" | "paymentMethodCode">) {
+  const paymentStatus = String(item.paymentStatus ?? "").toUpperCase();
+  const confirmableMethod =
+    item.paymentMethodCode === "card" || item.paymentMethodCode === "prepaid";
+  return confirmableMethod && paymentStatus === "PAID";
+}
+
+function getDriverConfirmActionLabel(
+  item: Pick<DriverSettlementItem, "status" | "paymentMethodCode">,
+) {
+  if (item.status === "PAID") return "완료";
+  if (item.paymentMethodCode === "card") return "토스 결제확인";
+  if (item.paymentMethodCode === "prepaid") return "착불 결제확인";
+  return "결제 확인";
+}
 
 function startOfMonth(d: Date) {
   return new Date(d.getFullYear(), d.getMonth(), 1);
@@ -166,7 +185,7 @@ function getStatusBadge(status: DriverSettlementStatus) {
       color: "#B45309",
     };
   }
-  return { label: "미확인", backgroundColor: "#F1F5F9", color: "#64748B" };
+  return { label: "미결제", backgroundColor: "#FEE2E2", color: "#D44B46" };
 }
 
 function getPayoutStatusLabel(item: DriverSettlementItem) {
@@ -235,6 +254,12 @@ function formatRateLabel(rate?: number | null) {
   return `${Number.isInteger(rounded) ? rounded.toFixed(0) : rounded.toFixed(1)}%`;
 }
 
+function getSnapshotLabel(item: DriverSettlementItem) {
+  if (!item.hasSettlementSnapshot) return "정산 스냅샷 없음";
+  if (!item.hasDriverBreakdown) return "차주 분리 정산값 없음";
+  return "차주 분리 정산값 있음";
+}
+
 function mapOrderToSettlementItem(
   order: OrderResponse,
   settlement?: SettlementResponse,
@@ -292,6 +317,9 @@ function mapOrderToSettlementItem(
     paymentMethodLabel: toPaymentMethodLabel(
       settlement?.paymentMethod ?? order.payMethod,
     ),
+    paymentMethodCode:
+      normalizePaymentMethod(settlement?.paymentMethod ?? order.payMethod) ??
+      null,
     baseAmount,
     driverFeeAmount,
     driverFeeRate: toFiniteNumber(settlement?.driverFeeRate) ?? (hasDriverBreakdown ? derivedDriverFeeRate : null),
@@ -321,6 +349,8 @@ export default function DriverSettlementScreen() {
   const currentMonth = startOfMonth(new Date());
 
   const [filter, setFilter] = React.useState<SettlementFilter>("ALL");
+  const [paymentFilter, setPaymentFilter] =
+    React.useState<PaymentMethodFilter>("ALL");
   const [viewMonth, setViewMonth] = React.useState<Date>(currentMonth);
   const [items, setItems] = React.useState<DriverSettlementItem[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -386,9 +416,28 @@ export default function DriverSettlementScreen() {
   );
 
   const filtered = React.useMemo(() => {
-    if (filter === "ALL") return monthItems;
-    return monthItems.filter((item) => item.status === filter);
-  }, [filter, monthItems]);
+    const paymentFiltered =
+      paymentFilter === "ALL"
+        ? monthItems
+        : monthItems.filter((item) =>
+            paymentFilter === "TOSS"
+              ? item.paymentMethodCode === "card"
+              : item.paymentMethodCode === "prepaid",
+          );
+
+    if (filter === "ALL") return paymentFiltered;
+    if (filter === "UNPAID") {
+      return paymentFiltered.filter(
+        (item) => item.status !== "PAID" && !isDriverConfirmPending(item),
+      );
+    }
+    if (filter === "AWAITING_CONFIRM") {
+      return paymentFiltered.filter(
+        (item) => item.status !== "PAID" && isDriverConfirmPending(item),
+      );
+    }
+    return paymentFiltered.filter((item) => item.status === "PAID");
+  }, [filter, monthItems, paymentFilter]);
 
   const summaryExpectedAmount = React.useMemo(
     () => monthItems.reduce((acc, item) => acc + item.driverPayoutAmount, 0),
@@ -429,7 +478,7 @@ export default function DriverSettlementScreen() {
         Alert.alert("안내", `주문 #${item.orderId}는 이미 정산 완료되었습니다.`);
         return;
       }
-      if (item.status !== "AWAITING_CONFIRM") {
+      if (!isDriverConfirmPending(item)) {
         Alert.alert("안내", "화주 결제가 완료된 뒤에 차주 확인을 진행할 수 있습니다.");
         return;
       }
@@ -469,7 +518,7 @@ export default function DriverSettlementScreen() {
           borderBottomColor: c.border.default,
           backgroundColor: c.bg.surface,
         } as ViewStyle,
-        monthText: { fontSize: 17, fontWeight: "900", color: c.text.primary } as TextStyle,
+        monthText: { fontSize: 17, fontWeight: "900", color: "#0F172A" } as TextStyle,
         monthNavBtn: {
           width: 28,
           height: 28,
@@ -481,7 +530,7 @@ export default function DriverSettlementScreen() {
           marginTop: 14,
           marginHorizontal: 16,
           borderRadius: 24,
-          backgroundColor: "#0F172A",
+          backgroundColor: c.brand.primary,
           paddingHorizontal: 18,
           paddingVertical: 18,
           overflow: "hidden",
@@ -515,12 +564,14 @@ export default function DriverSettlementScreen() {
           fontWeight: "700",
           color: "rgba(255,255,255,0.66)",
         } as TextStyle,
+        summarySmallRight: { textAlign: "right" } as TextStyle,
         summaryValue: {
           marginTop: 6,
           fontSize: 17,
           fontWeight: "900",
           color: "#FFFFFF",
         } as TextStyle,
+        summaryValueRight: { textAlign: "right" } as TextStyle,
         topCard: {
           borderRadius: 18,
           borderWidth: 1,
@@ -549,9 +600,9 @@ export default function DriverSettlementScreen() {
           borderRadius: 10,
           alignItems: "center",
           justifyContent: "center",
-          backgroundColor: "#EEF2FF",
+          backgroundColor: "#F1F5F9",
         } as ViewStyle,
-        accountBtnText: { fontSize: 12, fontWeight: "900", color: "#4338CA" } as TextStyle,
+        accountBtnText: { fontSize: 12, fontWeight: "900", color: "#0F172A" } as TextStyle,
         noticeCard: {
           borderRadius: 18,
           padding: 14,
@@ -567,7 +618,14 @@ export default function DriverSettlementScreen() {
           fontWeight: "700",
           color: "#7C2D12",
         } as TextStyle,
+        filterSection: {
+          borderTopWidth: 1,
+          borderTopColor: c.border.default,
+          paddingTop: 12,
+          gap: 10,
+        } as ViewStyle,
         filterRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 } as ViewStyle,
+        paymentFilterRow: { flexDirection: "row", gap: 8 } as ViewStyle,
         filterBtn: {
           borderRadius: 18,
           paddingHorizontal: 14,
@@ -580,6 +638,18 @@ export default function DriverSettlementScreen() {
         filterBtnActive: { backgroundColor: "#0F172A", borderColor: "#0F172A" } as ViewStyle,
         filterText: { fontSize: 13, fontWeight: "800", color: "#667085" } as TextStyle,
         filterTextActive: { color: "#FFFFFF" } as TextStyle,
+        paymentBtn: {
+          borderRadius: 16,
+          paddingHorizontal: 12,
+          height: 32,
+          justifyContent: "center",
+          backgroundColor: "#F1F5F9",
+        } as ViewStyle,
+        paymentBtnActive: {
+          backgroundColor: "#0F172A",
+        } as ViewStyle,
+        paymentBtnText: { fontSize: 12, fontWeight: "700", color: "#94A3B8" } as TextStyle,
+        paymentBtnTextActive: { color: "#FFFFFF" } as TextStyle,
         emptyCard: {
           marginTop: 8,
           borderRadius: 14,
@@ -599,46 +669,38 @@ export default function DriverSettlementScreen() {
           padding: 14,
           gap: 12,
         } as ViewStyle,
+        unpaidCard: { borderColor: "#E05A55" } as ViewStyle,
         itemTop: {
           flexDirection: "row",
           alignItems: "flex-start",
           justifyContent: "space-between",
           gap: 10,
         } as ViewStyle,
+        itemTopLeft: { flex: 1 } as ViewStyle,
         dateText: { fontSize: 12, fontWeight: "700", color: "#64748B" } as TextStyle,
         routeText: { marginTop: 4, fontSize: 16, fontWeight: "900", color: c.text.primary } as TextStyle,
         arrowText: { color: "#94A3B8" } as TextStyle,
+        amountWrap: { alignItems: "flex-end", gap: 6 } as ViewStyle,
+        amountText: { fontSize: 18, fontWeight: "900", color: c.text.primary } as TextStyle,
+        amountUnpaid: { color: "#E05A55" } as TextStyle,
+        unpaidIcon: { opacity: 0.95 } as TextStyle,
         statusBadge: {
           borderRadius: 999,
           paddingHorizontal: 10,
           paddingVertical: 6,
         } as ViewStyle,
         statusText: { fontSize: 12, fontWeight: "900" } as TextStyle,
-        heroWrap: {
-          borderRadius: 16,
-          backgroundColor: "#F8FAFC",
-          borderWidth: 1,
-          borderColor: "#E5EAF1",
-          padding: 14,
-          gap: 4,
-        } as ViewStyle,
-        heroLabel: { fontSize: 12, fontWeight: "800", color: "#64748B" } as TextStyle,
-        heroAmount: { fontSize: 24, fontWeight: "900", color: c.text.primary } as TextStyle,
-        heroSub: { fontSize: 12, fontWeight: "700", color: c.text.secondary } as TextStyle,
-        breakdownGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 } as ViewStyle,
-        breakdownCard: {
-          width: "48.5%",
-          minHeight: 72,
-          borderRadius: 14,
-          backgroundColor: "#FFFFFF",
-          borderWidth: 1,
-          borderColor: "#EDF2F7",
-          padding: 12,
-          gap: 6,
-        } as ViewStyle,
-        breakdownLabel: { fontSize: 11, fontWeight: "800", color: "#94A3B8" } as TextStyle,
-        breakdownValue: { fontSize: 14, fontWeight: "900", color: c.text.primary } as TextStyle,
-        breakdownMeta: { fontSize: 11, fontWeight: "700", color: "#64748B" } as TextStyle,
+        metaText: {
+          fontSize: 12,
+          fontWeight: "700",
+          color: c.text.secondary,
+        } as TextStyle,
+        hintText: {
+          fontSize: 12,
+          lineHeight: 18,
+          fontWeight: "700",
+          color: c.text.secondary,
+        } as TextStyle,
         detailBox: {
           borderTopWidth: 1,
           borderTopColor: "#EEF2F7",
@@ -676,7 +738,7 @@ export default function DriverSettlementScreen() {
           flexDirection: "row",
           alignItems: "center",
           gap: 6,
-          backgroundColor: "#4338CA",
+          backgroundColor: "#0F172A",
         } as ViewStyle,
         actionBtnDisabled: { backgroundColor: "#E2E8F0" } as ViewStyle,
         actionText: { fontSize: 12, fontWeight: "900", color: "#FFFFFF" } as TextStyle,
@@ -688,8 +750,7 @@ export default function DriverSettlementScreen() {
   return (
     <View style={s.page}>
       <ShipperScreenHeader
-        title="차주 정산"
-        subtitle="받는 금액 기준으로 정산 상태와 지급 흐름을 확인합니다."
+        title="정산 내역"
         hideBackButton
       />
       <ScrollView contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false}>
@@ -726,21 +787,15 @@ export default function DriverSettlementScreen() {
             </View>
             <View style={s.summaryColDivider} />
             <View style={s.summaryCol}>
-              <Text style={s.summarySmall}>입금 완료</Text>
-              <Text style={s.summaryValue}>{toWon(summaryPayoutCompletedAmount)}</Text>
+              <Text style={[s.summarySmall, s.summarySmallRight]}>입금 완료</Text>
+              <Text style={[s.summaryValue, s.summaryValueRight]}>
+                {toWon(summaryPayoutCompletedAmount)}
+              </Text>
             </View>
           </View>
         </View>
 
         <View style={s.contentWrap}>
-          <View style={s.topCard}>
-            <Text style={s.topCardTitle}>정산 흐름</Text>
-            <Text style={s.topCardBody}>
-              운송 완료 후 화주 결제가 먼저 끝나고, 차주 확인이 끝나면 정산 완료로
-              바뀝니다. 그다음 지급 요청과 입금 완료가 정산 계좌 기준으로 이어집니다.
-            </Text>
-          </View>
-
           <View style={s.topCard}>
             <Text style={s.topCardTitle}>정산 계좌</Text>
             <View style={s.accountRow}>
@@ -762,30 +817,53 @@ export default function DriverSettlementScreen() {
             <View style={s.noticeCard}>
               <Text style={s.noticeTitle}>분리 정산값이 없는 건이 있습니다.</Text>
               <Text style={s.noticeText}>
-                일부 정산 건은 차주 side fee와 프로모션 스냅샷이 아직 분리 저장되지 않아
+                일부 정산 건은 차주 수수료와 프로모션 스냅샷이 아직 분리 저장되지 않아
                 최종 수령 금액 중심으로 안내됩니다.
               </Text>
             </View>
           ) : null}
 
-          <View style={s.filterRow}>
-            {[
-              ["ALL", "전체"],
-              ["UNPAID", "미확인"],
-              ["AWAITING_CONFIRM", "결제 확인 대기"],
-              ["PAID", "완료"],
-            ].map(([key, label]) => {
-              const active = filter === key;
-              return (
-                <Pressable
-                  key={key}
-                  style={[s.filterBtn, active && s.filterBtnActive]}
-                  onPress={() => setFilter(key as SettlementFilter)}
-                >
-                  <Text style={[s.filterText, active && s.filterTextActive]}>{label}</Text>
-                </Pressable>
-              );
-            })}
+          <View style={s.filterSection}>
+            <View style={s.filterRow}>
+              {[
+                ["ALL", "전체"],
+                ["UNPAID", "미결제"],
+                ["AWAITING_CONFIRM", "결제 확인 대기"],
+                ["PAID", "완료"],
+              ].map(([key, label]) => {
+                const active = filter === key;
+                return (
+                  <Pressable
+                    key={key}
+                    style={[s.filterBtn, active && s.filterBtnActive]}
+                    onPress={() => setFilter(key as SettlementFilter)}
+                  >
+                    <Text style={[s.filterText, active && s.filterTextActive]}>{label}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            <View style={s.paymentFilterRow}>
+              {[
+                ["ALL", "결제 전체"],
+                ["TOSS", "토스"],
+                ["DEFERRED", "착불"],
+              ].map(([key, label]) => {
+                const active = paymentFilter === key;
+                return (
+                  <Pressable
+                    key={key}
+                    style={[s.paymentBtn, active && s.paymentBtnActive]}
+                    onPress={() => setPaymentFilter(key as PaymentMethodFilter)}
+                  >
+                    <Text style={[s.paymentBtnText, active && s.paymentBtnTextActive]}>
+                      {label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
           </View>
 
           {loading ? (
@@ -800,61 +878,69 @@ export default function DriverSettlementScreen() {
             <View style={s.listWrap}>
               {filtered.map((item) => {
                 const badge = getStatusBadge(item.status);
+                const isUnpaid = item.status === "UNPAID";
                 const isExpanded = expandedOrderId === item.orderId;
                 const isSubmitting = submittingOrderId === item.orderId;
-                const showConfirmButton = item.status === "AWAITING_CONFIRM";
+                const isPaid = item.status === "PAID";
+                const confirmPending = isDriverConfirmPending(item);
+                const confirmableMethod =
+                  item.paymentMethodCode === "card" ||
+                  item.paymentMethodCode === "prepaid";
+                const showConfirmButton = confirmableMethod && (confirmPending || isPaid);
+                const confirmButtonLabel = getDriverConfirmActionLabel(item);
 
                 return (
-                  <View key={item.id} style={s.itemCard}>
+                  <View key={item.id} style={[s.itemCard, isUnpaid && s.unpaidCard]}>
                     <View style={s.itemTop}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={s.dateText}>{item.dateLabel}</Text>
+                      <View style={s.itemTopLeft}>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                          <Text style={s.dateText}>{item.dateLabel}</Text>
+                          <View style={[s.statusBadge, { backgroundColor: badge.backgroundColor }]}>
+                            <Text style={[s.statusText, { color: badge.color }]}>{badge.label}</Text>
+                          </View>
+                        </View>
                         <Text style={s.routeText}>
                           {item.from} <Text style={s.arrowText}>→</Text> {item.to}
                         </Text>
                       </View>
-                      <View style={[s.statusBadge, { backgroundColor: badge.backgroundColor }]}>
-                        <Text style={[s.statusText, { color: badge.color }]}>{badge.label}</Text>
-                      </View>
-                    </View>
-
-                    <View style={s.heroWrap}>
-                      <Text style={s.heroLabel}>{getPrimaryAmountLabel(item)}</Text>
-                      <Text style={s.heroAmount}>{toWon(item.driverPayoutAmount)}</Text>
-                      <Text style={s.heroSub}>{getStatusDescription(item)}</Text>
-                    </View>
-
-                    <View style={s.breakdownGrid}>
-                      <View style={s.breakdownCard}>
-                        <Text style={s.breakdownLabel}>기본 운임</Text>
-                        <Text style={s.breakdownValue}>{toWon(item.baseAmount)}</Text>
-                      </View>
-
-                      <View style={s.breakdownCard}>
-                        <Text style={s.breakdownLabel}>차주 side fee</Text>
-                        <Text style={s.breakdownValue}>{getDriverFeeLabel(item)}</Text>
-                        <Text style={s.breakdownMeta}>
-                          {item.driverFeeRate !== null ? `적용 rate ${formatRateLabel(item.driverFeeRate)}` : "rate 분리값 없음"}
+                      <View style={s.amountWrap}>
+                        {isUnpaid ? (
+                          <MaterialCommunityIcons
+                            name="credit-card-outline"
+                            size={18}
+                            color="#D44B46"
+                            style={s.unpaidIcon}
+                          />
+                        ) : null}
+                        <Text style={[s.amountText, isUnpaid && s.amountUnpaid]}>
+                          {toWon(item.driverPayoutAmount)}
                         </Text>
                       </View>
-
-                      <View style={s.breakdownCard}>
-                        <Text style={s.breakdownLabel}>프로모션</Text>
-                        <Text style={s.breakdownValue}>{getPromoLabel(item)}</Text>
-                      </View>
-
-                      <View style={s.breakdownCard}>
-                        <Text style={s.breakdownLabel}>지급 상태</Text>
-                        <Text style={s.breakdownValue}>{getPayoutStatusLabel(item)}</Text>
-                        <Text style={s.breakdownMeta}>계좌 {item.bankName ? `${item.bankName} ${maskAccount(item.accountNum)}` : "미등록"}</Text>
-                      </View>
                     </View>
+
+                    <Text style={s.metaText}>결제 방식: {item.paymentMethodLabel}</Text>
 
                     {isExpanded ? (
                       <View style={s.detailBox}>
                         <View style={s.detailRow}>
+                          <Text style={s.detailKey}>주문 번호</Text>
+                          <Text style={s.detailValue}>#{item.orderId}</Text>
+                        </View>
+                        <View style={s.detailRow}>
                           <Text style={s.detailKey}>결제 방식</Text>
                           <Text style={s.detailValue}>{item.paymentMethodLabel}</Text>
+                        </View>
+                        <View style={s.detailRow}>
+                          <Text style={s.detailKey}>기본 운임</Text>
+                          <Text style={s.detailValue}>{toWon(item.baseAmount)}</Text>
+                        </View>
+                        <View style={s.detailRow}>
+                          <Text style={s.detailKey}>차주 수수료</Text>
+                          <Text style={s.detailValue}>{getDriverFeeLabel(item)}</Text>
+                        </View>
+                        <View style={s.detailRow}>
+                          <Text style={s.detailKey}>정산 생성 시각</Text>
+                          <Text style={s.detailValue}>{formatDateTime(item.feeDate)}</Text>
                         </View>
                         <View style={s.detailRow}>
                           <Text style={s.detailKey}>결제 완료 시각</Text>
@@ -863,6 +949,36 @@ export default function DriverSettlementScreen() {
                         <View style={s.detailRow}>
                           <Text style={s.detailKey}>차주 확인 시각</Text>
                           <Text style={s.detailValue}>{formatDateTime(item.confirmedAt ?? item.feeCompleteDate)}</Text>
+                        </View>
+                        <View style={s.detailRow}>
+                          <Text style={s.detailKey}>정산 완료 시각</Text>
+                          <Text style={s.detailValue}>{formatDateTime(item.feeCompleteDate)}</Text>
+                        </View>
+                        <View style={s.detailRow}>
+                          <Text style={s.detailKey}>상태 엔진</Text>
+                          <Text style={s.detailValue}>
+                            결제 {item.paymentStatus ?? "-"} / 정산 {item.settlementStatus ?? "-"}
+                          </Text>
+                        </View>
+                        <View style={s.detailRow}>
+                          <Text style={s.detailKey}>차주 수수료율</Text>
+                          <Text style={s.detailValue}>{formatRateLabel(item.driverFeeRate)}</Text>
+                        </View>
+                        <View style={s.detailRow}>
+                          <Text style={s.detailKey}>프로모션 적용</Text>
+                          <Text style={s.detailValue}>{getPromoLabel(item)}</Text>
+                        </View>
+                        <View style={s.detailRow}>
+                          <Text style={s.detailKey}>정산 스냅샷</Text>
+                          <Text style={s.detailValue}>{getSnapshotLabel(item)}</Text>
+                        </View>
+                        <View style={s.detailRow}>
+                          <Text style={s.detailKey}>지급 상태</Text>
+                          <Text style={s.detailValue}>{getPayoutStatusLabel(item)}</Text>
+                        </View>
+                        <View style={s.detailRow}>
+                          <Text style={s.detailKey}>상태 안내</Text>
+                          <Text style={s.detailValue}>{getStatusDescription(item)}</Text>
                         </View>
                         <View style={s.detailRow}>
                           <Text style={s.detailKey}>지급 요청 시각</Text>
@@ -906,17 +1022,22 @@ export default function DriverSettlementScreen() {
 
                       {showConfirmButton ? (
                         <Pressable
-                          style={[s.actionBtn, isSubmitting && s.actionBtnDisabled]}
-                          disabled={isSubmitting}
+                          style={[s.actionBtn, (isSubmitting || isPaid) && s.actionBtnDisabled]}
+                          disabled={isSubmitting || isPaid}
                           onPress={() => void onPressConfirm(item)}
                         >
                           <MaterialCommunityIcons
-                            name="clipboard-check-multiple-outline"
+                            name={isPaid ? "check-decagram-outline" : "clipboard-check-multiple-outline"}
                             size={14}
-                            color={isSubmitting ? "#64748B" : "#FFFFFF"}
+                            color={isSubmitting || isPaid ? "#64748B" : "#FFFFFF"}
                           />
-                          <Text style={[s.actionText, isSubmitting && s.actionTextDisabled]}>
-                            {isSubmitting ? "처리중..." : "결제 확인"}
+                          <Text
+                            style={[
+                              s.actionText,
+                              (isSubmitting || isPaid) && s.actionTextDisabled,
+                            ]}
+                          >
+                            {isSubmitting ? "처리중..." : confirmButtonLabel}
                           </Text>
                         </Pressable>
                       ) : null}
