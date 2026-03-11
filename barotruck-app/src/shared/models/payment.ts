@@ -58,6 +58,24 @@ export type PaymentDisputeStatus =
   | 'ADMIN_REJECTED';
 
 /** 운송 결제 응답 DTO */
+export interface PaymentAmountSnapshotResponse {
+  baseAmount: number | null;
+  shipperChargeAmount: number | null;
+  shipperFeeRate: number | null;
+  shipperFeeAmount: number | null;
+  shipperPromoApplied: boolean | null;
+  driverFeeRate: number | null;
+  driverFeeAmount: number | null;
+  driverPromoApplied: boolean | null;
+  driverPayoutAmount: number | null;
+  tossFeeRate: number | null;
+  tossFeeAmount: number | null;
+  platformGrossRevenue: number | null;
+  platformNetRevenue: number | null;
+  feePolicyId: number | null;
+  feePolicyAppliedAt: string | null;
+}
+
 export interface TransportPaymentResponse {
   paymentId: number;
   orderId: number;
@@ -67,6 +85,7 @@ export interface TransportPaymentResponse {
   feeRateSnapshot: number;
   feeAmountSnapshot: number;
   netAmountSnapshot: number;
+  amountSnapshot?: PaymentAmountSnapshotResponse | null;
   method: PaymentMethod;
   paymentTiming: PaymentTiming;
   status: TransportPaymentStatus;

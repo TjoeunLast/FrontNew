@@ -169,10 +169,22 @@ export default function DriverSettlementAccountScreen() {
 
   return (
     <View style={s.page}>
-      <ShipperScreenHeader title="정산 계좌 관리" onPressBack={goBack} />
+      <ShipperScreenHeader
+        title="정산 계좌 관리"
+        subtitle="정산 완료 금액은 등록된 계좌로 지급됩니다."
+        onPressBack={goBack}
+      />
       <ScrollView contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
+        <View style={[s.card, { backgroundColor: "#F8FAFF", borderColor: "#D7E3FF" }]}>
+          <Text style={[s.cardTitle, { color: "#1D4ED8" }]}>입금 전 확인</Text>
+          <Text style={s.hint}>
+            계좌 변경 시 이미 지급 요청된 건에는 바로 반영되지 않을 수 있습니다. 현재
+            등록된 계좌와 예금주 정보를 먼저 확인해 주세요.
+          </Text>
+        </View>
+
         <View style={s.card}>
-          <Text style={s.cardTitle}>계좌 정보 입력</Text>
+          <Text style={s.cardTitle}>정산 계좌 입력</Text>
           <View style={s.row}>
             <Text style={s.label}>은행명</Text>
             <TextInput
@@ -194,14 +206,17 @@ export default function DriverSettlementAccountScreen() {
               placeholderTextColor={c.text.secondary}
             />
           </View>
-          <Text style={s.hint}>예금주는 회원 실명 기준으로 지급 처리됩니다. 계좌 변경 시 다음 정산 건부터 적용됩니다.</Text>
+          <Text style={s.hint}>
+            예금주는 회원 실명 기준으로 지급 처리됩니다. 계좌 변경 시 다음 지급 요청
+            건부터 순차 반영됩니다.
+          </Text>
           <Pressable style={[s.saveBtn, saving && { opacity: 0.6 }]} onPress={() => void onSave()} disabled={saving}>
             <Text style={s.saveBtnText}>{saving ? "저장 중..." : "저장"}</Text>
           </Pressable>
         </View>
 
         <View style={s.card}>
-          <Text style={s.cardTitle}>현재 등록 계좌</Text>
+          <Text style={s.cardTitle}>현재 지급 계좌</Text>
           {saved ? (
             <>
               <View style={s.valueRow}>
@@ -214,7 +229,7 @@ export default function DriverSettlementAccountScreen() {
               </View>
             </>
           ) : (
-            <Text style={s.hint}>아직 등록된 정산 계좌가 없습니다.</Text>
+            <Text style={s.hint}>아직 등록된 정산 계좌가 없습니다. 지급 전에 계좌를 먼저 등록해 주세요.</Text>
           )}
         </View>
       </ScrollView>

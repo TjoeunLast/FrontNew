@@ -4,6 +4,10 @@ import {
   DEFAULT_TOSS_PREPARE_REQUEST,
 } from '../models/payment';
 import type {
+  ShipperOrderFeePreviewRequest,
+  ShipperOrderFeePreviewResponse,
+} from '../models/feePolicy';
+import type {
   CancelTossPaymentRequest,
   CreatePaymentDisputeRequest,
   DriverPayoutItemStatusResponse,
@@ -98,6 +102,34 @@ type TossPrepareResponseRaw = Omit<TossPrepareResponse, 'provider'> & {
  * 5) 이의 필요 시 createDispute 호출
  */
 export const PaymentService = {
+  /** 화주 주문 생성 요금 preview */
+  previewShipperOrderCharge: async (
+    request: ShipperOrderFeePreviewRequest
+  ): Promise<ShipperOrderFeePreviewResponse> => {
+    const baseFare = Math.max(0, Math.round(Number(request.baseFare) || 0));
+    const laborFee = Math.max(0, Math.round(Number(request.laborFee) || 0));
+    const packagingPrice = Math.max(0, Math.round(Number(request.packagingPrice) || 0));
+    const insuranceFee = Math.max(0, Math.round(Number(request.insuranceFee) || 0));
+    const surcharge = Math.max(
+      0,
+      Math.round(Number(request.surcharge ?? laborFee + packagingPrice + insuranceFee) || 0)
+    );
+    const subtotal = Math.max(
+      0,
+      Math.round(Number(request.subtotal ?? baseFare + surcharge) || 0)
+    );
+    const paymentMethod = request.payMethod === 'card' ? 'CARD' : 'CASH';
+    const paymentProvider = request.payMethod === 'card' ? 'TOSS' : null;
+    const payChannel = request.payMethod === 'card' ? 'CARD' : null;
+
+    return post<ShipperOrderFeePreviewResponse>(`${USER_PAYMENT_BASE}/fee-preview`, {
+      baseAmount: subtotal,
+      paymentProvider,
+      paymentMethod,
+      payChannel,
+    });
+  },
+
   /** 화주 수동 결제 반영(운영 fallback) */
   markPaid: (orderId: number, request: MarkPaidRequest) =>
     post<TransportPaymentResponse>(`${USER_PAYMENT_BASE}/orders/${orderId}/mark-paid`, request),

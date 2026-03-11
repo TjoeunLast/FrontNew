@@ -3,15 +3,20 @@ import {
   clearStoredAuthSession,
   validateStoredSession,
 } from "@/shared/utils/authSession";
-import { Slot, usePathname, useRouter } from "expo-router";
+import { Slot, usePathname, useRootNavigationState, useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 
 export default function ShipperLayout() {
   const pathname = usePathname();
   const router = useRouter();
+  const rootNavigationState = useRootNavigationState();
   const [authorized, setAuthorized] = useState(false);
 
   useEffect(() => {
+    if (!rootNavigationState?.key) {
+      return;
+    }
+
     let active = true;
 
     void (async () => {
@@ -40,7 +45,7 @@ export default function ShipperLayout() {
     return () => {
       active = false;
     };
-  }, [pathname, router]);
+  }, [pathname, rootNavigationState?.key, router]);
 
   if (!authorized) {
     return <SplashView />;

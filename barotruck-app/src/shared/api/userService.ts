@@ -105,6 +105,14 @@ export const UserService = {
 
     return {
       ...baseProfile,
+      userLevel: toFiniteNumber(
+        (baseProfile as any).userLevel ??
+          (baseProfile as any).user_level ??
+          (baseProfile as any).level ??
+          (baseProfile as any).user?.userLevel ??
+          (baseProfile as any).user?.user_level ??
+          (baseProfile as any).user?.level
+      ),
       nickname:
         String(snapshot?.nickname ?? baseProfile.nickname).trim() ||
         baseProfile.nickname,

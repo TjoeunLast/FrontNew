@@ -64,10 +64,20 @@ export interface SettlementResponse {
   paymentStatus?: TransportPaymentStatus | null;
   /** 결제 금액 */
   paymentAmount?: number | null;
-  /** 수수료 금액 */
+  /** 레거시 결제 snapshot 기준 수수료 금액(차주 side fee와 다를 수 있음) */
   paymentFeeAmount?: number | null;
-  /** 차주 지급 예정 금액 */
+  /** 레거시 결제 snapshot 기준 차주 지급 예정 금액 */
   paymentNetAmount?: number | null;
+  /** 양면 수수료 rollout 이후 기본 운임 */
+  baseAmount?: number | null;
+  /** 양면 수수료 rollout 이후 차주 side fee rate(% 단위) */
+  driverFeeRate?: number | null;
+  /** 양면 수수료 rollout 이후 차주 side fee 금액 */
+  driverFeeAmount?: number | null;
+  /** 양면 수수료 rollout 이후 차주 프로모션 적용 여부 */
+  driverPromoApplied?: boolean | null;
+  /** 양면 수수료 rollout 이후 차주 최종 수령 예정 금액 */
+  driverPayoutAmount?: number | null;
   /** PG 거래 ID */
   pgTid?: string | null;
   /** 수기결제 증빙 URL */
