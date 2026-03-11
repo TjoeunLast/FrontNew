@@ -1,6 +1,4 @@
 ﻿import { Ionicons } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import * as FileSystem from "expo-file-system/legacy";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useMemo, useState } from "react";
 import {
@@ -24,48 +22,6 @@ import { TextField } from "@/shared/ui/form/TextField";
 import AddressSearch from "@/shared/utils/AddressSearch";
 import { withAlpha } from "@/shared/utils/color";
 import { saveCurrentUserSnapshot } from "@/shared/utils/currentUserStorage";
-import { buildProfileImageFileStem, buildProfileImageStorageKey } from "@/shared/utils/profileImageStorage";
-
-async function persistProfileImage(uri: string, identity?: string): Promise<string> {
-  const docDir = FileSystem.documentDirectory;
-  if (!docDir) return uri;
-
-  const cleanUri = uri.split("?")[0] || uri;
-  const ext = cleanUri.includes(".")
-    ? cleanUri.substring(cleanUri.lastIndexOf("."))
-    : ".jpg";
-  const safeExt = ext.length >= 2 && ext.length <= 5 ? ext : ".jpg";
-  const targetUri = `${docDir}${buildProfileImageFileStem(identity)}${safeExt}`;
-
-  const targetInfo = await FileSystem.getInfoAsync(targetUri);
-  if (targetInfo.exists) {
-    await FileSystem.deleteAsync(targetUri, { idempotent: true });
-  }
-
-  await FileSystem.copyAsync({ from: uri, to: targetUri });
-  return targetUri;
-}
-
-function toUploadFile(uri: string) {
-  const normalized = uri.split("?")[0] || uri;
-  const ext = normalized.includes(".")
-    ? normalized.substring(normalized.lastIndexOf(".") + 1).toLowerCase()
-    : "jpg";
-  const type =
-    ext === "png"
-      ? "image/png"
-      : ext === "heic"
-        ? "image/heic"
-        : ext === "webp"
-          ? "image/webp"
-          : "image/jpeg";
-
-  return {
-    uri,
-    name: `profile.${ext || "jpg"}`,
-    type,
-  } as any;
-}
 
 function showMsg(title: string, msg: string) {
   if (Platform.OS === "web") globalThis.alert(`${title}\n\n${msg}`);
@@ -262,7 +218,6 @@ export default function SignupDriverScreen() {
     password = "",
     name = "",
     phone = "",
-    profileImageUri = "",
     gender,
     birthDate,
   } = useLocalSearchParams<{
@@ -270,7 +225,6 @@ export default function SignupDriverScreen() {
     password: string;
     name: string;
     phone: string;
-    profileImageUri?: string;
     gender?: "M" | "F";
     birthDate?: string;
   }>();
@@ -340,18 +294,6 @@ export default function SignupDriverScreen() {
       await AuthService.register(payload);
       await UserService.saveDriverProfile(driverProfilePayload);
 
-      if (profileImageUri) {
-        try {
-          const persistedUri = await persistProfileImage(
-            String(profileImageUri),
-            email,
-          );
-          const uploadedImageUrl = await UserService.uploadProfileImage(toUploadFile(persistedUri));
-          await AsyncStorage.setItem(buildProfileImageStorageKey(email), uploadedImageUrl || persistedUri);
-        } catch (imageError) {
-          console.error("signup profile image upload failed", imageError);
-        }
-      }
       await saveCurrentUserSnapshot({
         email,
         name,

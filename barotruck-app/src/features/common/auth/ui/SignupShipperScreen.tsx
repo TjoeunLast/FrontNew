@@ -1,6 +1,4 @@
 ﻿import { Ionicons } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import * as FileSystem from "expo-file-system/legacy";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
@@ -17,56 +15,14 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import apiClient from "@/shared/api/apiClient";
 import { AuthService } from "@/shared/api/authService";
-import { UserService } from "@/shared/api/userService";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import type { RegisterRequest } from "@/shared/models/auth";
 import { Button } from "@/shared/ui/base/Button";
 import { TextField } from "@/shared/ui/form/TextField";
 import { withAlpha } from "@/shared/utils/color";
 import { saveCurrentUserSnapshot } from "@/shared/utils/currentUserStorage";
-import { buildProfileImageFileStem, buildProfileImageStorageKey } from "@/shared/utils/profileImageStorage";
 
 type ShipperType = "personal" | "business";
-async function persistProfileImage(uri: string, identity?: string): Promise<string> {
-  const docDir = FileSystem.documentDirectory;
-  if (!docDir) return uri;
-
-  const cleanUri = uri.split("?")[0] || uri;
-  const ext = cleanUri.includes(".")
-    ? cleanUri.substring(cleanUri.lastIndexOf("."))
-    : ".jpg";
-  const safeExt = ext.length >= 2 && ext.length <= 5 ? ext : ".jpg";
-  const targetUri = `${docDir}${buildProfileImageFileStem(identity)}${safeExt}`;
-
-  const targetInfo = await FileSystem.getInfoAsync(targetUri);
-  if (targetInfo.exists) {
-    await FileSystem.deleteAsync(targetUri, { idempotent: true });
-  }
-
-  await FileSystem.copyAsync({ from: uri, to: targetUri });
-  return targetUri;
-}
-
-function toUploadFile(uri: string) {
-  const normalized = uri.split("?")[0] || uri;
-  const ext = normalized.includes(".")
-    ? normalized.substring(normalized.lastIndexOf(".") + 1).toLowerCase()
-    : "jpg";
-  const type =
-    ext === "png"
-      ? "image/png"
-      : ext === "heic"
-        ? "image/heic"
-        : ext === "webp"
-          ? "image/webp"
-          : "image/jpeg";
-
-  return {
-    uri,
-    name: `profile.${ext || "jpg"}`,
-    type,
-  } as any;
-}
 
 function digitsOnly(v: string) {
   return v.replace(/[^0-9]/g, "");
@@ -123,7 +79,6 @@ export default function SignupShipperScreen() {
     password: string;
     name: string;
     phone: string;
-    profileImageUri?: string;
     gender?: "M" | "F";
     birthDate?: string;
 
@@ -192,18 +147,6 @@ export default function SignupShipperScreen() {
       
 
       await AuthService.register(payload);
-      if (params.profileImageUri) {
-        try {
-          const persistedUri = await persistProfileImage(
-            String(params.profileImageUri),
-            params.email,
-          );
-          const uploadedImageUrl = await UserService.uploadProfileImage(toUploadFile(persistedUri));
-          await AsyncStorage.setItem(buildProfileImageStorageKey(params.email), uploadedImageUrl || persistedUri);
-        } catch (imageError) {
-          console.error("signup profile image upload failed", imageError);
-        }
-      }
       await saveCurrentUserSnapshot({
         email: params.email,
         name: params.name,
