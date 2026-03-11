@@ -12,7 +12,6 @@ import {
 import {
   calcOrderAmount,
   isDriverSettlementEligibleOrder,
-  statusText,
   toSettlementStatus,
   toWon,
 } from "@/features/common/settlement/lib/settlementHelpers";
@@ -23,7 +22,7 @@ import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import type { OrderResponse } from "@/shared/models/order";
 import ShipperScreenHeader from "@/shared/ui/layout/ShipperScreenHeader";
 
-type SettlementFilter = "ALL" | "PENDING" | "PAID";
+type SettlementFilter = "ALL" | "UNPAID" | "AWAITING_CONFIRM" | "PAID";
 type SettlementStatus = "UNPAID" | "PENDING" | "PAID" | "TAX_INVOICE";
 
 type SettlementItem = {
@@ -84,6 +83,22 @@ function toDateLabel(d: Date) {
 
 function isAwaitingDriverConfirm(paymentStatus?: string | null) {
   return String(paymentStatus ?? "").toUpperCase() === "PAID";
+}
+
+function getDriverSettlementLabel(item: SettlementItem) {
+  if (item.status === "PAID") return "완료";
+  if (item.confirmByDriver) return "결제 확인 대기";
+  return "미확인";
+}
+
+function getDriverSettlementBadgeColor(item: SettlementItem) {
+  if (item.status === "PAID") {
+    return { backgroundColor: "#E8F5E9", color: "#15803D" };
+  }
+  if (item.confirmByDriver) {
+    return { backgroundColor: "#FEF9C3", color: "#A16207" };
+  }
+  return { backgroundColor: "#FEE2E2", color: "#7C8591" };
 }
 
 function mapOrderToSettlement(order: OrderResponse): SettlementItem | null {
@@ -183,8 +198,16 @@ export default function DriverSettlementScreen() {
           );
 
     if (filter === "ALL") return methodFiltered;
-    if (filter === "PENDING")
-      return methodFiltered.filter((x) => x.status !== "PAID");
+    if (filter === "UNPAID") {
+      return methodFiltered.filter(
+        (x) => x.status !== "PAID" && !x.confirmByDriver,
+      );
+    }
+    if (filter === "AWAITING_CONFIRM") {
+      return methodFiltered.filter(
+        (x) => x.status !== "PAID" && x.confirmByDriver,
+      );
+    }
     return methodFiltered.filter((x) => x.status === "PAID");
   }, [filter, monthItems, paymentFilter]);
 
@@ -245,7 +268,7 @@ export default function DriverSettlementScreen() {
       justifyContent: "center",
     },
     contentWrap: { paddingHorizontal: 16, paddingTop: 14, gap: 10 },
-    filterRow: { flexDirection: "row", gap: 8 },
+    filterRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
     paymentFilterRow: { flexDirection: "row", gap: 8, marginTop: 2 },
     filterBtn: {
       borderRadius: 18,
@@ -367,7 +390,8 @@ export default function DriverSettlementScreen() {
           <View style={s.filterRow}>
             {[
               ["ALL", "전체"],
-              ["PENDING", "미확인"],
+              ["UNPAID", "미결제"],
+              ["AWAITING_CONFIRM", "결제 확인 대기"],
               ["PAID", "완료"],
             ].map(([key, label]) => {
               const active = filter === key;
@@ -387,7 +411,7 @@ export default function DriverSettlementScreen() {
               {[
                 ["ALL", "결제 전체"],
                 ["TOSS", "토스"],
-                ["OTHER", "기타"],
+                ["OTHER", "착불"],
               ].map(([key, label]) => {
               const active = paymentFilter === key;
               return (
@@ -422,7 +446,7 @@ export default function DriverSettlementScreen() {
                 const supportsDriverConfirm = item.isToss || item.isPrepaid;
                 const showDriverConfirmButton =
                   supportsDriverConfirm && (needsDriverConfirm || isPaid);
-                const statusColor = isPaid ? "#E8F5E9" : item.status === "PENDING" ? "#FEF9C3" : "#FEE2E2";
+                const badge = getDriverSettlementBadgeColor(item);
                 const actionText = isPaid
                   ? "완료"
                   : item.isToss
@@ -434,14 +458,19 @@ export default function DriverSettlementScreen() {
                     <View style={s.itemTop}>
                       <View style={s.dateRow}>
                         <Text style={s.dateText}>{item.dateLabel}</Text>
-                        <View style={[s.statusBadge, { backgroundColor: statusColor }]}> 
+                        <View
+                          style={[
+                            s.statusBadge,
+                            { backgroundColor: badge.backgroundColor },
+                          ]}
+                        >
                           <Text
                             style={[
                               s.statusText,
-                              { color: isPaid ? "#15803D" : "#7C8591" },
+                              { color: badge.color },
                             ]}
                           >
-                            {statusText(item.status)}
+                            {getDriverSettlementLabel(item)}
                           </Text>
                         </View>
                       </View>
