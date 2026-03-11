@@ -61,7 +61,7 @@ export default function CommonSettlementScreen() {
         <View style={s.card}>
           <Text style={s.title}>차주 정산 화면</Text>
           <Text style={s.body}>
-            차주 화면은 받는 금액 기준으로 봅니다. 기본 운임, 차주 side fee, 프로모션,
+            차주 화면은 받는 금액 기준으로 봅니다. 기본 운임, 차주 수수료, 프로모션,
             최종 수령 예정 금액을 순서대로 확인하고 결제 확인과 지급 상태를 함께 봅니다.
           </Text>
         </View>
@@ -69,16 +69,15 @@ export default function CommonSettlementScreen() {
         <View style={s.card}>
           <Text style={s.title}>화주 정산 화면</Text>
           <Text style={s.body}>
-            화주 화면은 결제 진행과 청구 금액을 중심으로 봅니다. 차주 side fee와 Toss
+            화주 화면은 결제 진행과 청구 금액을 중심으로 봅니다. 차주 수수료와 Toss
             수수료는 사용자 핵심 정보로 전면 노출하지 않고 설명 수준으로만 다룹니다.
           </Text>
         </View>
 
         <View style={s.noteCard}>
-          <Text style={s.noteTitle}>상태 흐름</Text>
+          <Text style={s.noteTitle}></Text>
           <Text style={s.noteText}>
-            운송 완료 후 화주 결제가 먼저 완료되고, 차주 확인이 끝나면 정산 완료로
-            전환됩니다. 이후 지급 요청과 입금 완료는 정산 계좌 기준으로 이어집니다.
+            
           </Text>
         </View>
       </ScrollView>

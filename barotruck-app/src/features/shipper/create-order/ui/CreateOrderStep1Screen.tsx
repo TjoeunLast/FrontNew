@@ -361,40 +361,35 @@ export function ShipperCreateOrderStep1Screen() {
     payMethod: pay,
     userLevel,
   });
-  const feePreviewBannerText = isFeePreviewLoading
-    ? "서버 preview를 확인 중입니다. 현재 금액은 임시 예상치로 표시됩니다."
-    : isFeePreviewFallback
+  const isFeePreviewError = isFeePreviewFallback && !isFeePreviewLoading;
+  const feePreviewBannerText = isFeePreviewError
       ? "서버 preview를 불러오지 못했습니다. 현재 금액은 임시 예상치입니다."
       : pay === "card"
-        ? `Toss 10% 선차감 후 남은 ${won(shipperFeePreview.postTossBaseAmount)} 기준으로 shipper side fee ${shipperFeePreview.appliedRateText}가 계산됩니다.${shipperFeePreview.promoApplied ? " shipper promo가 적용되었습니다." : ""}${shipperFeePreview.minFeeApplied ? " 최소 수수료가 반영되었습니다." : ""}`
-        : "최종 결제금액 안에서 shipper side fee가 내부 배분 기준으로 계산됩니다.";
+        ? `Toss 수수료 10% 선차감 후 남은 ${won(shipperFeePreview.postTossBaseAmount)} 기준으로 화주 수수료 ${shipperFeePreview.appliedRateText}가 계산됩니다.${shipperFeePreview.promoApplied ? " 화주 프로모션이 적용되었습니다." : ""}${shipperFeePreview.minFeeApplied ? " 최소 수수료가 반영되었습니다." : ""}`
+        : "최종 결제금액 안에서 화주 수수료가 내부 배분 기준으로 계산됩니다.";
   const shipperFeeLabel =
     pay === "card" && shipperFeePreview.appliedRateText !== "0%"
-      ? `shipper side fee 배분액 (${shipperFeePreview.appliedRateText})`
-      : "shipper side fee";
+      ? `화주 수수료 배분액 (${shipperFeePreview.appliedRateText})`
+      : "화주 수수료";
   const promoStatusText =
     pay !== "card"
       ? "해당 없음"
       : shipperFeePreview.promoApplied === null
-        ? isFeePreviewLoading
-          ? "확인 중"
-          : "서버 확인 필요"
+        ? "서버 확인 필요"
         : shipperFeePreview.promoApplied
           ? "적용"
           : "미적용";
   const fee = shipperFeePreview.feeAmount;
   const totalPay = shipperFeePreview.chargedTotal;
-  const feePreviewBannerColor = isFeePreviewFallback || isFeePreviewLoading
+  const feePreviewBannerColor = isFeePreviewError
     ? c.status.warning
     : c.brand.primary;
-  const feePreviewBannerBackground = isFeePreviewFallback || isFeePreviewLoading
+  const feePreviewBannerBackground = isFeePreviewError
     ? c.status.warningSoft
     : c.brand.primarySoft;
-  const feePreviewBannerIcon = isFeePreviewFallback
+  const feePreviewBannerIcon = isFeePreviewError
     ? "alert-circle-outline"
-    : isFeePreviewLoading
-      ? "time-outline"
-      : "checkmark-circle-outline";
+    : "checkmark-circle-outline";
   const vehicleTonnage = useMemo(() => parseOptionTonnage(ton), [ton]);
   const startTimePickerValue = useMemo(
     () => getTimePickerValue(loadDate, startTimeHHmm, "09:00"),
@@ -1412,7 +1407,7 @@ export function ShipperCreateOrderStep1Screen() {
             </View>
             <View style={s.feeRow}>
               <Text style={[s.feeLabel, { color: c.text.secondary }]}>
-                shipper promo
+                화주 프로모션
               </Text>
               <Text style={[s.feeValue, { color: c.text.primary }]}>
                 {promoStatusText}
@@ -1429,10 +1424,10 @@ export function ShipperCreateOrderStep1Screen() {
             </View>
             <View style={{ marginTop: 10, gap: 4 }}>
               <Text style={[s.hint, { color: c.text.secondary }]}>
-                차주 side fee는 별도 정산에서 차감됩니다.
+                차주 수수료는 별도 정산에서 차감됩니다.
               </Text>
               <Text style={[s.hint, { color: c.text.secondary }]}>
-                Toss 10%를 먼저 제외한 뒤 남은 금액에서 shipper/driver side fee가 계산됩니다.
+                Toss 수수료 10%를 먼저 제외한 뒤 남은 금액에서 화주/차주 수수료가 계산됩니다.
               </Text>
             </View>
           </Card>
@@ -1498,7 +1493,7 @@ export function ShipperCreateOrderStep1Screen() {
           </View>
           <Text style={[s.stickySub, { color: c.text.secondary, marginTop: 4 }]}>
             {isFeePreviewFallback || isFeePreviewLoading
-              ? "서버 preview 재확인 중"
+              ? "서버 preview 기준"
               : "서버 preview 기준"}
           </Text>
         </View>

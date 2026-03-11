@@ -88,7 +88,6 @@ async function savePendingSettlementOrderIds(ids: Set<number>) {
       JSON.stringify(arr),
     );
   } catch {
-    // noop
   }
 }
 
@@ -266,22 +265,6 @@ function getStatusLabel(status: SettlementStatus) {
   if (status === "PAID") return "정산 완료";
   if (status === "ISSUE") return "이슈";
   return "계산서";
-}
-
-function getStatusHint(status: SettlementStatus) {
-  if (status === "UNPAID") {
-    return "운송 완료 주문입니다. 화주 결제를 진행하면 차주 확인 단계로 넘어갑니다.";
-  }
-  if (status === "PENDING") {
-    return "화주 결제는 완료되었습니다. 차주가 결제 확인하면 정산 완료로 전환됩니다.";
-  }
-  if (status === "PAID") {
-    return "차주 확인까지 끝난 건입니다. 이후 관리자 지급 요청 단계로 이어집니다.";
-  }
-  if (status === "ISSUE") {
-    return "이의 또는 관리자 보류 상태입니다. 관리자 확인이 필요합니다.";
-  }
-  return "계산서 보기 기능은 준비 중입니다.";
 }
 
 function toActionLabel(status: SettlementStatus, isTransportCompleted = true) {
@@ -665,7 +648,6 @@ export default function ShipperSettlementScreen() {
         setSubmittingOrderId(null);
       }
     } catch {
-      // noop
     }
   }, []);
 
@@ -681,17 +663,15 @@ export default function ShipperSettlementScreen() {
       return;
     }
     if (item.status === "ISSUE") {
-      Alert.alert("상태 확인", getStatusHint(item.status));
+      Alert.alert("상태 확인", "관리자 확인이 필요한 정산 상태입니다.");
       return;
     }
     if (item.status === "UNPAID" && !item.isTransportCompleted) {
-      // 백엔드 정책: 운송 완료(COMPLETED) 이후에만 결제 시작 가능.
       Alert.alert("안내", "운송 완료 후 결제할 수 있습니다.");
       return;
     }
 
     if (item.isToss) {
-      // 토스 결제는 정산 화면 인라인 모달이 아니라 전용 라우트 화면에서 처리.
       router.push({
         pathname: "/(shipper)/payment-checkout",
         params: { orderId: String(item.orderId) },
@@ -845,28 +825,6 @@ export default function ShipperSettlementScreen() {
         } as TextStyle,
         summaryBigRight: { textAlign: "right" } as TextStyle,
         summarySmallRight: { textAlign: "right" } as TextStyle,
-        flowGuideCard: {
-          marginTop: 12,
-          marginHorizontal: 16,
-          borderRadius: 14,
-          borderWidth: 1,
-          borderColor: "#D9E2F2",
-          backgroundColor: "#FFFFFF",
-          paddingHorizontal: 14,
-          paddingVertical: 12,
-        } as ViewStyle,
-        flowGuideTitle: {
-          fontSize: 13,
-          fontWeight: "900",
-          color: "#0F172A",
-        } as TextStyle,
-        flowGuideText: {
-          marginTop: 6,
-          fontSize: 12,
-          fontWeight: "700",
-          lineHeight: 18,
-          color: "#64748B",
-        } as TextStyle,
         section: {
           marginTop: 16,
           paddingTop: 14,
@@ -972,12 +930,6 @@ export default function ShipperSettlementScreen() {
           fontSize: 12,
           fontWeight: "700",
           color: c.text.secondary,
-        } as TextStyle,
-        flowHintText: {
-          marginTop: 6,
-          fontSize: 11,
-          fontWeight: "700",
-          color: "#64748B",
         } as TextStyle,
         arrowText: { color: "#94A3B8" } as TextStyle,
         actionRow: {
@@ -1178,29 +1130,12 @@ export default function ShipperSettlementScreen() {
           </View>
         </View>
 
-        <View style={s.flowGuideCard}>
-          <Text style={s.flowGuideTitle}>정산 테스트 순서</Text>
-          <Text style={s.flowGuideText}>
-            1. 이 화면에서 결제하기를 눌러 화주 결제를 완료합니다.{"\n"}
-            2. 상태가 차주 확인 대기로 바뀝니다.{"\n"}
-            3. 차주 앱에서 결제확인을 진행합니다.{"\n"}
-            4. 상태가 정산 완료로 바뀝니다.{"\n"}
-            5. 관리자에서 지급 요청을 실행합니다.
-          </Text>
-          <Text style={[s.flowGuideText, { marginTop: 10 }]}>
-            차주 side fee는 별도 정산에서 차감됩니다.
-          </Text>
-          <Text style={[s.flowGuideText, { marginTop: 4 }]}>
-            Toss 수수료는 플랫폼 최종 정산 단계에서 마지막에 반영됩니다.
-          </Text>
-        </View>
-
         <View style={s.section}>
           <View style={s.filterRow}>
             {[
               ["ALL", "전체"],
               ["UNPAID", "결제 필요"],
-              ["PENDING", "확인 대기"],
+              ["PENDING", "결제 확인 대기"],
               ["PAID", "완료"],
             ].map(([key, label]) => {
               const active = filter === key;
@@ -1239,7 +1174,6 @@ export default function ShipperSettlementScreen() {
             })}
           </View>
 
-          {/* 목록 영역 */}
           {loading ? (
             <View style={s.emptyCard}>
               <Text style={s.emptyText}>정산 내역을 불러오는 중입니다.</Text>
@@ -1318,13 +1252,6 @@ export default function ShipperSettlementScreen() {
                       기본 운임+작업비 {toWon(item.billedSubtotal)} / shipper side fee{" "}
                       {toWon(item.shipperFeeAmount)}
                     </Text>
-                    <Text style={s.flowHintText}>
-                      {getStatusHint(item.status)}
-                    </Text>
-                    <Text style={s.flowHintText}>
-                      결제 {item.paymentStatus ?? "-"} / 정산 {item.settlementStatus ?? "-"}
-                    </Text>
-
                     <View style={s.actionRow}>
                       {(() => {
                         const isSubmitting = submittingOrderId === item.orderId;
@@ -1503,13 +1430,13 @@ export default function ShipperSettlementScreen() {
                 </Text>
               </View>
               <View style={s.receiptRow}>
-                <Text style={s.receiptKey}>shipper side fee</Text>
+                <Text style={s.receiptKey}>화주 수수료</Text>
                 <Text style={s.receiptVal}>
                   {receiptItem ? toWon(receiptItem.shipperFeeAmount) : "0원"}
                 </Text>
               </View>
               <View style={s.receiptRow}>
-                <Text style={s.receiptKey}>shipper promo</Text>
+                <Text style={s.receiptKey}>화주 프로모션</Text>
                 <Text style={s.receiptVal}>
                   {receiptItem?.isToss ? "정산 스냅샷 미제공" : "해당 없음"}
                 </Text>
@@ -1520,12 +1447,6 @@ export default function ShipperSettlementScreen() {
                   {receiptItem ? toWon(receiptItem.amount) : "0원"}
                 </Text>
               </View>
-              <Text style={[s.receiptPaid, { marginTop: 10 }]}>
-                차주 side fee는 별도 정산에서 차감됩니다.
-              </Text>
-              <Text style={s.receiptPaid}>
-                Toss 수수료는 플랫폼 최종 정산 단계에서 마지막에 반영됩니다.
-              </Text>
             </View>
           </Pressable>
         </Pressable>
@@ -1538,7 +1459,6 @@ const getStyles = (c: any) =>
   StyleSheet.create({
     page: { flex: 1, backgroundColor: "#F5F6FA" },
     scrollContent: { paddingBottom: 30 },
-    // 월 선택 스타일
     monthRow: {
       height: 64,
       flexDirection: "row",
@@ -1551,7 +1471,6 @@ const getStyles = (c: any) =>
     },
     monthText: { fontSize: 18, fontWeight: "800", color: "#1E293B" },
     monthNavBtn: { padding: 4 },
-    // 필터 및 건수 일렬 배치 스타일
     section: { marginTop: 20 },
     filterAndCountRow: {
       flexDirection: "row",
@@ -1568,7 +1487,6 @@ const getStyles = (c: any) =>
     },
     countText: { fontSize: 14, fontWeight: "800", color: "#475569" },
     filterGroup: { flexDirection: "row", gap: 6 },
-    // 차주 오더목록 스타일 카테고리 버튼
     categoryBtn: {
       paddingHorizontal: 12,
       paddingVertical: 6,
@@ -1578,7 +1496,6 @@ const getStyles = (c: any) =>
     categoryBtnActive: { backgroundColor: "#1E293B" },
     categoryText: { fontSize: 12, fontWeight: "700", color: "#94A3B8" },
     categoryTextActive: { color: "#FFF" },
-    // 리스트 공통 스타일
     listWrap: { paddingHorizontal: 16, gap: 12 },
     emptyCard: {
       marginHorizontal: 16,
