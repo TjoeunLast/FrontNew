@@ -1,3 +1,4 @@
+import { DispatchService } from "@/shared/api/dispatchService";
 import { useOrderFilterStore } from "@/features/driver/order-filter/model/useOrderFilterStore";
 import { OrderService } from "@/shared/api/orderService";
 import { UserService } from "@/shared/api/userService";
@@ -78,10 +79,16 @@ export const useOrderList = () => {
       console.log("위치 가져오기 완료:", location);
 
       if (location) {
-        setMyLocation({
+        const nextLocation = {
           lat: location.coords.latitude,
           lng: location.coords.longitude,
-        });
+        };
+        setMyLocation(nextLocation);
+        void DispatchService.updateDriverLocation(
+          nextLocation.lat,
+          nextLocation.lng,
+          new Date().toISOString(),
+        ).catch(() => null);
       } else {
         console.log("위치 가져오기 2초 초과 -> 내 활동 기반 필터링");
         setMyLocation(null);

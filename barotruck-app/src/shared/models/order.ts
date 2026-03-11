@@ -71,6 +71,7 @@ export interface OrderRequest {
   // 결제 방식 (예: 신용카드, 계좌이체, 인수증/후불, 선불)
   basePrice: number;
   payMethod: string;
+  autoDispatchLocked: boolean;
   laborFee?: number; // 수작업비 (기사님이 직접 상하차를 도울 경우 발생하는 수고비)
   packagingPrice?: number; // 포장비용 (물건 보호를 위한 래핑, 파레트 제공 등 실비)
   insuranceFee?: number; // 적재물 보험료 (고가 화물일 경우 추가되는 보험 비용)
@@ -131,6 +132,7 @@ export interface OrderResponse {
   packagingPrice?: number;
   insuranceFee?: number;
   payMethod: string;
+  autoDispatchLocked?: boolean;
 
   memo?: string;
   remark?: string;

@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useMemo, useEffect } from "react";
 import {
+  Alert,
   ScrollView,
   StyleSheet,
   Text,
@@ -12,6 +13,7 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
 import { DrOrderCard } from "@/features/driver/shard/ui/DrOrderCard";
+import { DispatchService } from "@/shared/api/dispatchService";
 import {
   calcOrderAmount,
   isDriverSettlementEligibleOrder,
@@ -28,6 +30,7 @@ export default function DriverHomeScreen() {
   const c = t.colors;
   const router = useRouter();
   const [hasUnreadChat, setHasUnreadChat] = useState(false);
+  const [handlingOfferId, setHandlingOfferId] = useState<number | null>(null);
 
   // 매출 관련 상태 추가
   const [totalAmount, setTotalAmount] = useState(0);
@@ -79,6 +82,8 @@ export default function DriverHomeScreen() {
   const {
     recommendedOrders,
     statusCounts,
+    openDispatchOffers,
+    openDispatchOfferCount,
     isRefreshing,
     onRefresh: homeRefresh,
   } = useDriverHome();
@@ -96,6 +101,50 @@ export default function DriverHomeScreen() {
       params: { initialTab: tabName },
     });
   };
+
+  const handleAcceptOffer = useCallback(
+    async (offerId: number) => {
+      if (handlingOfferId === offerId) return;
+      try {
+        setHandlingOfferId(offerId);
+        await DispatchService.acceptOffer(offerId);
+        await homeRefresh();
+        Alert.alert("배차 확정", "자동배차 제안을 수락했습니다.");
+        router.push("/(driver)/(tabs)/driving");
+      } catch (error: any) {
+        const message =
+          error?.response?.data?.message ||
+          error?.message ||
+          "자동배차 수락 처리에 실패했습니다.";
+        Alert.alert("오류", String(message));
+      } finally {
+        setHandlingOfferId((prev) => (prev === offerId ? null : prev));
+      }
+    },
+    [handlingOfferId, homeRefresh, router],
+  );
+
+  const handleRejectOffer = useCallback(
+    async (offerId: number) => {
+      if (handlingOfferId === offerId) return;
+      try {
+        setHandlingOfferId(offerId);
+        await DispatchService.rejectOffer(offerId, {
+          reasonCode: "DRIVER_DECLINED",
+        });
+        await homeRefresh();
+      } catch (error: any) {
+        const message =
+          error?.response?.data?.message ||
+          error?.message ||
+          "자동배차 거절 처리에 실패했습니다.";
+        Alert.alert("오류", String(message));
+      } finally {
+        setHandlingOfferId((prev) => (prev === offerId ? null : prev));
+      }
+    },
+    [handlingOfferId, homeRefresh],
+  );
 
   useFocusEffect(
     useCallback(() => {
@@ -303,6 +352,81 @@ export default function DriverHomeScreen() {
           </View>
         </View>
 
+        {openDispatchOfferCount > 0 && (
+          <View
+            style={[
+              styles.offerSection,
+              { backgroundColor: c.bg.surface, borderColor: c.border.default },
+            ]}
+          >
+            <View style={styles.listHeader}>
+              <Text style={[styles.sectionTitle, { color: c.text.primary }]}>
+                자동배차 제안
+              </Text>
+              <Text style={[styles.offerCountText, { color: c.brand.primary }]}>
+                {openDispatchOfferCount}건 도착
+              </Text>
+            </View>
+
+            {openDispatchOffers.slice(0, 3).map((offer) => {
+              const isHandling = handlingOfferId === offer.offerId;
+              return (
+                <View
+                  key={offer.offerId}
+                  style={[
+                    styles.offerCard,
+                    {
+                      backgroundColor: c.bg.canvas,
+                      borderColor: c.border.default,
+                    },
+                  ]}
+                >
+                  <View style={styles.offerTopRow}>
+                    <Text style={[styles.offerOrderId, { color: c.text.primary }]}>
+                      주문 #{offer.orderId}
+                    </Text>
+                    <Text style={[styles.offerMeta, { color: c.text.secondary }]}>
+                      WAVE {offer.wave} · 순위 {offer.rank}
+                    </Text>
+                  </View>
+                  <Text style={[styles.offerMeta, { color: c.text.secondary }]}>
+                    예상 거리 {offer.distanceKm?.toFixed?.(1) ?? "-"}km · ETA{" "}
+                    {offer.etaMinutes ?? "-"}분
+                  </Text>
+                  <View style={styles.offerActionRow}>
+                    <Pressable
+                      style={[
+                        styles.offerRejectBtn,
+                        { borderColor: c.border.default },
+                      ]}
+                      disabled={isHandling}
+                      onPress={() => void handleRejectOffer(offer.offerId)}
+                    >
+                      <Text
+                        style={[styles.offerRejectText, { color: c.text.secondary }]}
+                      >
+                        거절
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      style={[
+                        styles.offerAcceptBtn,
+                        { backgroundColor: c.brand.primary },
+                      ]}
+                      disabled={isHandling}
+                      onPress={() => void handleAcceptOffer(offer.offerId)}
+                    >
+                      <Text style={styles.offerAcceptText}>
+                        {isHandling ? "처리중..." : "수락"}
+                      </Text>
+                    </Pressable>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        )}
+
         {/* 맞춤 추천 오더 */}
         <View style={styles.orderList}>
           <View style={styles.listHeader}>
@@ -376,6 +500,50 @@ const styles = StyleSheet.create({
   },
   orderList: { gap: 16 },
   dashboardContainer: { marginBottom: 24 },
+  offerSection: {
+    marginBottom: 24,
+    borderRadius: 20,
+    borderWidth: 1,
+    padding: 16,
+    gap: 10,
+  },
+  offerCountText: { fontSize: 13, fontWeight: "800" },
+  offerCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 12,
+    gap: 8,
+  },
+  offerTopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  offerOrderId: { fontSize: 15, fontWeight: "800" },
+  offerMeta: { fontSize: 12, fontWeight: "600" },
+  offerActionRow: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: 8,
+  },
+  offerRejectBtn: {
+    minWidth: 72,
+    height: 34,
+    borderRadius: 10,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FFFFFF",
+  },
+  offerAcceptBtn: {
+    minWidth: 86,
+    height: 34,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  offerRejectText: { fontSize: 12, fontWeight: "800" },
+  offerAcceptText: { fontSize: 12, fontWeight: "800", color: "#FFFFFF" },
   sectionTitle: { fontSize: 18, fontWeight: "700" },
   statsGrid: { flexDirection: "row", justifyContent: "space-between", gap: 8 },
   statItem: {

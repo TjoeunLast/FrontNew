@@ -1,4 +1,6 @@
+import { DispatchService } from "@/shared/api/dispatchService";
 import { OrderService } from "@/shared/api/orderService";
+import type { DriverDispatchOfferResponse } from "@/shared/models/dispatch";
 import { OrderResponse } from "@/shared/models/order";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -7,6 +9,9 @@ export const useDriverHome = () => {
     [],
   );
   const [myOrders, setMyOrders] = useState<OrderResponse[]>([]);
+  const [openDispatchOffers, setOpenDispatchOffers] = useState<
+    DriverDispatchOfferResponse[]
+  >([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   // 홈 데이터 로드(위치 정보 가져온 후 서버 데이터 가져오기)
@@ -14,13 +19,21 @@ export const useDriverHome = () => {
     try {
       setIsRefreshing(true);
 
+      const availabilityPromise = DispatchService.updateDriverAvailability(
+        "ONLINE",
+      ).catch(() => null);
       // 맞춤 오더 가져오기
       const recommendedPromise = OrderService.getRecommendedOrders();
       const drivingOrdersPromise = OrderService.getMyDrivingOrders();
+      const openOffersPromise = DispatchService.getMyOpenOffers().catch(
+        () => [],
+      );
 
-      const [recommended, drivingOrders] = await Promise.all([
+      const [recommended, drivingOrders, openOffers] = await Promise.all([
         recommendedPromise,
         drivingOrdersPromise,
+        openOffersPromise,
+        availabilityPromise,
       ]);
 
       const filteredRecommended = recommended.filter(
@@ -28,6 +41,7 @@ export const useDriverHome = () => {
       );
 
       setRecommendedOrders(filteredRecommended);
+      setOpenDispatchOffers(openOffers);
 
       // 내 전체 운송 목록 가져오기 (상태 카운트용)
       setMyOrders(drivingOrders);
@@ -61,6 +75,8 @@ export const useDriverHome = () => {
   return {
     recommendedOrders,
     statusCounts,
+    openDispatchOffers,
+    openDispatchOfferCount: openDispatchOffers.length,
     isRefreshing,
     onRefresh: fetchHomeData,
   };
