@@ -5,7 +5,6 @@ import { useRouter } from "expo-router";
 import React, { useCallback, useMemo, useRef, useState } from "react";
 import {
   Alert,
-  Linking,
   Modal,
   Pressable,
   ScrollView,
@@ -30,6 +29,11 @@ import { SettlementService } from "@/shared/api/settlementService";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import type { OrderResponse } from "@/shared/models/order";
 import type { SettlementResponse } from "@/shared/models/Settlement";
+import {
+  APP_DEEP_LINK_PREFIX,
+  isWebViewInternalUrl,
+  openExternalCheckoutUrl,
+} from "@/shared/utils/payment/externalCheckoutLinking";
 import ShipperScreenHeader from "@/shared/ui/layout/ShipperScreenHeader";
 
 type SettlementFilter = "ALL" | "UNPAID" | "PENDING" | "PAID";
@@ -171,16 +175,6 @@ function isUrlMatched(targetUrl: string, expectedBaseUrl: string) {
   return targetUrl.startsWith(expectedBaseUrl);
 }
 
-function isWebViewInternalUrl(url: string) {
-  const lower = String(url || "").toLowerCase();
-  return (
-    lower.startsWith("http://") ||
-    lower.startsWith("https://") ||
-    lower.startsWith("about:blank") ||
-    lower.startsWith("data:")
-  );
-}
-
 function buildTossCheckoutHtml(input: {
   clientKey: string;
   amount: number;
@@ -233,7 +227,8 @@ function buildTossCheckoutHtml(input: {
           orderId: "${pgOrderId}",
           orderName: "${orderName}",
           successUrl: "${successUrl}",
-          failUrl: "${failUrl}"
+          failUrl: "${failUrl}",
+          appScheme: "${APP_DEEP_LINK_PREFIX}"
         }).catch(function (error) {
           window.ReactNativeWebView && window.ReactNativeWebView.postMessage(JSON.stringify({
             type: "REQUEST_ERROR",
@@ -618,11 +613,13 @@ export default function ShipperSettlementScreen() {
       if (handled) return false;
 
       if (!isWebViewInternalUrl(url)) {
-        void Linking.openURL(url).catch(() => {
-          Alert.alert(
-            "결제 안내",
-            "외부 결제 앱을 열 수 없습니다. 카드/은행 앱 설치 여부를 확인해 주세요.",
-          );
+        void openExternalCheckoutUrl(url).then((opened) => {
+          if (!opened) {
+            Alert.alert(
+              "결제 안내",
+              "외부 결제 앱을 열 수 없습니다. 카드/은행 앱 설치 여부를 확인해 주세요.",
+            );
+          }
         });
         return false;
       }

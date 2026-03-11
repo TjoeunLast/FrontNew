@@ -3,7 +3,6 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
-  Linking,
   Pressable,
   StyleSheet,
   Text,
@@ -16,6 +15,11 @@ import { WebView, type WebViewMessageEvent } from "react-native-webview";
 
 import { PaymentService } from "@/shared/api/paymentService";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
+import {
+  APP_DEEP_LINK_PREFIX,
+  isWebViewInternalUrl,
+  openExternalCheckoutUrl,
+} from "@/shared/utils/payment/externalCheckoutLinking";
 
 type TossCheckoutSession = {
   orderId: number;
@@ -52,16 +56,6 @@ function parseQueryValue(url: string, key: string) {
 function isUrlMatched(targetUrl: string, expectedBaseUrl: string) {
   if (!targetUrl || !expectedBaseUrl) return false;
   return targetUrl.startsWith(expectedBaseUrl);
-}
-
-function isWebViewInternalUrl(url: string) {
-  const lower = String(url || "").toLowerCase();
-  return (
-    lower.startsWith("http://") ||
-    lower.startsWith("https://") ||
-    lower.startsWith("about:blank") ||
-    lower.startsWith("data:")
-  );
 }
 
 function buildTossCheckoutHtml(input: {
@@ -116,7 +110,8 @@ function buildTossCheckoutHtml(input: {
             orderId: "${pgOrderId}",
             orderName: "${orderName}",
             successUrl: "${successUrl}",
-            failUrl: "${failUrl}"
+            failUrl: "${failUrl}",
+            appScheme: "${APP_DEEP_LINK_PREFIX}"
           }).catch(function (error) {
             window.ReactNativeWebView && window.ReactNativeWebView.postMessage(JSON.stringify({
               type: "REQUEST_ERROR",
@@ -345,9 +340,14 @@ export default function ShipperTossCheckoutScreen() {
       if (handled) return false;
 
       if (!isWebViewInternalUrl(url)) {
-        // 카드/은행 앱 스킴은 WebView 내부가 아니라 Linking으로 열어야 한다.
-        void Linking.openURL(url).catch(() => {
-          Alert.alert("결제 안내", "외부 결제 앱을 열 수 없습니다. 카드/은행 앱 설치 여부를 확인해 주세요.");
+        // Android WebView 결제는 intent URL을 앱 스킴 또는 마켓 링크로 풀어서 열어야 한다.
+        void openExternalCheckoutUrl(url).then((opened) => {
+          if (!opened) {
+            Alert.alert(
+              "결제 안내",
+              "외부 결제 앱을 열 수 없습니다. 카드/은행 앱 설치 여부를 확인해 주세요."
+            );
+          }
         });
         return false;
       }
