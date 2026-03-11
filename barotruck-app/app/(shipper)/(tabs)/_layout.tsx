@@ -21,8 +21,8 @@ export default function ShipperTabsLayout() {
           borderTopColor: c.border.default,
           borderTopWidth: 1,
           height: 58 + insets.bottom,
-          paddingTop: 6,
-          paddingBottom: 6 + insets.bottom,
+          paddingTop: 4,
+          paddingBottom: 10 + insets.bottom,
         },
         tabBarLabelStyle: {
           fontSize: 11,

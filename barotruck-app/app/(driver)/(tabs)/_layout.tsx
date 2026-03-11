@@ -13,8 +13,8 @@ export default function DriverTabsLayout() {
         headerShown: false,
         tabBarStyle: {
           height: 100,
-          paddingBottom: 20,
-          paddingTop: 10,
+          paddingBottom: 26,
+          paddingTop: 8,
           backgroundColor: "#FFFFFF",
           borderTopWidth: 0,
           elevation: 10, // 안드로이드 그림자
@@ -91,6 +91,12 @@ export default function DriverTabsLayout() {
               size={24}
             />
           ),
+        }}
+      />
+      <Tabs.Screen
+        name="notifications"
+        options={{
+          href: null,
         }}
       />
     </Tabs>

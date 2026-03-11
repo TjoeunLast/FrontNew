@@ -13,6 +13,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
+import { smsService } from "@/shared/api/smsService";
 import { Button } from "@/shared/ui/base/Button";
 import { TextField } from "@/shared/ui/form/TextField";
 import { withAlpha } from "@/shared/utils/color";
@@ -48,9 +49,6 @@ function parseBirthDate(v: string) {
     return null;
   return { y, mo, d };
 }
-function genCode6() {
-  return String(Math.floor(100000 + Math.random() * 900000));
-}
 function showMsg(title: string, msg: string) {
   if (Platform.OS === "web") window.alert(`${title}\n\n${msg}`);
   else Alert.alert(title, msg);
@@ -73,9 +71,10 @@ export default function SignupScreen() {
   const [birthDate, setBirthDate] = useState("");
 
   const [otpRequested, setOtpRequested] = useState(false);
-  const [otpCode, setOtpCode] = useState<string | null>(null);
   const [otpInput, setOtpInput] = useState("");
   const [phoneVerified, setPhoneVerified] = useState(false);
+  const [requestingOtp, setRequestingOtp] = useState(false);
+  const [verifyingOtp, setVerifyingOtp] = useState(false);
 
   const otpInputRef = useRef<TextInput>(null);
 
@@ -91,21 +90,33 @@ export default function SignupScreen() {
   const onEditPhone = () => {
     setPhoneVerified(false);
     setOtpRequested(false);
-    setOtpCode(null);
     setOtpInput("");
   };
 
-  const onRequestOtp = () => {
+  const onRequestOtp = async () => {
+    if (requestingOtp || verifyingOtp) return;
     if (!phoneFormatOk) {
       showMsg("휴대폰 확인", "휴대폰 번호를 확인해주세요.");
       return;
     }
-    const code = genCode6();
-    setOtpRequested(true);
-    setOtpCode(code);
-    setOtpInput("");
-    setPhoneVerified(false);
-    showMsg("인증요청(목업)", `인증번호: ${code}\n(나중에 SMS 연동으로 교체)`);
+    try {
+      setRequestingOtp(true);
+      const ok = await smsService.requestSmsCode(phone);
+      if (!ok) {
+        showMsg("인증요청 실패", "인증번호 전송에 실패했습니다. 다시 시도해주세요.");
+        return;
+      }
+      setOtpRequested(true);
+      setOtpInput("");
+      setPhoneVerified(false);
+      showMsg("인증요청 완료", "입력한 휴대폰 번호로 인증번호를 전송했습니다.");
+    } catch (e: any) {
+      const message =
+        e?.response?.data?.message ?? "인증번호 요청 중 문제가 발생했습니다.";
+      showMsg("오류", message);
+    } finally {
+      setRequestingOtp(false);
+    }
   };
 
   const onChangeEmail = (v: string) => {
@@ -115,7 +126,6 @@ export default function SignupScreen() {
     setPhone(v);
     setPhoneVerified(false);
     setOtpRequested(false);
-    setOtpCode(null);
     setOtpInput("");
   };
 
@@ -155,14 +165,30 @@ export default function SignupScreen() {
     birthDateOk &&
     phoneVerified;
 
-  const onVerifyOtp = () => {
-    if (!otpRequested || !otpCode) return;
-    if (otpInput.trim() === otpCode) {
-      setPhoneVerified(true);
-      showMsg("인증 완료", "휴대폰 인증이 완료됐어요.");
+  const onVerifyOtp = async () => {
+    if (!otpRequested || requestingOtp || verifyingOtp) return;
+    const trimmedCode = otpInput.trim();
+    if (trimmedCode.length !== 6) {
+      showMsg("입력 확인", "인증번호 6자리를 입력해주세요.");
       return;
     }
-    showMsg("인증 실패", "인증번호가 올바르지 않아요.");
+    try {
+      setVerifyingOtp(true);
+      const ok = await smsService.verifySmsCode(phone, trimmedCode);
+      if (!ok) {
+        setPhoneVerified(false);
+        showMsg("인증 실패", "인증번호가 올바르지 않아요.");
+        return;
+      }
+      setPhoneVerified(true);
+      showMsg("인증 완료", "휴대폰 인증이 완료됐어요.");
+    } catch (e: any) {
+      const message =
+        e?.response?.data?.message ?? "인증 확인 중 문제가 발생했습니다.";
+      showMsg("오류", message);
+    } finally {
+      setVerifyingOtp(false);
+    }
   };
 
   const onNext = () => {
@@ -176,14 +202,15 @@ export default function SignupScreen() {
       email: normalizeEmail(email),
       password: pw,
       name: name.trim(),
-      phone: phone.trim(),
+      phone: digitsOnly(phone),
       role: role,
       gender: gender!,
       birthDate: birthDate.trim(),
     };
 
     router.push({
-      pathname: "/(auth)/signup-profile",
+      pathname:
+        role === "shipper" ? "/(auth)/signup-shipper" : "/(auth)/signup-driver",
       params: signupData,
     });
   };
@@ -422,7 +449,7 @@ export default function SignupScreen() {
                     phoneFormatOk && !phoneVerified && s.tfWrapSuccess,
                     phoneVerified && { borderColor: c.status.success },
                   ]}
-                  editable={!otpRequested || phoneVerified}
+                  editable={(!otpRequested || phoneVerified) && !requestingOtp && !verifyingOtp}
                   inputStyle={s.tfInput}
                   errorText={
                     phone.length > 0 && !phoneFormatOk
@@ -432,31 +459,41 @@ export default function SignupScreen() {
                 />
               </View>
               <View style={s.rowGap} />
-              <Pressable
-                style={[
-                  s.miniBtn,
-                  phoneVerified && s.miniBtnVerified,
-                  (!phoneFormatOk || phoneVerified) && { opacity: 0.6 },
-                ]}
-                onPress={
-                  otpRequested && !phoneVerified ? onEditPhone : onRequestOtp
-                }
-                disabled={!phoneFormatOk || phoneVerified}
-              >
-                <Text
+                <Pressable
                   style={[
-                    s.miniBtnText,
-                    phoneVerified && s.miniBtnTextVerified,
+                    s.miniBtn,
+                    phoneVerified && s.miniBtnVerified,
+                    ((otpRequested ? phoneVerified : !phoneFormatOk || phoneVerified) ||
+                      requestingOtp ||
+                      verifyingOtp) && { opacity: 0.6 },
                   ]}
+                  onPress={
+                    otpRequested && !phoneVerified
+                      ? onEditPhone
+                      : () => void onRequestOtp()
+                  }
+                  disabled={
+                    (otpRequested ? phoneVerified : !phoneFormatOk || phoneVerified) ||
+                    requestingOtp ||
+                    verifyingOtp
+                  }
                 >
-                  {phoneVerified
-                    ? "인증완료"
-                    : otpRequested
-                      ? "번호수정"
-                      : "인증요청"}
-                </Text>
-              </Pressable>
-            </View>
+                  <Text
+                    style={[
+                      s.miniBtnText,
+                      phoneVerified && s.miniBtnTextVerified,
+                    ]}
+                  >
+                    {requestingOtp
+                      ? "요청중..."
+                      : phoneVerified
+                        ? "인증완료"
+                        : otpRequested
+                          ? "번호수정"
+                          : "인증요청"}
+                  </Text>
+                </Pressable>
+              </View>
 
             {otpRequested && !phoneVerified ? (
               <View style={s.otpBox}>
@@ -469,6 +506,7 @@ export default function SignupScreen() {
                       onChangeText={setOtpInput}
                       placeholder="6자리 숫자"
                       keyboardType="number-pad"
+                      editable={!verifyingOtp}
                       inputWrapStyle={[
                         s.tfWrap,
                         otpInput.trim().length === 6 && s.tfWrapSuccess,
@@ -481,12 +519,14 @@ export default function SignupScreen() {
                     style={[
                       s.miniBtn,
                       s.miniBtnActive,
-                      otpInput.trim().length !== 6 && { opacity: 0.5 },
+                      (otpInput.trim().length !== 6 || requestingOtp || verifyingOtp) && { opacity: 0.5 },
                     ]}
-                    onPress={onVerifyOtp}
-                    disabled={otpInput.trim().length !== 6}
+                    onPress={() => void onVerifyOtp()}
+                    disabled={otpInput.trim().length !== 6 || requestingOtp || verifyingOtp}
                   >
-                    <Text style={s.miniBtnTextActive}>확인</Text>
+                    <Text style={s.miniBtnTextActive}>
+                      {verifyingOtp ? "확인중..." : "확인"}
+                    </Text>
                   </Pressable>
                 </View>
                 <Text style={s.helper}>

@@ -101,6 +101,8 @@ export default function DriverHomeScreen() {
       params: { initialTab: tabName },
     });
   };
+  const goNotificationsTab = () =>
+    router.push("/(driver)/(tabs)/notifications" as any);
 
   const handleAcceptOffer = useCallback(
     async (offerId: number) => {
@@ -185,7 +187,7 @@ export default function DriverHomeScreen() {
             {hasUnreadChat && <View style={styles.chatUnreadDot} />}
           </Pressable>
 
-          <Pressable onPress={() => console.log("알림 이동")}>
+          <Pressable onPress={goNotificationsTab}>
             <Ionicons
               name="notifications-outline"
               size={24}
