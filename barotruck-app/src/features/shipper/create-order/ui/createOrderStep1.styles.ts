@@ -140,6 +140,17 @@ export const s = StyleSheet.create({
   emoji: { fontSize: 18, marginBottom: 8 },
   choiceTitle: { fontSize: 14, fontWeight: "900", marginBottom: 6 },
   choiceDesc: { fontSize: 12, fontWeight: "700", lineHeight: 16 },
+  dispatchLockRow: {
+    marginTop: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  dispatchLockTitle: { fontSize: 14, fontWeight: "900", marginBottom: 4 },
+  dispatchLockDesc: { fontSize: 12, fontWeight: "700", lineHeight: 17 },
 
   aiBox: {
     marginTop: 12,

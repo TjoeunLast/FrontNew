@@ -9,6 +9,7 @@ import {
   Platform,
   Pressable,
   ScrollView,
+  Switch,
   Text,
   TextInput,
   View,
@@ -262,6 +263,9 @@ export function ShipperCreateOrderStep1Screen() {
   const [weightTon, setWeightTon] = useState(initialDraft?.weightTon ?? "0");
   const [dispatch, setDispatch] = useState<DispatchType>(
     initialDraft?.dispatch ?? "instant",
+  );
+  const [autoDispatchLocked, setAutoDispatchLocked] = useState(
+    initialDraft?.autoDispatchLocked ?? false,
   );
   const [tripType, setTripType] = useState<TripType>(
     initialDraft?.tripType ?? "oneWay",
@@ -596,6 +600,7 @@ export function ShipperCreateOrderStep1Screen() {
       requestTags: [],
       requestText: "",
       dispatch,
+      autoDispatchLocked,
       tripType,
       pay,
       distanceKm,
@@ -1105,6 +1110,48 @@ export function ShipperCreateOrderStep1Screen() {
               desc="지원한 기사님의 평점을 보고 선택합니다."
               selected={dispatch === "direct"}
               onPress={() => setDispatch("direct")}
+            />
+          </View>
+
+          <View
+            style={[
+              s.dispatchLockRow,
+              {
+                backgroundColor: autoDispatchLocked
+                  ? c.status.warningSoft
+                  : c.bg.surface,
+                borderColor: autoDispatchLocked
+                  ? c.status.warning
+                  : c.border.default,
+              },
+            ]}
+          >
+            <View style={{ flex: 1, paddingRight: 12 }}>
+              <Text
+                style={[
+                  s.dispatchLockTitle,
+                  { color: c.text.primary },
+                ]}
+              >
+                자동배차 잠금
+              </Text>
+              <Text
+                style={[
+                  s.dispatchLockDesc,
+                  { color: c.text.secondary },
+                ]}
+              >
+                켜두면 자동 후보 탐색과 푸시 오퍼를 시작하지 않습니다. 기사님은 공개 오더 목록에서 직접 지원하거나 수락할 수 있습니다.
+              </Text>
+            </View>
+            <Switch
+              value={autoDispatchLocked}
+              onValueChange={setAutoDispatchLocked}
+              trackColor={{
+                false: c.border.default,
+                true: c.status.warning,
+              }}
+              thumbColor={autoDispatchLocked ? "#FFFFFF" : "#F8FAFC"}
             />
           </View>
 

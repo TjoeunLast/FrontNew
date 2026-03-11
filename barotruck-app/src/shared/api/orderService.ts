@@ -355,6 +355,7 @@ function normalizeOrderRow(node: any): OrderResponse | null {
     packagingPrice: (node as any).packagingPrice !== undefined ? Number((node as any).packagingPrice) : undefined,
     insuranceFee: (node as any).insuranceFee !== undefined ? Number((node as any).insuranceFee) : undefined,
     payMethod: String((node as any).payMethod ?? ''),
+    autoDispatchLocked: Boolean((node as any).autoDispatchLocked),
     memo: (node as any).memo !== undefined ? String((node as any).memo) : undefined,
     remark: (node as any).remark !== undefined ? String((node as any).remark) : undefined,
     tag,

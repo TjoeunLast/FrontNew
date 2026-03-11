@@ -78,6 +78,8 @@ export default function DriverMyPageScreen() {
 
   const [loggingOut, setLoggingOut] = React.useState(false);
   const [receiveOrderAlarm, setReceiveOrderAlarm] = React.useState(true);
+  const [autoDispatchEnabled, setAutoDispatchEnabled] = React.useState(true);
+  const [savingAutoDispatchEnabled, setSavingAutoDispatchEnabled] = React.useState(false);
   const [adminForceAllocateBlocked, setAdminForceAllocateBlocked] = React.useState(false);
   const [savingAdminForceAllocateBlocked, setSavingAdminForceAllocateBlocked] = React.useState(false);
   const [profile, setProfile] = React.useState<DriverProfileView>({
@@ -118,6 +120,7 @@ export default function DriverMyPageScreen() {
             await AsyncStorage.setItem(storageKey, resolvedImageUrl);
           }
           setAdminForceAllocateBlocked(Boolean(me?.adminForceAllocateBlocked));
+          setAutoDispatchEnabled(me?.autoDispatchEnabled !== false);
           setProfile({
             nickname: toText(me?.nickname ?? cached?.nickname, "차주"),
             gender: normalizeGenderLabel(me?.gender ?? me?.sex ?? detail?.gender ?? detail?.user?.gender ?? cached?.gender),
@@ -132,6 +135,7 @@ export default function DriverMyPageScreen() {
           const localImageUrl = await AsyncStorage.getItem(buildProfileImageStorageKey(cached?.email));
           setProfileImageUrl(localImageUrl ?? "");
           setAdminForceAllocateBlocked(false);
+          setAutoDispatchEnabled(true);
           setProfile({
             nickname: toText(cached?.nickname, "차주"),
             gender: normalizeGenderLabel(cached?.gender),
@@ -190,6 +194,21 @@ export default function DriverMyPageScreen() {
       Alert.alert("저장 실패", "직접 배차 설정을 저장하지 못했습니다.");
     } finally {
       setSavingAdminForceAllocateBlocked(false);
+    }
+  };
+
+  const onToggleAutoDispatchEnabled = async (nextValue: boolean) => {
+    if (savingAutoDispatchEnabled) return;
+    const previousValue = autoDispatchEnabled;
+    setAutoDispatchEnabled(nextValue);
+    try {
+      setSavingAutoDispatchEnabled(true);
+      await UserService.updateAutoDispatchEnabled(nextValue);
+    } catch {
+      setAutoDispatchEnabled(previousValue);
+      Alert.alert("저장 실패", "자동배차 허용 설정을 저장하지 못했습니다.");
+    } finally {
+      setSavingAutoDispatchEnabled(false);
     }
   };
 
@@ -346,11 +365,38 @@ export default function DriverMyPageScreen() {
           <View style={s.divider} />
           <View style={s.settingRow}>
             <View style={s.iconWrap}>
+              <Ionicons name="flash" size={22} color="#2563EB" />
+            </View>
+            <View style={s.settingLabelWrap}>
+              <Text style={s.settingLabel}>자동배차 허용</Text>
+              <Text style={s.settingSub}>자동배차 후보 탐색과 배차 제안 수신</Text>
+            </View>
+            <View
+              style={[
+                s.settingActionWrap,
+                savingAutoDispatchEnabled && s.settingActionDisabled,
+              ]}
+            >
+              <Switch
+                value={autoDispatchEnabled}
+                onValueChange={(nextValue) =>
+                  void onToggleAutoDispatchEnabled(nextValue)
+                }
+                disabled={savingAutoDispatchEnabled}
+                trackColor={{ false: "#D7DEE8", true: "#BFDBFE" }}
+                thumbColor={autoDispatchEnabled ? "#2563EB" : "#FFFFFF"}
+                ios_backgroundColor="#D7DEE8"
+              />
+            </View>
+          </View>
+          <View style={s.divider} />
+          <View style={s.settingRow}>
+            <View style={s.iconWrap}>
               <Ionicons name="flash-outline" size={22} color="#DC2626" />
             </View>
             <View style={s.settingLabelWrap}>
               <Text style={s.settingLabel}>직접 배차</Text>
-              <Text style={s.settingSub}>직접 배차 사용 여부</Text>
+              <Text style={s.settingSub}>관리자 직접 배차 사용 여부</Text>
             </View>
             <View
               style={[

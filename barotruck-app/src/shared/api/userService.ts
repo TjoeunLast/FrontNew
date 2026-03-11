@@ -173,6 +173,10 @@ export const UserService = {
     await apiClient.post("/api/user/admin-force-allocate-blocked", { blocked });
   },
 
+  updateAutoDispatchEnabled: async (enabled: boolean): Promise<void> => {
+    await apiClient.post("/api/user/auto-dispatch-enabled", { enabled });
+  },
+
   updateInstantDispatchEnabled: async (enabled: boolean): Promise<void> => {
     const candidates = [
       { url: "/api/v1/drivers/me/instant-dispatch", payload: { enabled } },

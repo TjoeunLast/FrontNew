@@ -22,6 +22,7 @@ export type CreateOrderDraft = {
   requestText: string;
 
   dispatch: "instant" | "direct";
+  autoDispatchLocked: boolean;
   tripType: "oneWay" | "roundTrip";
   pay: EnabledShipperPaymentMethod;
 

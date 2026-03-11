@@ -31,16 +31,25 @@ export function normalizePaymentMethod(raw?: string | null): PaymentMethodCode |
     return "card";
   }
 
-  if (value.includes("prepaid") || value.includes("cash") || value.includes("착불") || value.includes("postpaid")) {
+  if (
+    value.includes("prepaid") ||
+    value.includes("cash") ||
+    value.includes("착불") ||
+    value.includes("postpaid") ||
+    value.includes("현금") ||
+    value.includes("선불") ||
+    value.includes("후불") ||
+    value.includes("인수증")
+  ) {
     return "prepaid";
-  }
-
-  if (value.includes("receipt") || value.includes("영수증") || value.includes("receipt30")) {
-    return "receipt30";
   }
 
   if (value.includes("month") || value.includes("월말")) {
     return "monthEnd";
+  }
+
+  if (value.includes("receipt") || value.includes("영수증") || value.includes("receipt30")) {
+    return "receipt30";
   }
 
   return undefined;

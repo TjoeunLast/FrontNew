@@ -147,6 +147,7 @@ export function ShipperCreateOrderStep2CargoScreen() {
         payMethod: toPaymentMethodLabel(draft.pay),
         packagingPrice,
         instant: draft.dispatch === "instant",
+        autoDispatchLocked: draft.autoDispatchLocked,
         distance: draft.distanceKm,
         duration: Math.max(30, Math.round(draft.estimatedDurationMin ?? draft.distanceKm * 2)),
       };
