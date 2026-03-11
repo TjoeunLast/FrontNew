@@ -23,21 +23,17 @@ import {
   isTossPayment,
   toPaymentMethodLabel,
 } from "@/features/common/payment/lib/paymentMethods";
-import {
-  calcOrderAmount,
-  statusText,
-  toSettlementStatus,
-  toWon,
-} from "@/features/common/settlement/lib/settlementHelpers";
+import { calcOrderAmount, toWon } from "@/features/common/settlement/lib/settlementHelpers";
 import { OrderApi } from "@/shared/api/orderService";
 import { PaymentService } from "@/shared/api/paymentService";
 import { SettlementService } from "@/shared/api/settlementService";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
 import type { OrderResponse } from "@/shared/models/order";
+import type { SettlementResponse } from "@/shared/models/Settlement";
 import ShipperScreenHeader from "@/shared/ui/layout/ShipperScreenHeader";
 
-type SettlementFilter = "ALL" | "UNPAID" | "TAX";
-type SettlementStatus = "UNPAID" | "PENDING" | "PAID" | "TAX_INVOICE";
+type SettlementFilter = "ALL" | "UNPAID" | "PENDING" | "PAID";
+type SettlementStatus = "UNPAID" | "PENDING" | "PAID" | "ISSUE" | "TAX_INVOICE";
 
 type SettlementItem = {
   id: string;
@@ -53,6 +49,10 @@ type SettlementItem = {
   vehicleInfo: string;
   payMethodLabel: string;
   isToss: boolean;
+  paymentStatus?: string | null;
+  settlementStatus?: string | null;
+  paidAt?: string | null;
+  confirmedAt?: string | null;
 };
 
 type TossCheckoutSession = {
@@ -130,6 +130,13 @@ function parseDate(v?: string) {
 function toDateLabel(d: Date) {
   const w = ["일", "월", "화", "수", "목", "금", "토"][d.getDay()];
   return `${d.getMonth() + 1}.${d.getDate()} (${w})`;
+}
+
+function formatDateTime(value?: string | Date | null) {
+  if (!value) return "-";
+  const date = value instanceof Date ? value : parseDate(value);
+  if (!date) return "-";
+  return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")} ${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 }
 
 function escapeHtmlValue(v: string) {
@@ -246,17 +253,80 @@ function buildTossCheckoutHtml(input: {
 </html>`;
 }
 
+function getStatusLabel(status: SettlementStatus) {
+  if (status === "UNPAID") return "결제 필요";
+  if (status === "PENDING") return "차주 확인 대기";
+  if (status === "PAID") return "정산 완료";
+  if (status === "ISSUE") return "이슈";
+  return "계산서";
+}
+
+function getStatusHint(status: SettlementStatus) {
+  if (status === "UNPAID") {
+    return "운송 완료 주문입니다. 화주 결제를 진행하면 차주 확인 단계로 넘어갑니다.";
+  }
+  if (status === "PENDING") {
+    return "화주 결제는 완료되었습니다. 차주가 결제 확인하면 정산 완료로 전환됩니다.";
+  }
+  if (status === "PAID") {
+    return "차주 확인까지 끝난 건입니다. 이후 관리자 지급 요청 단계로 이어집니다.";
+  }
+  if (status === "ISSUE") {
+    return "이의 또는 관리자 보류 상태입니다. 관리자 확인이 필요합니다.";
+  }
+  return "계산서 보기 기능은 준비 중입니다.";
+}
+
 function toActionLabel(status: SettlementStatus, isTransportCompleted = true) {
-  if (status === "UNPAID")
+  if (status === "UNPAID") {
     return isTransportCompleted ? "결제하기" : "운송완료 후 결제";
-  if (status === "PENDING") return "결제대기";
-  if (status === "PAID") return "영수증 확인";
-  return "계산서 보기";
+  }
+  if (status === "ISSUE") return "상태 확인";
+  if (status === "TAX_INVOICE") return "계산서 보기";
+  return "영수증 보기";
+}
+
+function resolveItemStatus(
+  order: OrderResponse,
+  settlement?: SettlementResponse,
+): SettlementStatus {
+  const paymentStatus = String(
+    settlement?.paymentStatus ?? order.paymentStatus ?? "",
+  ).toUpperCase();
+  const settlementStatus = String(
+    settlement?.status ?? order.settlementStatus ?? "",
+  ).toUpperCase();
+
+  if (
+    paymentStatus === "CONFIRMED" ||
+    paymentStatus === "ADMIN_FORCE_CONFIRMED" ||
+    settlementStatus === "COMPLETED"
+  ) {
+    return "PAID";
+  }
+
+  if (
+    paymentStatus === "DISPUTED" ||
+    paymentStatus === "ADMIN_HOLD" ||
+    paymentStatus === "ADMIN_REJECTED" ||
+    settlementStatus === "WAIT"
+  ) {
+    return "ISSUE";
+  }
+
+  if (
+    paymentStatus === "PAID" ||
+    (!!settlement && settlementStatus === "READY")
+  ) {
+    return "PENDING";
+  }
+
+  return "UNPAID";
 }
 
 function mapOrderToSettlement(
   order: OrderResponse,
-  pendingOrderIds?: Set<number>,
+  settlement?: SettlementResponse,
 ): SettlementItem | null {
   if (order.status !== "COMPLETED") return null;
 
@@ -270,22 +340,7 @@ function mapOrderToSettlement(
   if (!isShipperActivePaymentMethod(order.payMethod)) return null;
 
   const amount = calcOrderAmount(order);
-  const normalizedOrderStatus = String(order.status ?? "")
-    .trim()
-    .toUpperCase();
-  // 일부 레거시 응답은 settlementStatus가 READY여도 order.status에 결제완료 상태가 들어옴.
-  // 이 경우 결제완료 건이 다시 UNPAID로 보이지 않도록 보정.
-  const paidByOrderStatus =
-    normalizedOrderStatus === "PAID" ||
-    normalizedOrderStatus === "CONFIRMED" ||
-    normalizedOrderStatus === "ADMIN_FORCE_CONFIRMED";
-  const rawBaseStatus = toSettlementStatus(order);
-  const baseStatus =
-    rawBaseStatus === "UNPAID" && paidByOrderStatus ? "PAID" : rawBaseStatus;
-  const status =
-    baseStatus === "UNPAID" && pendingOrderIds?.has(Number(order.orderId))
-      ? "PENDING"
-      : baseStatus;
+  const status = resolveItemStatus(order, settlement);
   const isTransportCompleted = true;
   const vehicleInfo =
     `${order.reqCarType || "차량"} ${order.reqTonnage || ""}`.trim();
@@ -304,6 +359,10 @@ function mapOrderToSettlement(
     vehicleInfo: vehicleInfo || "-",
     payMethodLabel: toPaymentMethodLabel(order.payMethod),
     isToss: isTossPayment(order.payMethod),
+    paymentStatus: settlement?.paymentStatus ?? order.paymentStatus ?? null,
+    settlementStatus: settlement?.status ?? order.settlementStatus ?? null,
+    paidAt: settlement?.paidAt ?? null,
+    confirmedAt: settlement?.confirmedAt ?? null,
   };
 }
 
@@ -332,21 +391,25 @@ export default function ShipperSettlementScreen() {
   const handledTossResultUrlRef = useRef<string | null>(null);
 
   const fetchItems = useCallback(async () => {
-    const pendingOrderIds = await loadPendingSettlementOrderIds();
-    const rows = await OrderApi.getMyShipperOrders();
+    const [rows, settlements] = await Promise.all([
+      OrderApi.getMyShipperOrders(),
+      SettlementService.getMySettlements().catch((error) => {
+        console.warn("정산 snapshot 조회 실패:", error);
+        return [] as SettlementResponse[];
+      }),
+    ]);
+    const settlementMap = new Map<number, SettlementResponse>();
+    settlements.forEach((row) => {
+      const orderId = Number(row.orderId);
+      if (Number.isFinite(orderId)) {
+        settlementMap.set(orderId, row);
+      }
+    });
+
     const mapped = rows
-      .map((row) => mapOrderToSettlement(row, pendingOrderIds))
+      .map((row) => mapOrderToSettlement(row, settlementMap.get(Number(row.orderId))))
       .filter((x): x is SettlementItem => x !== null)
       .sort((a, b) => b.scheduledAt.getTime() - a.scheduledAt.getTime());
-
-    const paidIds = mapped
-      .filter((x) => x.status === "PAID")
-      .map((x) => x.orderId);
-    let dirty = false;
-    paidIds.forEach((id) => {
-      if (pendingOrderIds.delete(id)) dirty = true;
-    });
-    if (dirty) await savePendingSettlementOrderIds(pendingOrderIds);
 
     return mapped;
   }, []);
@@ -394,21 +457,23 @@ export default function ShipperSettlementScreen() {
           );
 
     if (filter === "ALL") return methodFiltered;
-    if (filter === "UNPAID")
-      return methodFiltered.filter((x) => x.status === "UNPAID");
-    return methodFiltered.filter((x) => x.status === "TAX_INVOICE");
+    return methodFiltered.filter((x) => x.status === filter);
   }, [filter, monthItems, paymentFilter]);
 
   const summaryTotal = useMemo(
     () => monthItems.reduce((acc, cur) => acc + cur.amount, 0),
     [monthItems],
   );
-  const summaryDoneCount = monthItems.length;
-  const summaryUnpaid = useMemo(
-    () =>
-      monthItems
-        .filter((x) => x.status === "UNPAID")
-        .reduce((acc, cur) => acc + cur.amount, 0),
+  const summaryNeedPaymentCount = useMemo(
+    () => monthItems.filter((x) => x.status === "UNPAID").length,
+    [monthItems],
+  );
+  const summaryPendingCount = useMemo(
+    () => monthItems.filter((x) => x.status === "PENDING").length,
+    [monthItems],
+  );
+  const summaryCompletedCount = useMemo(
+    () => monthItems.filter((x) => x.status === "PAID").length,
     [monthItems],
   );
 
@@ -478,9 +543,9 @@ export default function ShipperSettlementScreen() {
               row.orderId === tossCheckout.orderId
                 ? {
                     ...row,
-                    status: "PAID",
+                    status: "PENDING",
                     actionLabel: toActionLabel(
-                      "PAID",
+                      "PENDING",
                       row.isTransportCompleted,
                     ),
                   }
@@ -491,7 +556,11 @@ export default function ShipperSettlementScreen() {
           setItems((prev) =>
             prev.map((row) =>
               row.orderId === tossCheckout.orderId
-                ? { ...row, status: "PAID", actionLabel: toActionLabel("PAID") }
+                ? {
+                    ...row,
+                    status: "PENDING",
+                    actionLabel: toActionLabel("PENDING"),
+                  }
                 : row,
             ),
           );
@@ -589,7 +658,7 @@ export default function ShipperSettlementScreen() {
 
   const onPressAction = async (item: SettlementItem) => {
     if (submittingOrderId === item.orderId) return;
-    if (item.status === "PAID") {
+    if (item.status === "PAID" || item.status === "PENDING") {
       setReceiptItem(item);
       return;
     }
@@ -598,8 +667,8 @@ export default function ShipperSettlementScreen() {
       Alert.alert("안내", "계산서 보기 기능은 준비 중입니다.");
       return;
     }
-    if (item.status === "PENDING") {
-      Alert.alert("안내", "결제 요청 처리 중입니다.");
+    if (item.status === "ISSUE") {
+      Alert.alert("상태 확인", getStatusHint(item.status));
       return;
     }
     if (item.status === "UNPAID" && !item.isTransportCompleted) {
@@ -619,14 +688,10 @@ export default function ShipperSettlementScreen() {
 
     try {
       setSubmittingOrderId(item.orderId);
-      await SettlementService.initSettlement({
-        orderId: item.orderId,
-        couponDiscount: 0,
-        levelDiscount: 0,
+      await PaymentService.markPaid(item.orderId, {
+        method: "CASH",
+        paymentTiming: "POSTPAID",
       });
-      const pendingOrderIds = await loadPendingSettlementOrderIds();
-      pendingOrderIds.add(item.orderId);
-      await savePendingSettlementOrderIds(pendingOrderIds);
       const refreshed = await fetchItems().catch(() => null);
       if (refreshed) {
         setItems(refreshed);
@@ -638,15 +703,20 @@ export default function ShipperSettlementScreen() {
                   ...row,
                   status: "PENDING",
                   actionLabel: toActionLabel("PENDING"),
+                  paymentStatus: "PAID",
+                  settlementStatus: "READY",
                 }
               : row,
           ),
         );
       }
-      Alert.alert("결제 요청", "결제 요청이 생성되었습니다.");
+      Alert.alert(
+        "결제 완료",
+        "착불 결제가 완료되었습니다. 이제 차주 확인이 끝나면 정산 완료로 전환됩니다.",
+      );
     } catch (error: any) {
       const msg =
-        error?.response?.data?.message || "결제 요청 중 오류가 발생했습니다.";
+        error?.response?.data?.message || "착불 결제 중 오류가 발생했습니다.";
       const msgText = String(msg);
       const msgLower = msgText.toLowerCase();
       const isAlreadyPaid =
@@ -660,31 +730,7 @@ export default function ShipperSettlementScreen() {
         msgLower.includes("constraint") ||
         msgLower.includes("already");
 
-      if (isAlreadyPaid) {
-        const pendingOrderIds = await loadPendingSettlementOrderIds();
-        if (pendingOrderIds.delete(item.orderId)) {
-          await savePendingSettlementOrderIds(pendingOrderIds);
-        }
-        const refreshed = await fetchItems().catch(() => null);
-        if (refreshed) {
-          setItems(refreshed);
-        } else {
-          setItems((prev) =>
-            prev.map((row) =>
-              row.id === item.id
-                ? { ...row, status: "PAID", actionLabel: toActionLabel("PAID") }
-                : row,
-            ),
-          );
-        }
-        Alert.alert("안내", "이미 결제완료된 건입니다.");
-        return;
-      }
-
-      if (isDuplicate) {
-        const pendingOrderIds = await loadPendingSettlementOrderIds();
-        pendingOrderIds.add(item.orderId);
-        await savePendingSettlementOrderIds(pendingOrderIds);
+      if (isAlreadyPaid || isDuplicate) {
         const refreshed = await fetchItems().catch(() => null);
         if (refreshed) {
           setItems(refreshed);
@@ -696,12 +742,14 @@ export default function ShipperSettlementScreen() {
                     ...row,
                     status: "PENDING",
                     actionLabel: toActionLabel("PENDING"),
+                    paymentStatus: "PAID",
+                    settlementStatus: "READY",
                   }
                 : row,
             ),
           );
         }
-        Alert.alert("안내", "이미 결제 요청된 건입니다.");
+        Alert.alert("안내", "이미 결제완료된 건입니다. 차주 확인 대기 상태일 수 있습니다.");
         return;
       }
 
@@ -814,6 +862,7 @@ export default function ShipperSettlementScreen() {
         } as ViewStyle,
         filterRow: {
           flexDirection: "row",
+          flexWrap: "wrap",
           gap: 8,
           paddingHorizontal: 16,
         } as ViewStyle,
@@ -1096,20 +1145,22 @@ export default function ShipperSettlementScreen() {
         </View>
 
         <View style={s.summaryCard}>
-          <Text style={s.summaryCaption}>{viewMonthNumber}월 총 지출 예정</Text>
+          <Text style={s.summaryCaption}>{viewMonthNumber}월 결제/정산 현황</Text>
           <Text style={s.summaryAmount}>{toWon(summaryTotal)}</Text>
           <View style={s.summaryDivider} />
           <View style={s.summaryBottomRow}>
             <View style={s.summaryCol}>
-              <Text style={s.summaryBig}>{summaryDoneCount}건</Text>
-              <Text style={s.summarySmall}>완료</Text>
+              <Text style={s.summaryBig}>{summaryNeedPaymentCount}건</Text>
+              <Text style={s.summarySmall}>결제 필요</Text>
             </View>
             <View style={s.summaryColDivider} />
             <View style={s.summaryCol}>
               <Text style={[s.summaryBig, s.summaryBigRight]}>
-                {toWon(summaryUnpaid)}
+                {summaryPendingCount}건 / {summaryCompletedCount}건
               </Text>
-              <Text style={[s.summarySmall, s.summarySmallRight]}>미결제</Text>
+              <Text style={[s.summarySmall, s.summarySmallRight]}>
+                확인 대기 / 완료
+              </Text>
             </View>
           </View>
         </View>
@@ -1118,9 +1169,10 @@ export default function ShipperSettlementScreen() {
           <Text style={s.flowGuideTitle}>정산 테스트 순서</Text>
           <Text style={s.flowGuideText}>
             1. 이 화면에서 결제하기를 눌러 화주 결제를 완료합니다.{"\n"}
-            2. 차주 앱에서 결제확인을 진행합니다.{"\n"}
-            3. 관리자에서 지급 요청을 실행합니다.{"\n"}
-            4. 차주 앱 정산 화면에서 지급 상태를 조회합니다.
+            2. 상태가 차주 확인 대기로 바뀝니다.{"\n"}
+            3. 차주 앱에서 결제확인을 진행합니다.{"\n"}
+            4. 상태가 정산 완료로 바뀝니다.{"\n"}
+            5. 관리자에서 지급 요청을 실행합니다.
           </Text>
         </View>
 
@@ -1128,7 +1180,9 @@ export default function ShipperSettlementScreen() {
           <View style={s.filterRow}>
             {[
               ["ALL", "전체"],
-              ["UNPAID", "미결제"],
+              ["UNPAID", "결제 필요"],
+              ["PENDING", "확인 대기"],
+              ["PAID", "완료"],
             ].map(([key, label]) => {
               const active = filter === key;
               return (
@@ -1181,10 +1235,15 @@ export default function ShipperSettlementScreen() {
                 const isUnpaid = item.status === "UNPAID";
                 const isPending = item.status === "PENDING";
                 const isPaid = item.status === "PAID";
+                const isIssue = item.status === "ISSUE";
                 return (
                   <View
                     key={item.id}
-                    style={[s.itemCard, isUnpaid && s.unpaidCard]}
+                    style={[
+                      s.itemCard,
+                      isUnpaid && s.unpaidCard,
+                      isIssue && { borderColor: "#F59E0B" },
+                    ]}
                   >
                     <View style={s.itemTop}>
                       <View style={s.dateRow}>
@@ -1199,7 +1258,9 @@ export default function ShipperSettlementScreen() {
                                   ? "#FEF9C3"
                                   : isPaid
                                     ? "#DCFCE7"
-                                    : "#E0ECFF",
+                                    : isIssue
+                                      ? "#FEF3C7"
+                                      : "#E0ECFF",
                             },
                           ]}
                         >
@@ -1213,11 +1274,13 @@ export default function ShipperSettlementScreen() {
                                     ? "#A16207"
                                     : isPaid
                                       ? "#15803D"
-                                      : "#2E6DA4",
+                                      : isIssue
+                                        ? "#B45309"
+                                        : "#2E6DA4",
                               },
                             ]}
                           >
-                            {statusText(item.status)}
+                            {getStatusLabel(item.status)}
                           </Text>
                         </View>
                       </View>
@@ -1233,11 +1296,10 @@ export default function ShipperSettlementScreen() {
                       결제 방식: {item.payMethodLabel}
                     </Text>
                     <Text style={s.flowHintText}>
-                      {isUnpaid
-                        ? "1단계: 화주 결제를 진행할 차례입니다."
-                        : isPending
-                          ? "결제 요청이 생성되었습니다. 완료 후 차주 확인 단계로 넘어갑니다."
-                          : "결제 완료 건입니다. 이후 관리자 지급 요청과 차주 지급 상태 확인 단계로 이어집니다."}
+                      {getStatusHint(item.status)}
+                    </Text>
+                    <Text style={s.flowHintText}>
+                      결제 {item.paymentStatus ?? "-"} / 정산 {item.settlementStatus ?? "-"}
                     </Text>
 
                     <View style={s.actionRow}>
@@ -1249,12 +1311,10 @@ export default function ShipperSettlementScreen() {
                           <Pressable
                             style={[
                               s.actionBtn,
-                              (!isUnpaid || paymentBlocked) &&
+                              ((item.status !== "UNPAID") || paymentBlocked) &&
                                 s.actionBtnNeutral,
                             ]}
-                            disabled={
-                              isSubmitting || isPending || paymentBlocked
-                            }
+                            disabled={isSubmitting || paymentBlocked}
                             onPress={() => void onPressAction(item)}
                           >
                             <MaterialCommunityIcons
@@ -1263,8 +1323,10 @@ export default function ShipperSettlementScreen() {
                                   ? "lock-outline"
                                   : item.status === "PAID"
                                     ? "file-document-outline"
-                                    : item.status === "PENDING"
-                                      ? "timer-sand"
+                                  : item.status === "PENDING"
+                                      ? "clock-outline"
+                                    : item.status === "ISSUE"
+                                      ? "alert-circle-outline"
                                       : item.status === "TAX_INVOICE"
                                         ? "file-outline"
                                         : "credit-card-outline"
@@ -1277,17 +1339,19 @@ export default function ShipperSettlementScreen() {
                                     ? "#4E46E5"
                                     : isPending
                                       ? "#A16207"
+                                    : isIssue
+                                      ? "#B45309"
                                       : "#64748B"
                               }
                             />
                             <Text
                               style={[
                                 s.actionText,
-                                (!isUnpaid || paymentBlocked) &&
+                                ((item.status !== "UNPAID") || paymentBlocked) &&
                                   s.actionTextNeutral,
                               ]}
                             >
-                              {isSubmitting ? "요청중..." : item.actionLabel}
+                              {isSubmitting ? "처리중..." : item.actionLabel}
                             </Text>
                           </Pressable>
                         );
@@ -1362,15 +1426,29 @@ export default function ShipperSettlementScreen() {
               <Text style={s.receiptAmount}>
                 {receiptItem ? receiptItem.amount.toLocaleString("ko-KR") : "0"}
               </Text>
-              <Text style={s.receiptPaid}>결제완료</Text>
+              <Text style={s.receiptPaid}>
+                {receiptItem ? getStatusLabel(receiptItem.status) : "-"}
+              </Text>
               <View style={s.receiptDash} />
 
               <View style={s.receiptRow}>
                 <Text style={s.receiptKey}>운송일시</Text>
                 <Text style={s.receiptVal}>
                   {receiptItem
-                    ? `${receiptItem.scheduledAt.getFullYear()}.${String(receiptItem.scheduledAt.getMonth() + 1).padStart(2, "0")}.${String(receiptItem.scheduledAt.getDate()).padStart(2, "0")} ${String(receiptItem.scheduledAt.getHours()).padStart(2, "0")}:${String(receiptItem.scheduledAt.getMinutes()).padStart(2, "0")}`
+                    ? formatDateTime(receiptItem.scheduledAt)
                     : "-"}
+                </Text>
+              </View>
+              <View style={s.receiptRow}>
+                <Text style={s.receiptKey}>결제 시각</Text>
+                <Text style={s.receiptVal}>
+                  {formatDateTime(receiptItem?.paidAt)}
+                </Text>
+              </View>
+              <View style={s.receiptRow}>
+                <Text style={s.receiptKey}>확인 완료 시각</Text>
+                <Text style={s.receiptVal}>
+                  {formatDateTime(receiptItem?.confirmedAt)}
                 </Text>
               </View>
               <View style={s.receiptRow}>
@@ -1383,6 +1461,13 @@ export default function ShipperSettlementScreen() {
                 <Text style={s.receiptKey}>결제 방식</Text>
                 <Text style={s.receiptVal}>
                   {receiptItem?.payMethodLabel ?? "-"}
+                </Text>
+              </View>
+              <View style={s.receiptRow}>
+                <Text style={s.receiptKey}>상태 엔진</Text>
+                <Text style={s.receiptVal}>
+                  결제 {receiptItem?.paymentStatus ?? "-"} / 정산{" "}
+                  {receiptItem?.settlementStatus ?? "-"}
                 </Text>
               </View>
 
