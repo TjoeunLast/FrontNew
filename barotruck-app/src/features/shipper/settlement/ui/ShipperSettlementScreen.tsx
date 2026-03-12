@@ -367,6 +367,7 @@ export default function ShipperSettlementScreen() {
   const currentMonth = startOfMonth(new Date());
 
   const [filter, setFilter] = useState<SettlementFilter>("ALL");
+  const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
   const [paymentFilter, setPaymentFilter] =
     useState<PaymentMethodFilter>("ALL");
   const [viewMonth, setViewMonth] = useState<Date>(currentMonth);
@@ -467,6 +468,16 @@ export default function ShipperSettlementScreen() {
     () => Math.max(0, summaryTotal - summaryCompletedAmount),
     [summaryCompletedAmount, summaryTotal],
   );
+  const statusDropdownOptions: Array<[SettlementFilter, string]> = [
+    ["ALL", "결제 전체"],
+    ["UNPAID", "결제 필요"],
+    ["PENDING", "결제 확인 대기"],
+    ["PAID", "완료"],
+  ];
+  const statusDropdownLabel = useMemo(() => {
+    const found = statusDropdownOptions.find(([key]) => key === filter);
+    return found?.[1] ?? "결제 전체";
+  }, [filter]);
 
   const closeTossCheckout = useCallback(() => {
     if (tossConfirming) return;
@@ -753,7 +764,7 @@ export default function ShipperSettlementScreen() {
     () =>
       StyleSheet.create({
         page: { flex: 1, backgroundColor: "#F5F6FA" } as ViewStyle,
-        scrollContent: { paddingBottom: 22 } as ViewStyle,
+        scrollContent: { paddingBottom: 24 + insets.bottom } as ViewStyle,
         monthRow: {
           height: 72,
           flexDirection: "row",
@@ -818,28 +829,108 @@ export default function ShipperSettlementScreen() {
         } as TextStyle,
         summaryBigRight: { textAlign: "right" } as TextStyle,
         summarySmallRight: { textAlign: "right" } as TextStyle,
-        section: {
-          marginTop: 16,
-          paddingTop: 14,
+        contentWrap: { paddingHorizontal: 16, paddingTop: 14, gap: 12 } as ViewStyle,
+        filterSection: {
           borderTopWidth: 1,
           borderTopColor: c.border.default,
+          paddingTop: 12,
+          gap: 10,
         } as ViewStyle,
         filterRow: {
           flexDirection: "row",
-          flexWrap: "wrap",
-          gap: 8,
-          paddingHorizontal: 16,
+          alignItems: "center",
+          justifyContent: "space-between",
+          zIndex: 20,
         } as ViewStyle,
-        paymentFilterRow: {
+        paymentFilterInlineRow: {
           flexDirection: "row",
-          gap: 8,
-          paddingHorizontal: 16,
-          marginTop: 12,
+          alignItems: "center",
+          gap: 14,
         } as ViewStyle,
+        dropdownWrap: {
+          width: 170,
+          position: "relative",
+        } as ViewStyle,
+        dropdownTrigger: {
+          height: 36,
+          borderRadius: 18,
+          borderWidth: 1,
+          borderColor: "#D4D9E3",
+          backgroundColor: "#FFFFFF",
+          paddingHorizontal: 12,
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 8,
+        } as ViewStyle,
+        dropdownTriggerActive: {
+          borderColor: c.brand.primary,
+          backgroundColor: "#FFFFFF",
+        } as ViewStyle,
+        dropdownTriggerText: {
+          flex: 1,
+          fontSize: 13,
+          fontWeight: "800",
+          color: "#667085",
+        } as TextStyle,
+        dropdownTriggerTextActive: {
+          color: c.brand.primary,
+        } as TextStyle,
+        dropdownMenu: {
+          position: "absolute",
+          top: 40,
+          left: 0,
+          right: 0,
+          borderRadius: 12,
+          borderWidth: 1,
+          borderColor: "#DDE3F3",
+          backgroundColor: "#FFFFFF",
+          overflow: "hidden",
+          shadowColor: "#0F172A",
+          shadowOpacity: 0.04,
+          shadowRadius: 4,
+          shadowOffset: { width: 0, height: 2 },
+          elevation: 2,
+        } as ViewStyle,
+        dropdownItem: {
+          minHeight: 38,
+          paddingHorizontal: 12,
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          borderBottomWidth: 1,
+          borderBottomColor: "#EEF2F7",
+        } as ViewStyle,
+        dropdownItemLast: {
+          borderBottomWidth: 0,
+        } as ViewStyle,
+        dropdownItemText: {
+          fontSize: 13,
+          fontWeight: "700",
+          color: "#334155",
+        } as TextStyle,
+        dropdownItemTextActive: {
+          color: c.brand.primary,
+          fontWeight: "900",
+        } as TextStyle,
+        paymentTextBtn: {
+          minHeight: 32,
+          paddingHorizontal: 4,
+          justifyContent: "center",
+        } as ViewStyle,
+        paymentText: {
+          fontSize: 13,
+          fontWeight: "700",
+          color: c.text.secondary,
+        } as TextStyle,
+        paymentTextActive: {
+          color: c.brand.primary,
+          fontWeight: "900",
+        } as TextStyle,
         filterBtn: {
           borderRadius: 18,
           paddingHorizontal: 14,
-          height: 38,
+          height: 36,
           justifyContent: "center",
           borderWidth: 1,
           borderColor: "#D4D9E3",
@@ -855,100 +946,84 @@ export default function ShipperSettlementScreen() {
           color: "#667085",
         } as TextStyle,
         filterTextActive: { color: "#FFFFFF" } as TextStyle,
-        categoryBtn: {
-          borderRadius: 16,
-          paddingHorizontal: 12,
-          height: 32,
-          justifyContent: "center",
-          backgroundColor: "#F1F5F9",
-        } as ViewStyle,
-        categoryBtnActive: {
-          backgroundColor: "#0F172A",
-        } as ViewStyle,
-        categoryText: {
-          fontSize: 12,
-          fontWeight: "800",
-          color: "#94A3B8",
-        } as TextStyle,
-        categoryTextActive: { color: "#FFFFFF" } as TextStyle,
         listWrap: {
-          marginTop: 10,
-          paddingHorizontal: 16,
-          gap: 10,
+          gap: 12,
         } as ViewStyle,
         itemCard: {
-          borderRadius: 16,
+          borderRadius: 20,
           borderWidth: 1,
-          borderColor: "#D9DEE7",
+          borderColor: "#DEE3ED",
           backgroundColor: "#FFFFFF",
-          paddingHorizontal: 14,
-          paddingVertical: 12,
+          padding: 14,
+          gap: 12,
         } as ViewStyle,
         unpaidCard: { borderColor: "#E05A55" } as ViewStyle,
         itemTop: {
           flexDirection: "row",
+          alignItems: "flex-start",
           justifyContent: "space-between",
-          alignItems: "center",
+          gap: 10,
         } as ViewStyle,
+        itemTopLeft: { flex: 1 } as ViewStyle,
         dateRow: {
           flexDirection: "row",
           alignItems: "center",
-          gap: 6,
+          gap: 8,
         } as ViewStyle,
         dateText: {
-          fontSize: 13,
+          fontSize: 12,
           fontWeight: "700",
           color: "#64748B",
         } as TextStyle,
         statusBadge: {
-          paddingHorizontal: 8,
-          paddingVertical: 4,
-          borderRadius: 8,
+          borderRadius: 999,
+          paddingHorizontal: 10,
+          paddingVertical: 6,
         } as ViewStyle,
-        statusText: { fontSize: 12, fontWeight: "800" } as TextStyle,
+        statusText: { fontSize: 12, fontWeight: "900" } as TextStyle,
+        amountWrap: { alignItems: "flex-end", gap: 6 } as ViewStyle,
         amountText: {
-          fontSize: 16,
+          fontSize: 18,
           fontWeight: "900",
           color: c.text.primary,
         } as TextStyle,
         amountUnpaid: { color: "#E05A55" } as TextStyle,
+        unpaidIcon: { opacity: 0.95 } as TextStyle,
         routeText: {
-          marginTop: 10,
-          fontSize: 14,
+          marginTop: 4,
+          fontSize: 16,
           fontWeight: "900",
           color: c.text.primary,
         } as TextStyle,
-        payMethodText: {
-          marginTop: 6,
+        metaText: {
           fontSize: 12,
           fontWeight: "700",
           color: c.text.secondary,
         } as TextStyle,
         arrowText: { color: "#94A3B8" } as TextStyle,
         actionRow: {
-          marginTop: 8,
           flexDirection: "row",
+          alignItems: "center",
           justifyContent: "flex-end",
+          gap: 8,
         } as ViewStyle,
         actionBtn: {
-          height: 34,
-          paddingHorizontal: 12,
+          height: 36,
+          paddingHorizontal: 14,
           borderRadius: 10,
           flexDirection: "row",
           alignItems: "center",
-          gap: 5,
-          backgroundColor: "#EEF2FF",
+          gap: 6,
+          backgroundColor: "#0F172A",
         } as ViewStyle,
-        actionBtnNeutral: { backgroundColor: "#EEF2F7" } as ViewStyle,
+        actionBtnNeutral: { backgroundColor: "#E2E8F0" } as ViewStyle,
         actionText: {
-          fontSize: 13,
-          fontWeight: "800",
-          color: "#4E46E5",
+          fontSize: 12,
+          fontWeight: "900",
+          color: "#FFFFFF",
         } as TextStyle,
         actionTextNeutral: { color: "#64748B" } as TextStyle,
         emptyCard: {
-          marginHorizontal: 16,
-          marginTop: 10,
           borderRadius: 14,
           borderWidth: 1,
           borderColor: c.border.default,
@@ -1113,48 +1188,84 @@ export default function ShipperSettlementScreen() {
           style={s.summaryCard}
         />
 
-        <View style={s.section}>
-          <View style={s.filterRow}>
-            {[
-              ["ALL", "전체"],
-              ["UNPAID", "결제 필요"],
-              ["PENDING", "결제 확인 대기"],
-              ["PAID", "완료"],
-            ].map(([key, label]) => {
-              const active = filter === key;
-              return (
-                <Pressable
-                  key={key}
-                  style={[s.filterBtn, active && s.filterBtnActive]}
-                  onPress={() => setFilter(key as SettlementFilter)}
-                >
-                  <Text style={[s.filterText, active && s.filterTextActive]}>
-                    {label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
+        <View style={s.contentWrap}>
+          <View style={s.filterSection}>
+            <View style={s.filterRow}>
+              <View style={s.paymentFilterInlineRow}>
+                {[
+                  ["ALL", "결제 전체"],
+                  ["TOSS", "토스"],
+                  ["DEFERRED", "착불"],
+                ].map(([key, label]) => {
+                  const active = paymentFilter === key;
+                  return (
+                    <Pressable
+                      key={key}
+                      style={s.paymentTextBtn}
+                      onPress={() => setPaymentFilter(key as PaymentMethodFilter)}
+                    >
+                      <Text style={[s.paymentText, active && s.paymentTextActive]}>
+                        {label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
 
-          <View style={s.paymentFilterRow}>
-            {[
-              ["ALL", "결제 전체"],
-              ["TOSS", "토스"],
-              ["DEFERRED", "착불"],
-            ].map(([key, label]) => {
-              const active = paymentFilter === key;
-              return (
+              <View style={s.dropdownWrap}>
                 <Pressable
-                  key={key}
-                  style={[s.categoryBtn, active && s.categoryBtnActive]}
-                  onPress={() => setPaymentFilter(key as PaymentMethodFilter)}
+                  style={[s.dropdownTrigger, s.dropdownTriggerActive]}
+                  onPress={() => setStatusDropdownOpen((prev) => !prev)}
                 >
-                  <Text style={[s.categoryText, active && s.categoryTextActive]}>
-                    {label}
+                  <Text
+                    style={[s.dropdownTriggerText, s.dropdownTriggerTextActive]}
+                    numberOfLines={1}
+                  >
+                    {statusDropdownLabel}
                   </Text>
+                  <Ionicons
+                    name={statusDropdownOpen ? "chevron-up" : "chevron-down"}
+                    size={16}
+                    color={c.brand.primary}
+                  />
                 </Pressable>
-              );
-            })}
+
+                {statusDropdownOpen ? (
+                  <View style={s.dropdownMenu}>
+                    {statusDropdownOptions.map(([key, label], idx) => {
+                      const active = filter === key;
+                      const isLast = idx === statusDropdownOptions.length - 1;
+                      return (
+                        <Pressable
+                          key={key}
+                          style={[s.dropdownItem, isLast && s.dropdownItemLast]}
+                          onPress={() => {
+                            setFilter(key);
+                            setStatusDropdownOpen(false);
+                          }}
+                        >
+                          <Text
+                            style={[
+                              s.dropdownItemText,
+                              active && s.dropdownItemTextActive,
+                            ]}
+                          >
+                            {label}
+                          </Text>
+                          {active ? (
+                            <Ionicons
+                              name="checkmark"
+                              size={14}
+                              color={c.brand.primary}
+                            />
+                          ) : null}
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                ) : null}
+              </View>
+            </View>
           </View>
 
           {loading ? (
@@ -1182,58 +1293,67 @@ export default function ShipperSettlementScreen() {
                     ]}
                   >
                     <View style={s.itemTop}>
-                      <View style={s.dateRow}>
-                        <Text style={s.dateText}>{item.dateLabel}</Text>
-                        <View
-                          style={[
-                            s.statusBadge,
-                            {
-                              backgroundColor: isUnpaid
-                                ? "#FDE7E5"
-                                : isPending
-                                  ? "#FEF9C3"
-                                  : isPaid
-                                    ? "#DCFCE7"
-                                    : isIssue
-                                      ? "#FEF3C7"
-                                      : "#E0ECFF",
-                            },
-                          ]}
-                        >
-                          <Text
+                      <View style={s.itemTopLeft}>
+                        <View style={s.dateRow}>
+                          <Text style={s.dateText}>{item.dateLabel}</Text>
+                          <View
                             style={[
-                              s.statusText,
+                              s.statusBadge,
                               {
-                                color: isUnpaid
-                                  ? "#D44B46"
+                                backgroundColor: isUnpaid
+                                  ? "#FDE7E5"
                                   : isPending
-                                    ? "#A16207"
+                                    ? "#FEF9C3"
                                     : isPaid
-                                      ? "#15803D"
+                                      ? "#DCFCE7"
                                       : isIssue
-                                        ? "#B45309"
-                                        : "#2E6DA4",
+                                        ? "#FEF3C7"
+                                        : "#E0ECFF",
                               },
                             ]}
                           >
-                            {getStatusLabel(item.status)}
-                          </Text>
+                            <Text
+                              style={[
+                                s.statusText,
+                                {
+                                  color: isUnpaid
+                                    ? "#D44B46"
+                                    : isPending
+                                      ? "#A16207"
+                                      : isPaid
+                                        ? "#15803D"
+                                        : isIssue
+                                          ? "#B45309"
+                                          : "#2E6DA4",
+                                },
+                              ]}
+                            >
+                              {getStatusLabel(item.status)}
+                            </Text>
+                          </View>
                         </View>
+                        <Text style={s.routeText}>
+                          {item.from} <Text style={s.arrowText}>→</Text> {item.to}
+                        </Text>
                       </View>
-                      <Text style={[s.amountText, isUnpaid && s.amountUnpaid]}>
-                        {toWon(item.amount)}
-                      </Text>
+                      <View style={s.amountWrap}>
+                        {isUnpaid ? (
+                          <MaterialCommunityIcons
+                            name="credit-card-outline"
+                            size={18}
+                            color="#D44B46"
+                            style={s.unpaidIcon}
+                          />
+                        ) : null}
+                        <Text style={[s.amountText, isUnpaid && s.amountUnpaid]}>
+                          {toWon(item.amount)}
+                        </Text>
+                      </View>
                     </View>
 
-                    <Text style={s.routeText}>
-                      {item.from} <Text style={s.arrowText}>→</Text> {item.to}
-                    </Text>
-                    <Text style={s.payMethodText}>
-                      결제 방식: {item.payMethodLabel}
-                    </Text>
-                    <Text style={s.payMethodText}>
-                      기본 운임+작업비 {toWon(item.billedSubtotal)} / shipper side fee{" "}
-                      {toWon(item.shipperFeeAmount)}
+                    <Text style={s.metaText}>결제 방식: {item.payMethodLabel}</Text>
+                    <Text style={s.metaText}>
+                      기본 운임+작업비 {toWon(item.billedSubtotal)} / 화주 수수료 {toWon(item.shipperFeeAmount)}
                     </Text>
                     <View style={s.actionRow}>
                       {(() => {
@@ -1266,15 +1386,9 @@ export default function ShipperSettlementScreen() {
                               }
                               size={14}
                               color={
-                                paymentBlocked
-                                  ? "#94A3B8"
-                                  : isUnpaid
-                                    ? "#4E46E5"
-                                    : isPending
-                                      ? "#A16207"
-                                    : isIssue
-                                      ? "#B45309"
-                                      : "#64748B"
+                                paymentBlocked || item.status !== "UNPAID"
+                                  ? "#64748B"
+                                  : "#FFFFFF"
                               }
                             />
                             <Text

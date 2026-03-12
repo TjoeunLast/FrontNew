@@ -20,7 +20,6 @@ import {
 
 import apiClient from "@/shared/api/apiClient";
 import { AuthService } from "@/shared/api/authService";
-import { PaymentService } from "@/shared/api/paymentService";
 import { UserService } from "@/shared/api/userService";
 import { USE_MOCK } from "@/shared/config/mock";
 import { useAppTheme } from "@/shared/hooks/useAppTheme";
@@ -31,7 +30,6 @@ import {
   getCurrentUserSnapshot,
   saveCurrentUserSnapshot,
 } from "@/shared/utils/currentUserStorage";
-import { getBillingAgreementMethodLabel } from "@/shared/utils/payment/billingAgreement";
 import { buildProfileImageStorageKey } from "@/shared/utils/profileImageStorage";
 
 type ProfileView = {
@@ -169,7 +167,6 @@ export default function MyPageScreen() {
     ageLabel: "-",
   });
   const [profileImageUrl, setProfileImageUrl] = useState("");
-  const [paymentMethodLabel, setPaymentMethodLabel] = useState("미등록");
 
   const roleLabel = profile.role === "-" ? "회원" : profile.role;
   const managementSectionTitle = roleLabel === "차주" ? "차주 관리" : "화주 관리";
@@ -180,10 +177,6 @@ export default function MyPageScreen() {
       let active = true;
 
       void (async () => {
-        const agreement = await PaymentService.getMyBillingAgreement().catch(() => null);
-        if (!active) return;
-        setPaymentMethodLabel(getBillingAgreementMethodLabel(agreement));
-
         try {
           const me = (await UserService.getMyInfo()) as any;
           const cached = await getCurrentUserSnapshot();
@@ -500,18 +493,8 @@ export default function MyPageScreen() {
             </View>
           </View>
         </View>
-
-        <Text style={s.sectionTitle}>{managementSectionTitle}</Text>
+        <Text style={s.sectionTitle}>고객 지원</Text>
         <View style={s.sectionCard}>
-          <Pressable style={s.row} onPress={() => router.push("/(common)/settings/shipper/payment" as any)}>
-            <View style={[s.rowIconWrap, { backgroundColor: withAlpha(c.brand.primary, 0.12) }]}>
-              <Ionicons name="card-outline" size={18} color={c.brand.primary} />
-            </View>
-            <Text style={s.rowLabel}>결제 수단 관리</Text>
-            <Text style={[s.rowValue, paymentMethodLabel !== "미등록" && s.rowValueActive]}>{paymentMethodLabel}</Text>
-            <Ionicons name="chevron-forward" size={20} color={c.text.secondary} />
-          </Pressable>
-          <View style={s.divider} />
           <Pressable style={s.row} onPress={() => router.push("/(common)/settings/shipper/verification" as any)}>
             <View style={[s.rowIconWrap, { backgroundColor: withAlpha(c.status.warning, 0.16) }]}>
               <Ionicons name="shield-checkmark-outline" size={18} color={c.status.warning} />
@@ -519,11 +502,6 @@ export default function MyPageScreen() {
             <Text style={s.rowLabel}>사업자 인증</Text>
             <Ionicons name="chevron-forward" size={20} color={c.text.secondary} />
           </Pressable>
-          <View style={s.divider} />
-        </View>
-
-        <Text style={s.sectionTitle}>고객 지원</Text>
-        <View style={s.sectionCard}>
           <Pressable style={s.row} onPress={() => router.push("/(common)/settings/reviews" as any)}>
             <View style={[s.rowIconWrap, { backgroundColor: withAlpha(c.brand.primary, 0.12) }]}>
               <Ionicons name="chatbox-ellipses-outline" size={18} color={c.brand.primary} />
