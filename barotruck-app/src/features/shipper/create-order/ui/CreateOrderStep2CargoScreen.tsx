@@ -117,10 +117,7 @@ export function ShipperCreateOrderStep2CargoScreen() {
   if (!draft) return null;
   const fee = shipperFeePreview.feeAmount;
   const totalPay = shipperFeePreview.chargedTotal;
-  const shipperFeeLabel =
-    draft.pay === "card" && shipperFeePreview.appliedRateText !== "0%"
-      ? `화주 수수료 배분액 (${shipperFeePreview.appliedRateText})`
-      : "화주 수수료";
+  const shipperFeeLabel = `화주 수수료 (${shipperFeePreview.appliedRateText})`;
   const promoStatusText =
     draft.pay !== "card"
       ? "해당 없음"
@@ -132,9 +129,7 @@ export function ShipperCreateOrderStep2CargoScreen() {
   const isFeePreviewError = isFeePreviewFallback && !isFeePreviewLoading;
   const feePreviewNotice = isFeePreviewError
       ? "서버 preview를 불러오지 못했습니다. 현재 금액은 임시 예상치입니다."
-      : draft.pay === "card"
-        ? `Toss 수수료 10% 선차감 후 남은 ${won(shipperFeePreview.postTossBaseAmount)} 기준으로 화주 수수료가 계산됩니다.`
-        : "최종 결제금액 안에서 화주 수수료가 내부 배분 기준으로 계산됩니다.";
+      : `화주 수수료율 ${shipperFeePreview.appliedRateText} 적용`;
   const unloadHintText =
     resolvedWorkType === "크레인"
       ? `크레인 +7% (${won(unloadSurcharge)})`
@@ -401,9 +396,6 @@ export function ShipperCreateOrderStep2CargoScreen() {
             </Text>
             <Text style={{ color: c.text.secondary, fontSize: 12, fontWeight: "700", marginTop: 6 }}>
               차주 수수료는 별도 정산에서 차감됩니다.
-            </Text>
-            <Text style={{ color: c.text.secondary, fontSize: 12, fontWeight: "700", marginTop: 4 }}>
-              Toss 수수료 10%를 먼저 제외한 뒤 남은 금액에서 화주/차주 수수료가 계산됩니다.
             </Text>
           </View>
         </View>

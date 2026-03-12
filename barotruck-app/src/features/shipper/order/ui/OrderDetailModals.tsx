@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import {
   ActivityIndicator,
+  Keyboard,
   Modal,
   Pressable,
   ScrollView,
@@ -242,8 +243,11 @@ export function OrderDetailModals({
         animationType="fade"
         onRequestClose={onCloseReview}
       >
-        <View style={s.modalBackdrop}>
-          <View style={[s.modalCard, { backgroundColor: colors.bgSurface }]}>
+        <Pressable style={s.modalBackdrop} onPress={Keyboard.dismiss}>
+          <View
+            style={[s.modalCard, { backgroundColor: colors.bgSurface }]}
+            onStartShouldSetResponder={() => true}
+          >
             <View style={s.modalHeader}>
               <Text style={[s.modalTitle, { color: colors.textPrimary }]}>평점 남기기</Text>
               <Pressable onPress={onCloseReview} style={s.modalCloseBtn}>
@@ -292,7 +296,7 @@ export function OrderDetailModals({
               )}
             </Pressable>
           </View>
-        </View>
+        </Pressable>
       </Modal>
     </>
   );

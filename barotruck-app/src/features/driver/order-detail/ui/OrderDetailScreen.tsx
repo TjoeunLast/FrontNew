@@ -16,6 +16,7 @@ import {
   ActivityIndicator,
   Alert,
   Dimensions,
+  Keyboard,
   Modal,
   Pressable,
   ScrollView,
@@ -1436,8 +1437,11 @@ export default function OrderDetailScreen() {
           animationType="fade"
           onRequestClose={() => setReviewOpen(false)}
         >
-          <View style={styles.modalBackdrop}>
-            <View style={[styles.modalCard, { backgroundColor: c.bg.surface }]}>
+          <Pressable style={styles.modalBackdrop} onPress={Keyboard.dismiss}>
+            <View
+              style={[styles.modalCard, { backgroundColor: c.bg.surface }]}
+              onStartShouldSetResponder={() => true}
+            >
               <View style={styles.modalHeader}>
                 <Text style={[styles.modalTitle, { color: c.text.primary }]}>
                   평점 남기기
@@ -1502,7 +1506,7 @@ export default function OrderDetailScreen() {
                 )}
               </Pressable>
             </View>
-          </View>
+          </Pressable>
         </Modal>
         <ArrivalPhotoModal
           visible={arrivalPhotoModalOpen}

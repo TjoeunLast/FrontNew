@@ -869,23 +869,20 @@ export default function ProfileSettingsScreen() {
               <Text style={s.label}>성별</Text>
               <Text style={s.value}>{profile.gender}</Text>
             </View>
-            <View style={s.rowDivider} />
             {profile.role === "DRIVER" ? (
-              <Pressable style={s.rowPressable} onPress={onPressActivityAddress} disabled={isBusy}>
-                <Text style={s.label}>활동 지역</Text>
-                <View style={s.valueWrap}>
-                  <Text style={s.valueCompact} numberOfLines={1}>
-                    {draftActivityAddress}
-                  </Text>
-                  <Ionicons name="chevron-forward" size={16} color={c.text.secondary} />
-                </View>
-              </Pressable>
-            ) : (
-              <View style={s.row}>
-                <Text style={s.label}>활동 지역</Text>
-                <Text style={s.value}>{profile.activityAddress}</Text>
-              </View>
-            )}
+              <>
+                <View style={s.rowDivider} />
+                <Pressable style={s.rowPressable} onPress={onPressActivityAddress} disabled={isBusy}>
+                  <Text style={s.label}>활동 지역</Text>
+                  <View style={s.valueWrap}>
+                    <Text style={s.valueCompact} numberOfLines={1}>
+                      {draftActivityAddress}
+                    </Text>
+                    <Ionicons name="chevron-forward" size={16} color={c.text.secondary} />
+                  </View>
+                </Pressable>
+              </>
+            ) : null}
             {profile.role !== "DRIVER" ? (
               <>
                 <View style={s.rowDivider} />

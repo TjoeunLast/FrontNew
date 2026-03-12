@@ -364,13 +364,8 @@ export function ShipperCreateOrderStep1Screen() {
   const isFeePreviewError = isFeePreviewFallback && !isFeePreviewLoading;
   const feePreviewBannerText = isFeePreviewError
       ? "서버 preview를 불러오지 못했습니다. 현재 금액은 임시 예상치입니다."
-      : pay === "card"
-        ? `Toss 수수료 10% 선차감 후 남은 ${won(shipperFeePreview.postTossBaseAmount)} 기준으로 화주 수수료 ${shipperFeePreview.appliedRateText}가 계산됩니다.${shipperFeePreview.promoApplied ? " 화주 프로모션이 적용되었습니다." : ""}${shipperFeePreview.minFeeApplied ? " 최소 수수료가 반영되었습니다." : ""}`
-        : "최종 결제금액 안에서 화주 수수료가 내부 배분 기준으로 계산됩니다.";
-  const shipperFeeLabel =
-    pay === "card" && shipperFeePreview.appliedRateText !== "0%"
-      ? `화주 수수료 배분액 (${shipperFeePreview.appliedRateText})`
-      : "화주 수수료";
+      : `화주 수수료율 ${shipperFeePreview.appliedRateText} 적용`;
+  const shipperFeeLabel = `화주 수수료 (${shipperFeePreview.appliedRateText})`;
   const promoStatusText =
     pay !== "card"
       ? "해당 없음"
@@ -1425,9 +1420,6 @@ export function ShipperCreateOrderStep1Screen() {
             <View style={{ marginTop: 10, gap: 4 }}>
               <Text style={[s.hint, { color: c.text.secondary }]}>
                 차주 수수료는 별도 정산에서 차감됩니다.
-              </Text>
-              <Text style={[s.hint, { color: c.text.secondary }]}>
-                Toss 수수료 10%를 먼저 제외한 뒤 남은 금액에서 화주/차주 수수료가 계산됩니다.
               </Text>
             </View>
           </Card>
