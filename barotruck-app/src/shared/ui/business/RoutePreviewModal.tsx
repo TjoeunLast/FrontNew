@@ -40,8 +40,9 @@ type RoutePreviewWebViewProps = {
 };
 
 const KAKAO_MAP_JS_KEY = String(process.env.EXPO_PUBLIC_KAKAO_JAVASCRIPT_KEY ?? "").trim();
-const KAKAO_MAP_WEBVIEW_BASE_URL = String(process.env.EXPO_PUBLIC_KAKAO_WEBVIEW_BASE_URL ?? "https://localhost").trim();
-
+const KAKAO_MAP_WEBVIEW_BASE_URL = String(process.env.EXPO_PUBLIC_KAKAO_WEBVIEW_BASE_URL ??  "https://barotruck.store").trim();
+console.log("KAKAO_MAP_JS_KEY?", KAKAO_MAP_JS_KEY);
+console.log("KAKAO_MAP_WEBVIEW_BASE_URL?", KAKAO_MAP_WEBVIEW_BASE_URL);
 function escapeHtml(value: string): string {
   return value
     .replace(/&/g, "&amp;")
