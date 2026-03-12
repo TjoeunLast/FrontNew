@@ -70,6 +70,14 @@ export interface SettlementResponse {
   paymentNetAmount?: number | null;
   /** 양면 수수료 rollout 이후 기본 운임 */
   baseAmount?: number | null;
+  /** 양면 수수료 rollout 이후 화주 side fee rate(% 단위) */
+  shipperFeeRate?: number | null;
+  /** 양면 수수료 rollout 이후 화주 side fee 금액 */
+  shipperFeeAmount?: number | null;
+  /** 양면 수수료 rollout 이후 화주 프로모션 적용 여부 */
+  shipperPromoApplied?: boolean | null;
+  /** 양면 수수료 rollout 이후 화주 최종 청구 금액 */
+  shipperChargeAmount?: number | null;
   /** 양면 수수료 rollout 이후 차주 side fee rate(% 단위) */
   driverFeeRate?: number | null;
   /** 양면 수수료 rollout 이후 차주 side fee 금액 */

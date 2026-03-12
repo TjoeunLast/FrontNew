@@ -60,6 +60,8 @@ type SettlementItem = {
   settlementStatus?: string | null;
   paidAt?: string | null;
   confirmedAt?: string | null;
+  shipperFeeRate?: number | null;
+  shipperPromoApplied?: boolean | null;
 };
 
 type TossCheckoutSession = {
@@ -148,6 +150,11 @@ function formatDateTime(value?: string | Date | null) {
 function toAmount(value?: number | null) {
   if (typeof value !== "number" || !Number.isFinite(value)) return 0;
   return Math.max(0, Math.round(value));
+}
+
+function toRatePercentLabel(value?: number | null) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return null;
+  return `${(value * 100).toFixed(2)}%`;
 }
 
 function escapeHtmlValue(v: string) {
@@ -325,9 +332,16 @@ function mapOrderToSettlement(
 
   if (!isShipperActivePaymentMethod(order.payMethod)) return null;
 
-  const billedSubtotal = toAmount(settlement?.totalPrice) || calcOrderAmount(order);
-  const chargedTotal = toAmount(settlement?.paymentAmount) || billedSubtotal;
+  const billedSubtotal =
+    toAmount(settlement?.baseAmount) ||
+    toAmount(settlement?.totalPrice) ||
+    calcOrderAmount(order);
+  const chargedTotal =
+    toAmount(settlement?.shipperChargeAmount) ||
+    toAmount(settlement?.paymentAmount) ||
+    billedSubtotal;
   const shipperFeeAmount =
+    toAmount(settlement?.shipperFeeAmount) ||
     toAmount(settlement?.paymentFeeAmount) ||
     Math.max(0, chargedTotal - billedSubtotal);
   const status = resolveItemStatus(order, settlement);
@@ -355,6 +369,8 @@ function mapOrderToSettlement(
     settlementStatus: settlement?.status ?? order.settlementStatus ?? null,
     paidAt: settlement?.paidAt ?? null,
     confirmedAt: settlement?.confirmedAt ?? null,
+    shipperFeeRate: settlement?.shipperFeeRate ?? null,
+    shipperPromoApplied: settlement?.shipperPromoApplied ?? null,
   };
 }
 
@@ -1234,6 +1250,9 @@ export default function ShipperSettlementScreen() {
                     <Text style={s.payMethodText}>
                       기본 운임+작업비 {toWon(item.billedSubtotal)} / shipper side fee{" "}
                       {toWon(item.shipperFeeAmount)}
+                      {item.shipperFeeRate != null
+                        ? ` (${toRatePercentLabel(item.shipperFeeRate)})`
+                        : ""}
                     </Text>
                     <View style={s.actionRow}>
                       {(() => {
@@ -1415,13 +1434,23 @@ export default function ShipperSettlementScreen() {
               <View style={s.receiptRow}>
                 <Text style={s.receiptKey}>화주 수수료</Text>
                 <Text style={s.receiptVal}>
-                  {receiptItem ? toWon(receiptItem.shipperFeeAmount) : "0원"}
+                  {receiptItem
+                    ? `${toWon(receiptItem.shipperFeeAmount)}${
+                        receiptItem.shipperFeeRate != null
+                          ? ` (${toRatePercentLabel(receiptItem.shipperFeeRate)})`
+                          : ""
+                      }`
+                    : "0원"}
                 </Text>
               </View>
               <View style={s.receiptRow}>
                 <Text style={s.receiptKey}>화주 프로모션</Text>
                 <Text style={s.receiptVal}>
-                  {receiptItem?.isToss ? "정산 스냅샷 미제공" : "해당 없음"}
+                  {receiptItem?.shipperPromoApplied == null
+                    ? "서버 미제공"
+                    : receiptItem.shipperPromoApplied
+                      ? "적용"
+                      : "미적용"}
                 </Text>
               </View>
               <View style={s.receiptRow}>
