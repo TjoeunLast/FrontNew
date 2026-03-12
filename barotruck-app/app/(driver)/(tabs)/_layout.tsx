@@ -13,7 +13,7 @@ export default function DriverTabsLayout() {
         headerShown: false,
         tabBarStyle: {
           height: 100,
-          paddingBottom: 26,
+          paddingBottom: 30,
           paddingTop: 8,
           backgroundColor: "#FFFFFF",
           borderTopWidth: 0,

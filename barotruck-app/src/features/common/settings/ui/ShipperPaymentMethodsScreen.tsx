@@ -86,14 +86,14 @@ function getCardSummary(agreement: ShipperBillingAgreementResponse | null) {
 
 function getAgreementDescription(agreement: ShipperBillingAgreementResponse | null) {
   if (!agreement) {
-    return '월별 수수료 자동청구를 사용하려면 카드 등록을 진행해 주세요.';
+    return '등록된 자동결제 카드가 없습니다.';
   }
 
   if (agreement.status === 'ACTIVE') {
     return '현재 등록된 카드로 billing agreement가 활성화되어 있습니다.';
   }
 
-  return '이전 billing agreement가 비활성 상태입니다. 자동청구를 재개하려면 다시 등록해 주세요.';
+  return '이전 billing agreement가 비활성 상태입니다.';
 }
 
 function DetailRow({
@@ -191,10 +191,6 @@ export default function ShipperPaymentMethodsScreen() {
     }, [fetchAgreement, hasLoadedOnce])
   );
 
-  const onPressRegister = React.useCallback(() => {
-    router.push('/(common)/settings/shipper/billing-checkout' as any);
-  }, [router]);
-
   const executeDeactivate = React.useCallback(async () => {
     if (!agreement || agreement.status !== 'ACTIVE' || deactivating) {
       return;
@@ -225,7 +221,7 @@ export default function ShipperPaymentMethodsScreen() {
 
     Alert.alert(
       '자동결제 카드 해지',
-      '현재 등록된 billing agreement를 해지할까요? 이후 자동청구는 다시 등록하기 전까지 중단됩니다.',
+      '현재 등록된 billing agreement를 해지할까요? 이후 자동청구가 중단됩니다.',
       [
         { text: '취소', style: 'cancel' },
         {
@@ -491,7 +487,7 @@ export default function ShipperPaymentMethodsScreen() {
     <View style={s.page}>
       <ShipperScreenHeader
         title="결제 수단 관리"
-        subtitle="화주 자동청구용 billing agreement를 등록, 조회, 해지할 수 있습니다."
+        subtitle="화주 자동청구용 billing agreement 상태를 조회하고 해지할 수 있습니다."
         onPressBack={goBack}
       />
 
@@ -506,9 +502,9 @@ export default function ShipperPaymentMethodsScreen() {
               />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={s.heroTitle}>자동 결제 카드 등록</Text>
+              <Text style={s.heroTitle}>자동 결제 카드 상태</Text>
               <Text style={s.heroDesc}>
-                월별 수수료 자동청구에 사용할 토스 billing agreement를 연결합니다.
+                현재 자동청구 카드 등록 상태를 확인할 수 있습니다.
               </Text>
             </View>
           </View>
@@ -610,11 +606,6 @@ export default function ShipperPaymentMethodsScreen() {
                 disabled={refreshing}
                 style={{ flexGrow: 1 }}
               />
-              <Button
-                title={agreement.status === 'ACTIVE' ? '다시 등록' : '등록하기'}
-                onPress={onPressRegister}
-                style={{ flexGrow: 1 }}
-              />
               {agreement.status === 'ACTIVE' ? (
                 <Button
                   title={deactivating ? '해지 중...' : '해지'}
@@ -635,10 +626,9 @@ export default function ShipperPaymentMethodsScreen() {
             />
             <Text style={s.emptyTitle}>등록된 billing agreement가 없습니다.</Text>
             <Text style={s.emptyDesc}>
-              결제수단 등록을 시작하면 토스 카드 인증 후 자동청구용 agreement를 생성합니다.
+              현재 자동청구 카드가 등록되어 있지 않습니다.
             </Text>
             <View style={s.actionRow}>
-              <Button title="등록하기" onPress={onPressRegister} style={{ minWidth: 140 }} />
               <Button
                 title={refreshing ? '조회 중...' : '새로고침'}
                 variant="outline"
@@ -646,50 +636,11 @@ export default function ShipperPaymentMethodsScreen() {
                   void fetchAgreement('refresh');
                 }}
                 disabled={refreshing}
-                style={{ minWidth: 120 }}
+                style={{ minWidth: 140 }}
               />
             </View>
           </View>
         )}
-
-        <Text style={s.sectionTitle}>진행 가이드</Text>
-        <View style={s.guideCard}>
-          <View style={s.guideRow}>
-            <View style={s.guideIndex}>
-              <Text style={s.guideIndexText}>1</Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={s.guideTitle}>카드 등록 시작</Text>
-              <Text style={s.guideDesc}>
-                등록하기를 누르면 토스 billing 인증 WebView가 열리고 카드 인증을 진행합니다.
-              </Text>
-            </View>
-          </View>
-
-          <View style={s.guideRow}>
-            <View style={s.guideIndex}>
-              <Text style={s.guideIndexText}>2</Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={s.guideTitle}>성공 시 agreement 발급</Text>
-              <Text style={s.guideDesc}>
-                인증 성공 후 앱이 `authKey`로 서버 발급 API를 호출하고 등록 상태를 갱신합니다.
-              </Text>
-            </View>
-          </View>
-
-          <View style={s.guideRow}>
-            <View style={s.guideIndex}>
-              <Text style={s.guideIndexText}>3</Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={s.guideTitle}>실패 메시지 확인</Text>
-              <Text style={s.guideDesc}>
-                토스 인증 실패, 서버 발급 실패, 해지 실패는 모두 화면 상단 메시지와 토스트로 다시 확인할 수 있습니다.
-              </Text>
-            </View>
-          </View>
-        </View>
       </ScrollView>
     </View>
   );

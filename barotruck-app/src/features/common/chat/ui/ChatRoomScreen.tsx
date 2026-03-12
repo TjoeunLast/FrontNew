@@ -17,6 +17,7 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -27,6 +28,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useChatManager } from "../../../../shared/api/chatApi";
 import { ReportService } from "../../../../shared/api/reviewService";
@@ -108,6 +110,8 @@ const ChatRoomScreen = () => {
     useState<ChatOrderSummary | null>(null);
   const [cachedRoomTitle, setCachedRoomTitle] = useState("");
   const listRef = useRef<FlatList<ChatMessageResponse>>(null);
+  const insets = useSafeAreaInsets();
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   const {
     userId,
@@ -492,12 +496,37 @@ const ChatRoomScreen = () => {
     return () => clearTimeout(timer);
   }, [sortedMessages.length]);
 
+  useEffect(() => {
+    const showEvent =
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent =
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+
+    const onShow = Keyboard.addListener(showEvent, (event) => {
+      const rawHeight = Number(event?.endCoordinates?.height ?? 0);
+      const normalized = Math.max(0, rawHeight - insets.bottom);
+      setKeyboardHeight(normalized);
+    });
+    const onHide = Keyboard.addListener(hideEvent, () => {
+      setKeyboardHeight(0);
+    });
+
+    return () => {
+      onShow.remove();
+      onHide.remove();
+    };
+  }, [insets.bottom]);
+
+  const inputBottomOffset =
+    Math.max(16, insets.bottom + 8) +
+    (Platform.OS === "android" ? keyboardHeight : 0);
+
   return (
     <>
       <KeyboardAvoidingView
         style={styles.container}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={0}
       >
         {orderSummary ? (
           <TouchableOpacity
@@ -539,7 +568,12 @@ const ChatRoomScreen = () => {
           }
         />
 
-        <View style={styles.inputContainer}>
+        <View
+          style={[
+            styles.inputContainer,
+            { marginBottom: inputBottomOffset },
+          ]}
+        >
           <TouchableOpacity
             style={styles.circleIconButton}
             onPress={openAttachmentMenu}
@@ -736,7 +770,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     marginHorizontal: 12,
-    marginBottom: 32,
     borderRadius: 28,
   },
   circleIconButton: {
